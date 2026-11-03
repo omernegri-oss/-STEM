@@ -53,7 +53,7 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
   late joining and save/resume.
 - **Building.** 24 fixtures and decorations, placement validation (no blocked aisles or entrances), move, rotate,
   sell (full refund if bought today before opening), per-fixture upgrades, 7 floor styles, 8 wall colours,
-  and 5 store expansions.
+  5 lighting styles (up to a party disco) and 5 store expansions.
 - **Departments.** Grocery, refrigerated, frozen, produce, an interactive **butcher counter** and a **deli counter**
   where customers request specific cuts and quantities that a player or a hired specialist prepares.
 - **62 products** from **8 suppliers**, with expiry dates, spoilage and inventory tracking.
@@ -62,7 +62,7 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
 - **Employees** who visibly do their jobs: cashiers scan, stockers haul boxes from the loading area and racks, cleaners mop,
   and butchers chop. Happiness, raises, shifts, sick days and quitting are all modelled.
 - **Economy.** Revenue, cost of goods, salaries, rent, electricity, maintenance, tips, profit history chart and margins.
-- **Progression.** 15 store levels unlock products, suppliers, fixtures, roles, decor and expansions. There are 23 guided
+- **Progression.** A fresh **daily challenge** every day, 15 store levels unlock products, suppliers, fixtures, roles, decor and expansions. There are 23 guided
   goals with cash rewards, 24 achievements and 9 team upgrades (hand trucks, pallet jacks, shopping carts, LED lighting…).
 - **Random events.** Customer rushes, supplier delays, fridge breakdowns, product shortages, holidays, a VIP food
   blogger, staff absences, flash sales, health inspections, heatwaves, going viral, and a pigeon that gets inside.
@@ -80,7 +80,7 @@ server/        Node.js authoritative simulation (20 Hz) + WebSocket rooms
   customers.js   customer AI      staff.js   employee AI     persistence.js   JSON saves
 shared/        data.js (all game content & balance) · grid.js (placement rules, A*, collision)
 client/        Three.js renderer, procedural models, actors, build mode, UI panels, WebAudio
-tests/         sim.test.js · multiplayer.test.js · browser-e2e.mjs · browser-showcase.mjs
+tests/         sim.test.js · multiplayer.test.js · browser-e2e.mjs · browser-ui.mjs · browser-showcase.mjs
 ```
 
 The server owns all game state. Clients send intents (`place`, `order`, `pickup`, `stock`, `work`…) and their
@@ -90,8 +90,10 @@ something changes, plus 10 Hz snapshots of moving actors, which they interpolate
 ## Tests
 
 ```bash
-npm test               # headless simulation + 4-client multiplayer protocol test
-npm run test:browser   # 2-player browser playthrough (needs Playwright + Chromium)
+npm test                    # headless simulation + 4-client multiplayer protocol test
+npm run test:browser        # 2-player browser playthrough (needs Playwright + Chromium)
+node tests/browser-ui.mjs   # UI flows: butcher counter, build card, panels, events, report
+npm run showcase            # builds a level-10 store and saves screenshots (SHOTS=dir)
 ```
 
 Saves are written to `saves/` (override with `SAVES_DIR`). Port via `PORT` (default 3000).

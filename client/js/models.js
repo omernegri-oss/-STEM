@@ -1,5 +1,6 @@
 // Procedural stylized low-poly models built from primitives (no external assets).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FURNITURE, CATEGORIES } from '/shared/data.js';
 
 const matCache = new Map();
@@ -341,6 +342,8 @@ export function makeFurniture(type, f = {}) {
     }
     default: B(g, W, 1, D, 0x94a3b8, 0, 0.5, 0);
   }
+  const ud = g.userData;
+  mergeStatic(g, new Set([ud.led, ud.belt, ud.screen, ud.lamp, ...ud.anim.map(a => a.obj)]));
   return g;
 }
 
@@ -348,6 +351,37 @@ function staffMat(g, x) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.9 }));
   m.rotation.x = -Math.PI / 2; m.position.set(x, 0.006, -1); m.receiveShadow = true; g.add(m);
   const t = makeSprite('STAFF', 0.12, { bg: null, color: '#bfdbfe', size: 30 }); t.position.set(x, 0.1, -1.3); g.add(t);
+}
+
+// Merge static meshes of a group into one mesh per material. Objects in `exclude` (and their children) stay separate.
+export function mergeStatic(group, exclude = new Set()) {
+  group.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(group.matrixWorld).invert();
+  const buckets = new Map(), keep = [];
+  const skip = new Set();
+  for (const o of exclude) o && o.traverse(c => skip.add(c));
+  group.traverse(o => {
+    if (o === group || skip.has(o)) return;
+    if (!o.isMesh || o.material.map || o.material.transparent) { if (o.isMesh || o.isSprite) keep.push(o); return; }
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+    if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    const key = o.material.uuid + (o.castShadow ? 's' : '');
+    if (!buckets.has(key)) buckets.set(key, { mat: o.material, shadow: o.castShadow, geos: [] });
+    buckets.get(key).geos.push(g);
+  });
+  // re-parent kept objects directly under the group with their baked local transform
+  const kept = keep.map(o => { const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld); return { o, m }; });
+  const excluded = [...exclude].filter(Boolean).map(o => { const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld); return { o, m }; });
+  group.clear();
+  for (const b of buckets.values()) {
+    const merged = mergeGeometries(b.geos, false); if (!merged) continue;
+    const m = new THREE.Mesh(merged, b.mat); m.castShadow = b.shadow; m.receiveShadow = true;
+    group.add(m);
+  }
+  for (const { o, m } of [...kept, ...excluded]) { o.removeFromParent(); m.decompose(o.position, o.quaternion, o.scale); group.add(o); }
+  return group;
 }
 
 export function ghostify(obj, ok) {

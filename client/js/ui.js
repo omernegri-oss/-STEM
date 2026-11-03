@@ -107,6 +107,17 @@ export class UI {
     const g = GOALS[M.goalIndex];
     setText('g-text', g ? g.text : '🏆 All goals complete — you are true Tycoons!');
     setText('g-reward', g && g.reward ? `Reward: ${fmtMoney(g.reward)}` : '');
+    const ch = M.challenge;
+    if (ch) {
+      const txt = { serve: `Check out ${ch.target} customers today`, revenue: `Earn ${fmtMoney(ch.target)} in sales today`,
+        noangry: `Serve ${ch.target}+ customers with no angry walk-outs`, sat: `Average satisfaction ${ch.target}%+ today (15+ customers)`,
+        cat: `Sell ${ch.target} ${CATEGORIES[ch.cat]?.name || ''} items today` }[ch.type];
+      setText('c-text', txt);
+      const prog = ch.type === 'revenue' ? `${fmtMoney(ch.progress)} / ${fmtMoney(ch.target)}` : ch.type === 'sat' ? `${ch.progress}% now` : ch.type === 'noangry' ? `${ch.progress}/${ch.target} served · ${M.ledger.angry} angry` : `${ch.progress}/${ch.target}`;
+      setText('c-reward', ch.done ? `✅ Complete! +${fmtMoney(ch.reward)}` : ch.failed ? '❌ Failed — new challenge tomorrow' : `${prog} · Reward ${fmtMoney(ch.reward)}`);
+      $('c-bar').style.width = Math.min(100, (ch.type === 'sat' ? ch.progress / ch.target : ch.progress / ch.target) * 100) + '%';
+      $('c-card').className = 'goal-card daily' + (ch.done ? ' done' : ch.failed ? ' failed' : '');
+    }
     const myRole = (G.players || []).find(p => p.id === G.me)?.role;
     const tasks = [];
     const add = (text, role, urgent = false, ok = false) => tasks.push({ text, role, urgent, ok });
@@ -156,7 +167,7 @@ export class UI {
     const urgentFirst = tasks.sort((a, b) => (b.urgent - a.urgent) || ((b.role === myRole) - (a.role === myRole)));
     $('t-list').innerHTML = urgentFirst.slice(0, 9).map(t => `<li class="${t.urgent ? 'urgent' : ''} ${t.role === myRole ? 'mine' : ''} ${t.ok ? 'ok' : ''}">${esc(t.text)}</li>`).join('') || '<li class="ok">✨ All good! Keep shopping humming.</li>';
     setText('t-count', tasks.length ? `(${tasks.length})` : '');
-    const evs = (M.events || []).filter(e => EVENT_TYPES[e.type] && (e.until == null || (G.snap?.time ?? 0) < e.until));
+    const evs = (M.events || []).filter(e => EVENT_TYPES[e.type] && e.type !== 'sale' && (e.until == null || (G.snap?.time ?? 0) < e.until));
     $('ev-active').innerHTML = evs.map(e => `<div class="ev">${EVENT_TYPES[e.type].icon} ${EVENT_TYPES[e.type].name}</div>`).join('') + (M.saleActive ? '<div class="ev">🏷️ Flash sale: 15% off</div>' : '');
     // dock badges
     const badge = (panel, n) => { const b = document.querySelector(`#dock button[data-panel="${panel}"]`); let el = b.querySelector('.badge'); if (n) { if (!el) { el = document.createElement('span'); el.className = 'badge'; b.appendChild(el); } el.textContent = n; } else if (el) el.remove(); };
@@ -212,7 +223,7 @@ export class UI {
         <div><div class="section-title">💰 Income</div>${row('Sales', fmtMoney(r.revenue), 'pos')}${row('Tips', fmtMoney(r.tips), 'pos')}${row('Bonuses & rewards', fmtMoney(r.bonus), 'pos')}${r.vending ? row('Vending machines', fmtMoney(r.vending), 'pos') : ''}
           <div class="section-title">💸 Expenses</div>${row('Stock orders', fmtMoney(r.cogs), 'neg')}${row('Salaries', fmtMoney(r.salaries), 'neg')}${row('Rent', fmtMoney(r.rent), 'neg')}${row('Electricity', fmtMoney(r.power), 'neg')}${row('Maintenance', fmtMoney(r.maint), 'neg')}${row('Equipment & other', fmtMoney(r.other), 'neg')}
           ${row('<b>Cash now</b>', fmtMoney(r.cash), r.cash >= 0 ? 'pos' : 'neg')}</div>
-        <div><div class="section-title">👥 Customers</div>${row('Visitors', r.customers)}${row('Checked out', r.served)}${row('Left empty-handed', r.lost)}${row('Left angry 😡', r.angry, r.angry ? 'neg' : '')}${row('Products wasted', r.waste, r.waste ? 'neg' : '')}
+        <div>${r.challenge ? `<div class="section-title">⭐ Daily challenge</div><div class="kv"><span>${r.challenge.done ? '✅ Completed' : '❌ Missed'}</span><b class="${r.challenge.done ? 'pos' : 'neg'}">${r.challenge.done ? '+' + fmtMoney(r.challenge.reward) : '—'}</b></div>` : ''}<div class="section-title">👥 Customers</div>${row('Visitors', r.customers)}${row('Checked out', r.served)}${row('Left empty-handed', r.lost)}${row('Left angry 😡', r.angry, r.angry ? 'neg' : '')}${row('Products wasted', r.waste, r.waste ? 'neg' : '')}
           <div class="section-title">🏆 Best sellers</div><div class="note" style="font-size:13px">${top}</div>
           <div class="section-title">🗣️ Customers wanted</div><div class="note" style="font-size:13px">${dem}</div>
           ${r.quits.length ? `<div class="section-title">🚪 Quit</div><div class="note">${r.quits.map(esc).join(', ')}</div>` : ''}</div>

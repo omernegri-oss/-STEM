@@ -1,6 +1,6 @@
 // Renderer, camera, lighting with a day/night cycle, and the street environment around the store.
 import * as THREE from 'three';
-import { B, C, S, mat, makeTree, makeStreetLamp, rng, textTexture } from './models.js';
+import { B, C, S, mat, makeTree, makeStreetLamp, rng, textTexture, mergeStatic } from './models.js';
 
 export function createScene(canvas, { low = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
@@ -64,14 +64,16 @@ export function createScene(canvas, { low = false } = {}) {
     for (let i = 0; i < 14; i++) { const t = makeTree(r); t.position.set(-20 + r() * (W + 40), 0, D + 16.5 + r() * 7); t.scale.setScalar(0.7 + r() * 0.5); env.add(t); }
     for (let x = -24; x < W + 26; x += 9) { B(env, 1.6, 0.08, 0.5, 0x92400e, x, 0.45, D + 15.6); B(env, 0.1, 0.45, 0.4, 0x334155, x - 0.7, 0.22, D + 15.6); B(env, 0.1, 0.45, 0.4, 0x334155, x + 0.7, 0.22, D + 15.6); }
     const colors = [0xfca5a5, 0xfde68a, 0xa7f3d0, 0xbfdbfe, 0xddd6fe, 0xfbcfe8, 0xfed7aa];
+    const winOn = new THREE.MeshStandardMaterial({ color: 0x93c5fd, emissive: 0xfde68a, emissiveIntensity: 0, roughness: 0.3 });
+    const winOff = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.3 });
+    state.windows = [winOn]; let wi = 0;
     for (let x = -40, i = 0; x < W + 44; i++) {
       const w = 5 + Math.floor(r() * 5), h = 4 + Math.floor(r() * 7), d = 6;
       const bx = x + w / 2, bz = D + 31;
       B(env, w - 0.3, h, d, colors[i % colors.length], bx, h / 2, bz);
       B(env, w - 0.1, 0.3, d + 0.2, 0x64748b, bx, h + 0.15, bz);
       for (let fy = 1.6; fy < h - 0.6; fy += 2.2) for (let fx = -w / 2 + 1.2; fx < w / 2 - 0.6; fx += 1.6) {
-        const win = B(env, 0.8, 1.0, 0.05, 0x93c5fd, bx + fx, fy, bz - d / 2 - 0.02, { shadow: false, emissive: 0xfde68a, ei: 0 });
-        win.material = win.material.clone(); state.windows.push(win);
+        B(env, 0.8, 1.0, 0.05, 0x93c5fd, bx + fx, fy, bz - d / 2 - 0.02, { shadow: false, material: (wi++ * 7919) % 3 ? winOn : winOff });
       }
       if (r() < 0.5) { // awning
         for (let k = 0; k < 4; k++) { const a = B(env, (w - 1) / 4, 0.05, 1.0, k % 2 ? 0xffffff : colors[(i + 3) % colors.length], bx - (w - 1) / 2 + (w - 1) / 8 + k * (w - 1) / 4, 2.6, bz - d / 2 - 0.4, { shadow: false }); a.rotation.x = 0.3; }
@@ -109,6 +111,7 @@ export function createScene(canvas, { low = false } = {}) {
     // overflow pad (beside the building)
     const pad2 = new THREE.Mesh(new THREE.PlaneGeometry(5, 2), new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.1 }));
     pad2.rotation.x = -Math.PI / 2; pad2.position.set(-2.5, 0.011, D + 2); env.add(pad2);
+    mergeStatic(env);
     // sun & shadow frustum around the store
     const cx = W / 2, cz = D / 2 + 2;
     sun.target.position.set(cx, 0, cz);
@@ -140,7 +143,7 @@ export function createScene(canvas, { low = false } = {}) {
     for (const l of interior) { l.intensity = night * 18 + dusk * 5; l.visible = l.intensity > 0.05; }
     const lampOn = night > 0.3 || dusk > 0.6;
     for (const l of state.streetLamps) l.userData.bulb.material.emissiveIntensity = lampOn ? 1.5 : 0.1;
-    for (let i = 0; i < state.windows.length; i++) state.windows[i].material.emissiveIntensity = lampOn && (i * 7919) % 3 !== 0 ? 0.7 : 0;
+    for (const w of state.windows) w.emissiveIntensity = lampOn ? 0.7 : 0;
     renderer.toneMappingExposure = 1.05 + night * 0.1;
     return { night, dusk };
   }

@@ -18,6 +18,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 const STATIC = [
   ['/shared/', path.join(ROOT, 'shared')],
   ['/vendor/', path.join(ROOT, 'node_modules', 'three', 'build')],
+  ['/addons/', path.join(ROOT, 'node_modules', 'three', 'examples', 'jsm')],
   ['/', path.join(ROOT, 'client')],
 ];
 
@@ -103,7 +104,7 @@ export function startServer(port = PORT) {
         return;
       }
       if (msg.t === 'leave') { room.removePlayer(player); room = null; player = null; return; }
-      room.handle(player, msg);
+      try { room.handle(player, msg); } catch (e) { console.error(`[room ${room.code}] error handling ${msg.t}/${msg.a || ''}`, e); }
     });
     ws.on('close', () => { if (room && player) room.removePlayer(player); });
     ws.on('error', () => {});

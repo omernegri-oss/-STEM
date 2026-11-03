@@ -209,6 +209,7 @@ function stocker(game, st, dt) {
     case 'idle': case 'toPost': case 'working': {
       if (st.timer > 0) { if (st.wander) step(game, st, dt); return; }
       st.timer = 0.8; st.wander = false;
+      releaseClaims(game, st);
       // 1) clear expired stock
       const exp = s.furniture.find(f => f.slots && f.slots.some(sl => sl.expired && sl.qty > 0));
       if (exp && exp._front) {

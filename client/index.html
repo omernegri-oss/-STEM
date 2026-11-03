@@ -6,7 +6,7 @@
   <title>Supermarket Tycoons</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>" />
   <link rel="stylesheet" href="/css/style.css" />
-  <script type="importmap">{ "imports": { "three": "/vendor/three.module.js" } }</script>
+  <script type="importmap">{ "imports": { "three": "/vendor/three.module.js", "three/addons/": "/addons/" } }</script>
 </head>
 <body>
   <div id="app">
@@ -77,6 +77,7 @@
 
       <aside id="tasks">
         <div class="goal-card"><div class="goal-title">🎯 Goal</div><div id="g-text">—</div><div id="g-reward" class="reward"></div></div>
+        <div class="goal-card daily" id="c-card"><div class="goal-title">⭐ Daily challenge</div><div id="c-text">—</div><div class="bar" style="margin-top:5px"><div id="c-bar" style="width:0;background:linear-gradient(90deg,#facc15,#f97316)"></div></div><div id="c-reward" class="reward"></div></div>
         <div class="tasks-title">📋 To-do <span id="t-count"></span></div>
         <ul id="t-list"></ul>
         <div id="ev-active"></div>

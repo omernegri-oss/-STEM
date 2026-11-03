@@ -56,6 +56,7 @@ export class Game {
       negativeDays: 0, nextId: 1, created: Date.now(),
     };
     this.refreshCandidates();
+    this.s.challenge = this.makeChallenge();
   }
 
   load(save) {
@@ -67,6 +68,8 @@ export class Game {
     if (this.s.phase === 'open' || this.s.phase === 'closing') this.s.phase = 'prep';
     this.s.paused = false;
     for (const st of this.s.staff) this.resetStaffRuntime(st);
+    for (const b of this.s.boxes) delete b._claim;
+    if (!this.s.challenge) this.s.challenge = this.makeChallenge();
     void fr;
   }
 
@@ -161,14 +164,17 @@ export class Game {
     this.s.xp += Math.round(v);
     const lvl = Math.min(MAX_LEVEL, levelForXp(this.s.xp));
     if (lvl > this.s.level) {
+      const from = this.s.level + 1;
       this.s.level = lvl;
       const unlocks = [];
-      for (const [k, f] of Object.entries(FURNITURE)) if (f.level === lvl) unlocks.push(f.icon + ' ' + f.name);
-      for (const p of PRODUCTS) if (p.level === lvl) unlocks.push(p.icon + ' ' + p.name);
-      for (const s of SUPPLIERS) if (s.level === lvl) unlocks.push(s.icon + ' ' + s.name);
-      for (const r of Object.values(ROLES)) if (r.level === lvl) unlocks.push(r.icon + ' Hire ' + r.name);
-      for (const u of TEAM_UPGRADES) if (u.level === lvl) unlocks.push(u.icon + ' ' + u.name);
-      for (const e of EXPANSIONS) if (e.level === lvl && e.cost > 0) unlocks.push('📐 Expansion ' + e.w + '×' + e.d);
+      const inRange = (l) => l >= from && l <= lvl;
+      for (const [k, f] of Object.entries(FURNITURE)) if (inRange(f.level)) unlocks.push(f.icon + ' ' + f.name);
+      for (const p of PRODUCTS) if (inRange(p.level)) unlocks.push(p.icon + ' ' + p.name);
+      for (const s of SUPPLIERS) if (inRange(s.level)) unlocks.push(s.icon + ' ' + s.name);
+      for (const r of Object.values(ROLES)) if (inRange(r.level)) unlocks.push(r.icon + ' Hire ' + r.name);
+      for (const u of TEAM_UPGRADES) if (inRange(u.level)) unlocks.push(u.icon + ' ' + u.name);
+      for (const e of EXPANSIONS) if (inRange(e.level) && e.cost > 0) unlocks.push('📐 Expansion ' + e.w + '×' + e.d);
+      if (unlocks.length > 14) { const n = unlocks.length - 13; unlocks.length = 13; unlocks.push(`…and ${n} more!`); }
       this.fx({ k: 'levelup', level: lvl, unlocks });
       this.refreshCandidates(true);
     }
@@ -786,6 +792,46 @@ export class Game {
       this.dirtyMeta();
     }
   }
+  makeChallenge() {
+    const lvl = this.s.level;
+    const cats = ['grocery', 'fridge', 'frozen', 'produce', 'meat', 'deli'].filter(c => this.s.furniture.some(f => FURNITURE[f.type].cat === c));
+    const opts = [
+      { type: 'serve', target: Math.round((20 + lvl * 7) / 5) * 5 },
+      { type: 'revenue', target: Math.round((250 + lvl * 200) / 50) * 50 },
+      { type: 'noangry', target: 12 + lvl * 3 },
+      { type: 'sat', target: Math.min(80, 62 + lvl) },
+    ];
+    if (cats.length) opts.push({ type: 'cat', cat: pick(cats), target: 10 + lvl * 4 });
+    const c = pick(this.s.day === 1 ? opts.filter(o => o.type === 'serve' || o.type === 'revenue') : opts);
+    c.reward = 120 + lvl * 60; c.done = false; c.failed = false;
+    return c;
+  }
+  challengeProgress() {
+    const c = this.s.challenge, L = this.s.ledger; if (!c) return 0;
+    switch (c.type) {
+      case 'serve': case 'noangry': return L.served;
+      case 'revenue': return L.revenue;
+      case 'sat': return L.satN ? Math.round(L.satSum / L.satN) : 0;
+      case 'cat': return Object.entries(L.sold).reduce((a, [pid, n]) => a + (PRODUCT_MAP[pid].cat === c.cat ? n : 0), 0);
+    }
+    return 0;
+  }
+  checkChallenge(endOfDay = false) {
+    const c = this.s.challenge, L = this.s.ledger;
+    if (!c || c.done || c.failed) return;
+    const prog = this.challengeProgress();
+    let ok = false;
+    if (c.type === 'serve' || c.type === 'revenue' || c.type === 'cat') ok = prog >= c.target;
+    else if (endOfDay) ok = c.type === 'noangry' ? (L.served >= c.target && L.angry === 0) : (L.satN >= 15 && prog >= c.target);
+    if (c.type === 'noangry' && L.angry > 0) { c.failed = true; this.dirtyMeta(); return; }
+    if (ok) {
+      c.done = true;
+      this.earn(c.reward, 'bonus'); this.addXp(c.reward * 0.5);
+      this.fx({ k: 'goal', text: "Daily challenge complete!", reward: c.reward });
+      this.sound('fanfare'); this.dirtyMeta();
+    } else if (endOfDay) { c.failed = true; this.dirtyMeta(); }
+  }
+
   unlockAch(id) {
     if (this.s.achievements[id]) return;
     const a = ACHIEVEMENTS.find(a => a.id === id); if (!a) return;
@@ -890,6 +936,7 @@ export class Game {
 
   endDay() {
     const s = this.s;
+    this.checkChallenge(true);
     s.phase = 'report';
     // remaining customers vanish (store closed), staff go home
     for (const c of this.customers) if (!c.paid) returnBasket(this, c);
@@ -901,6 +948,7 @@ export class Game {
       st.present = false; st.state = 'idle'; st.post = null; st.path = null;
     }
     this.pigeons = [];
+    for (const b of s.boxes) delete b._claim;
     const L = s.ledger;
     // salaries
     let salaries = 0;
@@ -944,6 +992,7 @@ export class Game {
       power: L.power, maint: L.maint, other: L.other, expenses, profit, customers: L.customers, served: L.served,
       angry: L.angry, lost: L.lost, avgSat, waste: L.waste, top, rep: s.rep, quits: quits.map(q => q.name),
       demand: Object.entries(s.demand).sort((a, b) => b[1] - a[1]).slice(0, 5), cash: s.cash, vending: income,
+      challenge: s.challenge ? { ...s.challenge } : null,
     };
     s.report = report;
     s.history.push({ day: s.day, revenue: L.revenue, expenses, profit, customers: L.served, rep: Math.round(s.rep) });
@@ -982,6 +1031,7 @@ export class Game {
       }
     }
     this.refreshCandidates();
+    s.challenge = this.makeChallenge();
     this.dirtyMeta(); this.dirtyWorld();
     this.hooks.save && this.hooks.save();
   }
@@ -1025,7 +1075,7 @@ export class Game {
     updateStaff(this, simDt, dMin);
 
     this.lastAchCheck += dt;
-    if (this.lastAchCheck > 1) { this.lastAchCheck = 0; this.checkAchievements(); this.checkGoals(); }
+    if (this.lastAchCheck > 1) { this.lastAchCheck = 0; this.checkAchievements(); this.checkGoals(); if (s.phase === 'open' || s.phase === 'closing') this.checkChallenge(); }
   }
 
   updateSpawning(dMin) {
@@ -1112,7 +1162,7 @@ export class Game {
       name: s.name, w: s.w, d: s.d, doorX: s.doorX, floor: s.floor, wall: s.wall, expansion: s.expansion,
       furniture: s.furniture.map(f => ({ id: f.id, type: f.type, x: f.x, z: f.z, rot: f.rot, upg: f.upg, broken: f.broken, repair: f.repair || 0,
         techEta: f.techEta, temp: f.temp !== undefined ? Math.round(f.temp) : undefined, slots: f.slots, boxes: f.boxes, boughtDay: f.boughtDay, boughtPhase: f.boughtPhase })),
-      boxes: s.boxes, dirt: s.dirt, prices: s.prices, saleActive: s.saleActive,
+      boxes: s.boxes.map(b => ({ id: b.id, pid: b.pid, qty: b.qty, exp: b.exp, x: b.x, z: b.z, y: b.y, expired: b.expired })), dirt: s.dirt, prices: s.prices, saleActive: s.saleActive,
     };
   }
 
@@ -1128,6 +1178,7 @@ export class Game {
       ledger: s.ledger, history: s.history, report: s.report, stats: s.stats, achievements: s.achievements, goalIndex: s.goalIndex,
       demand: s.demand, events: s.events, pendingSale: s.pendingSale, saleActive: s.saleActive, eventLog: s.eventLog,
       negativeDays: s.negativeDays, speed: s.speed, paused: s.paused, carryCap: this.carryCap(),
+      challenge: s.challenge ? { ...s.challenge, progress: this.challengeProgress() } : null,
     };
   }
 }

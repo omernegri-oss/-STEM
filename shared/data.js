@@ -199,7 +199,7 @@ export const TEAM_UPGRADE_MAP = Object.fromEntries(TEAM_UPGRADES.map(u => [u.id,
 export const ROLES = {
   cashier: { name: 'Cashier',       icon: '💵', baseSalary: 70, level: 1, color: 0x2563eb, desc: 'Operates a checkout counter.' },
   stocker: { name: 'Shelf Stocker', icon: '📦', baseSalary: 65, level: 1, color: 0x16a34a, desc: 'Moves boxes onto shelves and keeps them full.' },
-  cleaner: { name: 'Cleaner',       icon: '🧹', baseSalary: 55, level: 3, color: 0x0891b2, desc: 'Cleans spills and litter.' },
+  cleaner: { name: 'Cleaner',       icon: '🧹', baseSalary: 55, level: 2, color: 0x0891b2, desc: 'Cleans spills and litter.' },
   butcher: { name: 'Butcher',       icon: '🔪', baseSalary: 95, level: 4, color: 0x991b1b, desc: 'Serves customers at the butcher counter.' },
   deli:    { name: 'Deli Clerk',    icon: '🧀', baseSalary: 85, level: 5, color: 0xca8a04, desc: 'Serves customers at the deli counter.' },
 };

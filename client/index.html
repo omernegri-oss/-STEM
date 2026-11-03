@@ -72,7 +72,7 @@
           <button data-speed="0" title="Pause">⏸</button><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="3">3×</button>
         </div>
         <button id="h-open" class="btn primary glow">🔓 Open Store</button>
-        <div class="tb-audio"><button id="h-sfx" title="Sound effects">🔊</button><button id="h-music" title="Music">🎵</button><button id="h-gfx"></button></div>
+        <div class="tb-audio"><button id="h-sfx" title="Sound effects">🔊</button><button id="h-music" title="Music">🎵</button><button id="h-gfx"></button><button id="h-help" title="How to play (?)">❔</button></div>
       </header>
 
       <aside id="tasks">
@@ -120,6 +120,38 @@
       <div id="eventcard" class="hidden"></div>
       <div id="levelup" class="hidden"></div>
       <div id="bankrupt" class="overlay hidden"><div class="ov-card" id="bk-body"></div></div>
+      <div id="help" class="overlay hidden"><div class="ov-card wide">
+        <h2>❔ How to play Supermarket Tycoons</h2>
+        <div class="report-grid">
+          <div>
+            <div class="section-title">🎮 Controls</div>
+            <div class="kv"><span>Move / sprint</span><b>WASD · Shift</b></div>
+            <div class="kv"><span>Rotate camera</span><b>Drag mouse · Z / C</b></div>
+            <div class="kv"><span>Zoom</span><b>Mouse wheel</b></div>
+            <div class="kv"><span>Interact (hold to repeat)</span><b>E / Space</b></div>
+            <div class="kv"><span>Drop carried box</span><b>Q</b></div>
+            <div class="kv"><span>Call repair technician</span><b>X</b></div>
+            <div class="kv"><span>Build mode (R rotate, M move, X sell, U upgrade)</span><b>B</b></div>
+            <div class="kv"><span>Order · Stock · Prices · Staff</span><b>O · I · P · H</b></div>
+            <div class="kv"><span>Money · Upgrades · Progress</span><b>F · U · K</b></div>
+            <div class="kv"><span>Chat · Emotes · Ping</span><b>Enter · 1-6 · G</b></div>
+          </div>
+          <div>
+            <div class="section-title">🏪 The loop</div>
+            <ol class="goals" style="padding-left:18px">
+              <li><b>Build</b> shelves, fridges and a checkout (B).</li>
+              <li><b>Order</b> products from suppliers (O). Trucks drop boxes at the yellow loading area.</li>
+              <li><b>Carry</b> boxes inside (E) and <b>stock</b> the right fixture — milk goes in a fridge!</li>
+              <li><b>Open the store</b>. Stand on the blue STAFF mat behind a checkout and press E to work the register.</li>
+              <li><b>Hire staff</b> (H) to automate jobs, and set <b>prices</b> (P) for profit.</li>
+              <li>At closing time read the <b>daily report</b>. Don't stay in debt for 3 days!</li>
+              <li>Level up to unlock produce, frozen food, the butcher, the deli, expansions and more.</li>
+            </ol>
+            <p class="note">Tip: split up! One player runs the till, another hauls deliveries, another builds and orders.</p>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:12px"><button class="btn primary" id="help-close">Got it!</button></div>
+      </div></div>
     </section>
 
     <div id="loading" class="hidden"><div class="spinner">🛒</div><p>Connecting…</p></div>

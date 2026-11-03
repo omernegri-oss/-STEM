@@ -21,7 +21,7 @@ export function spawnCustomer(game, opts = {}) {
   };
   // initial mood: store appeal & cleanliness
   const appeal = game.appeal();
-  c.mood = clamp(65 + Math.min(18, appeal * 0.45) - Math.min(20, s.dirt.length * 2.5), 20, 95);
+  c.mood = clamp(68 + Math.min(20, appeal * 0.45) - Math.min(18, s.dirt.length * 1.8), 20, 95);
   buildList(game, c);
   game.customers.push(c);
   s.ledger.customers++;
@@ -31,16 +31,18 @@ export function spawnCustomer(game, opts = {}) {
 function buildList(game, c) {
   const s = game.s;
   const avail = PRODUCTS.filter(p => s.level >= p.level && !COUNTER_CATS.includes(p.cat));
-  const stocked = new Set();
+  const stocked = new Set(), carried = new Set();
   const catPresent = new Set();
   for (const f of s.furniture) {
     const def = FURNITURE[f.type];
     if (def.cat) catPresent.add(def.cat);
-    if (f.slots) for (const sl of f.slots) if (sl.qty > 0 && !sl.expired) stocked.add(sl.pid);
+    if (f.slots) for (const sl of f.slots) { if (sl.pid) carried.add(sl.pid); if (sl.qty > 0 && !sl.expired) stocked.add(sl.pid); }
   }
+  c.carried = carried;
   const heat = game.eventActive('heatwave');
+  // shoppers mostly want what the store is known to sell; a few ask for other things (that's your demand signal)
   const weights = avail.map(p => {
-    let w = stocked.has(p.id) ? 4 : catPresent.has(p.cat) ? 0.9 : 0.3;
+    let w = stocked.has(p.id) ? 6 : carried.has(p.id) ? 4 : catPresent.has(p.cat) ? 0.45 : 0.15;
     if (heat && COLD_DRINKS.has(p.id)) w *= 4;
     return w;
   });
@@ -219,7 +221,7 @@ export function updateCustomers(game, dt, dMin) {
         if (c.patience < 30 && !c.thoughtT) say(c, c.patience < 15 ? '😤' : '⌛', 1.5);
       }
       // litter
-      if (Math.random() < 0.0022 * dMin) {
+      if (Math.random() < 0.0015 * dMin) {
         const tx = Math.floor(c.x), tz = Math.floor(c.z);
         const nearBin = s.furniture.some(f => f.type === 'bin' && Math.abs(f.x - tx) <= 4 && Math.abs(f.z - tz) <= 4);
         if (!nearBin || Math.random() < 0.3) game.addDirt(tx, tz, Math.random() < 0.5 ? 'spill' : 'litter');
@@ -271,7 +273,7 @@ export function updateCustomers(game, dt, dMin) {
           if (!ok) {
             const p = PRODUCT_MAP[pid];
             s.demand[pid] = (s.demand[pid] || 0) + 1;
-            c.mood -= 5; c.missed++;
+            c.mood -= c.carried && c.carried.has(pid) ? 6 : 2; c.missed++;
             say(c, '❓' + p.icon, 2.2);
             c.timer = 0.7;
             if (c.vip === pid) { c.mood -= 15; game.toast(`The VIP couldn't find ${p.name}... 😢`, 'bad', '🕶️'); }

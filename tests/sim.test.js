@@ -103,6 +103,7 @@ assert.ok(L.customers > 20, 'customers came');
 assert.ok(L.served > 5, 'customers served by cashier');
 assert.ok(L.revenue > 30, 'made revenue');
 assert.ok(sawRegister, 'customers reached register');
+assert.ok(sawStockerCarry, 'stocker carried boxes to shelves');
 assert.ok(g.s.achievements.first_sale);
 assert.ok(L.salaries > 0 && L.rent > 0 && L.power > 0);
 
@@ -173,5 +174,39 @@ const saved = JSON.parse(JSON.stringify(g.serialize()));
 const g2 = new Game('TEST1', saved, { fx: () => {}, isNameTaken: () => false });
 assert.equal(g2.s.name, 'Test Mart'); assert.equal(g2.s.furniture.length, g.s.furniture.length);
 g2.tick(0.05);
+// --- fresh store: cleaner, stocker from delivery pad, expiry, bankruptcy
+{
+  const g3 = new Game('TEST3', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
+  const q = { id: 1, name: 'Q', x: 6, z: 7, rot: 0, carry: [], station: null }; g3.players.set(1, q);
+  g3.act(q, { a: 'nameDraft', name: 'Clean Co' }); g3.act(q, { a: 'nameVote' });
+  g3.s.level = 3;
+  g3.act(q, { a: 'place', type: 'shelf', x: 1, z: 1, rot: 0 });
+  g3.act(q, { a: 'place', type: 'checkout', x: 8, z: 5, rot: 0 });
+  for (const role of ['cleaner', 'stocker', 'cashier']) { g3.s.candidates.push({ id: g3.id(), name: role, role, skill: 3, speed: 1.2, salary: 50, seed: 1 }); assert.ok(g3.act(q, { a: 'hire', id: g3.s.candidates.at(-1).id }), 'hire ' + role); }
+  for (let i = 0; i < 3; i++) g3.spawnBox('pasta', 12, 50, null, null);
+  g3.addDirt(5, 3, 'spill'); g3.addDirt(3, 6, 'litter');
+  const dirt0 = g3.s.dirt.length; assert.equal(dirt0, 2);
+  g3.act(q, { a: 'open' });
+  for (let i = 0; i < 20 * 25; i++) g3.tick(0.05);
+  const shelf = g3.s.furniture.find(f => f.type === 'shelf');
+  const units = shelf.slots.reduce((a, s) => a + (s.pid === 'pasta' ? s.qty : 0), 0);
+  console.log('stocker moved pasta to shelf:', units, '| dirt left', g3.s.dirt.length, '| boxes left', g3.s.boxes.length);
+  assert.ok(units >= 24, 'stocker hauled delivery boxes onto the shelf');
+  assert.ok(g3.s.dirt.filter(d => d.kind !== 'pigeon').length < dirt0 + 3, 'cleaner keeps the floor clean');
+  // expiry
+  shelf.slots[0].pid = 'milk'; shelf.slots[0].qty = 0;
+  shelf.slots[1].exp = g3.s.day + 1;
+  g3.endDay(); g3.beginNewDay();
+  assert.ok(shelf.slots[1].expired, 'slot expired overnight');
+  q.x = 2; q.z = 2.5;
+  assert.ok(g3.act(q, { a: 'clearExpired', id: shelf.id }));
+  assert.equal(shelf.slots[1].qty, 0);
+  // bankruptcy after 3 days in the red
+  g3.s.cash = -5000;
+  for (let d = 0; d < 3; d++) { g3.endDay(); if (g3.s.phase !== 'bankrupt') g3.beginNewDay(); }
+  assert.equal(g3.s.phase, 'bankrupt', 'bankrupt after 3 negative days');
+  assert.ok(g3.act(q, { a: 'restart' }));
+  assert.equal(g3.s.phase, 'prep'); assert.equal(g3.s.cash, 5000); assert.equal(g3.s.name, 'Clean Co');
+}
 console.log('✅ sim test passed');
 process.exit(0);

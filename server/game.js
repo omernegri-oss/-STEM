@@ -133,7 +133,7 @@ export class Game {
     a += Math.max(0, fl) * 1.5;
     const wl = WALLS.findIndex(x => x.id === this.s.wall);
     a += wl > 0 ? 2 : 0;
-    a -= this.s.dirt.length * 1.5;
+    a -= this.s.dirt.length;
     return Math.round(a);
   }
   carryCap() { return this.s.upgrades.palletjack ? 6 : this.s.upgrades.handtruck ? 3 : 1; }

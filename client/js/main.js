@@ -42,6 +42,9 @@ const gfxBtn = $('h-gfx');
 const syncGfx = () => { gfxBtn.textContent = lowGfx ? '🖥️ Low' : '🖥️ High'; gfxBtn.title = 'Graphics quality (click to toggle)'; };
 gfxBtn.onclick = () => { lowGfx = !lowGfx; try { localStorage.setItem('st_gfx', lowGfx ? 'low' : 'high'); } catch {} S.setQuality(lowGfx); syncGfx(); };
 syncGfx();
+const toggleHelp = (on) => $('help').classList.toggle('hidden', on === undefined ? undefined : !on);
+$('h-help').onclick = () => toggleHelp();
+$('help-close').onclick = () => toggleHelp(false);
 window.__dbg = { net, me, rig, ui, world, S };
 const build = new BuildMode({ scene: S.scene, camera: S.camera, world, net, G, ui, rig });
 window.__dbg.build = build;
@@ -156,7 +159,14 @@ net.on('fx', (m) => {
     case 'event': ui.showEvent(m); break;
     case 'report': ui.showReport(m.report); break;
     case 'delivery': fx.truck(m.x, m.z, m.supplier); setTimeout(() => play('honk', m.x, m.z), 2200); break;
-    case 'stocked': { const f = G.world?.furniture.find(f => f.id === m.id); if (f) { play('pop', f.x, f.z); if (Math.random() < 0.5) fx.sparkle(f.x + 0.8, f.z + 0.5); } break; }
+    case 'stocked': {
+      const e = world.furn.get(m.id); if (!e) break;
+      const src = m.by > 0 ? actors.players.get(m.by) : actors.staff.get(-m.by);
+      const p = PRODUCT_MAP[m.pid];
+      if (src && p) fx.fly(p.shape, p.color, src, e.group.position, m.n);
+      play('pop', e.group.position.x, e.group.position.z); setTimeout(() => play('pop', e.group.position.x, e.group.position.z), 90);
+      break;
+    }
     case 'placed': fx.burst(m.x + 1, 0.4, m.z + 0.5, 12, [0xffffff, 0xe2e8f0, 0xfde68a], 2); break;
     case 'named': ui.toast(`Welcome to ${m.name}!`, 'good', '🎉'); fx.burst(me.x, 2.5, me.z, 60); break;
     case 'expanded': fx.burst(me.x, 3, me.z, 60); break;
@@ -170,7 +180,8 @@ function enterGame() {
   showScreen('hud');
   ui.updateHud(); ui.renderTasks();
   canvas.focus();
-  setTimeout(() => ui.toast('Tip: WASD to move, drag the mouse to look around, E to interact.', 'info', '🎮'), 800);
+  setTimeout(() => ui.toast('Tip: WASD to move, drag the mouse to look around, E to interact. Press ? for help.', 'info', '🎮'), 800);
+  try { if (!localStorage.getItem('st_seen_help')) { toggleHelp(true); localStorage.setItem('st_seen_help', '1'); } } catch {}
 }
 
 // ----------------------------------------------------------------------------------- key commands
@@ -182,7 +193,9 @@ addEventListener('keydown', (e) => {
   if (input.typing()) return;
   const k = e.key.toLowerCase();
   if (k === 'enter') { $('chat-input').focus(); e.preventDefault(); return; }
+  if (k === '?' || k === 'f1') { toggleHelp(); e.preventDefault(); return; }
   if (k === 'escape') {
+    if (!$('help').classList.contains('hidden')) { toggleHelp(false); return; }
     if (ui.panel) { ui.closePanel(); return; }
     return; // build mode handles its own escape
   }

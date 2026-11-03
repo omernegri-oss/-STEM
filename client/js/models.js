@@ -110,6 +110,14 @@ export function makeSprite(text, height = 0.4, opts = {}) {
   s.scale.set(height * aspect, height, 1); s.renderOrder = 10;
   return s;
 }
+export function makeLabel(text, height = 0.2, opts = {}, maxW = 10) {
+  const { tex, aspect } = textTexture(text, opts);
+  let w = height * aspect, h = height;
+  if (w > maxW) { h *= maxW / w; w = maxW; }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+  m.renderOrder = 2;
+  return m;
+}
 export function setSpriteText(s, text, height = 0.4, opts = {}) {
   if (s.userData.text === text) return;
   s.userData.text = text;
@@ -151,8 +159,8 @@ export function makeFurniture(type, f = {}) {
       B(g, W - 0.1, h - 0.3, 0.02, type === 'freezer_upright' ? 0x93c5fd : 0xe0f2fe, 0, h / 2 + 0.05, -0.39, { emissive: 0x7dd3fc, ei: 0.35 });
       for (const s of slotLayout(type)) B(g, W - 0.12, 0.03, 0.78, 0xe2e8f0, 0, s.y - 0.015, -0.02, { opacity: 0.9 });
       B(g, W, 0.24, 0.05, cc, 0, h + 0.2, 0.4);
-      const lbl = makeSprite(CATEGORIES[def.cat].icon + ' ' + (type === 'freezer_upright' ? 'FROZEN' : 'CHILLED'), 0.2, { bg: null, color: '#fff', size: 40 });
-      lbl.position.set(0, h + 0.2, 0.44); g.add(lbl);
+      const lbl = makeLabel(CATEGORIES[def.cat].icon + ' ' + (type === 'freezer_upright' ? 'FROZEN' : 'CHILLED'), 0.2, { bg: null, color: '#fff', size: 40 }, W - 0.3);
+      lbl.position.set(0, h + 0.2, 0.43); g.add(lbl);
       if (type !== 'fridge_large') {
         const doors = W > 2.5 ? 3 : 2;
         for (let i = 0; i < doors; i++) {
@@ -179,8 +187,8 @@ export function makeFurniture(type, f = {}) {
       B(g, W, 0.1, 0.92, DARK, 0, 0.05, 0);
       const led = B(g, 0.1, 0.05, 0.02, 0x22c55e, W / 2 - 0.15, 0.6, 0.46, { emissive: 0x22c55e });
       g.userData.led = led;
-      const lbl = makeSprite('🧊 FROZEN', 0.18, { bg: '#818cf8', color: '#fff', size: 40 });
-      lbl.position.set(0, 1.15, 0); g.add(lbl);
+      const lbl = makeLabel('🧊 FROZEN', 0.16, { bg: '#818cf8', color: '#fff', size: 40 }, W - 0.4);
+      lbl.position.set(0, 0.62, 0.465); g.add(lbl);
       break;
     }
     case 'produce': {

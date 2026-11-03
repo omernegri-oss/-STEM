@@ -59,10 +59,14 @@ export function createScene(canvas, { low = false } = {}) {
     for (let x = -60; x < W + 70; x += 3) B(env, 1.6, 0.01, 0.15, 0xfde047, x, 0.005, D + 8.6, { shadow: false });
     // sidewalk across the street + buildings
     B(env, W + 140, 0.1, 3, 0xd6d3d1, W / 2, 0.03, D + 13.6, { shadow: false });
+    B(env, W + 140, 0.1, 3, 0xd6d3d1, W / 2, 0.03, D + 26.5, { shadow: false });
+    // a little park between the street and the far buildings
+    for (let i = 0; i < 14; i++) { const t = makeTree(r); t.position.set(-20 + r() * (W + 40), 0, D + 16.5 + r() * 7); t.scale.setScalar(0.7 + r() * 0.5); env.add(t); }
+    for (let x = -24; x < W + 26; x += 9) { B(env, 1.6, 0.08, 0.5, 0x92400e, x, 0.45, D + 15.6); B(env, 0.1, 0.45, 0.4, 0x334155, x - 0.7, 0.22, D + 15.6); B(env, 0.1, 0.45, 0.4, 0x334155, x + 0.7, 0.22, D + 15.6); }
     const colors = [0xfca5a5, 0xfde68a, 0xa7f3d0, 0xbfdbfe, 0xddd6fe, 0xfbcfe8, 0xfed7aa];
     for (let x = -40, i = 0; x < W + 44; i++) {
       const w = 5 + Math.floor(r() * 5), h = 4 + Math.floor(r() * 7), d = 6;
-      const bx = x + w / 2, bz = D + 18;
+      const bx = x + w / 2, bz = D + 31;
       B(env, w - 0.3, h, d, colors[i % colors.length], bx, h / 2, bz);
       B(env, w - 0.1, 0.3, d + 0.2, 0x64748b, bx, h + 0.15, bz);
       for (let fy = 1.6; fy < h - 0.6; fy += 2.2) for (let fx = -w / 2 + 1.2; fx < w / 2 - 0.6; fx += 1.6) {
@@ -80,6 +84,7 @@ export function createScene(canvas, { low = false } = {}) {
       const t = makeTree(r); t.position.set(x, 0, D + 4.2); env.add(t);
     }
     for (let x = -30; x < W + 34; x += 7) { const t = makeTree(r); t.position.set(x + r() * 2, 0, D + 13.5); t.scale.setScalar(0.8); env.add(t); }
+    for (let x = -36; x < W + 40; x += 12) { const l = makeStreetLamp(); l.position.set(x, 0, D + 12.6); l.rotation.y = -Math.PI / 2; env.add(l); state.streetLamps.push(l); }
     // trees and fence behind/beside the store
     for (let i = 0; i < 18; i++) { const t = makeTree(r); t.position.set(-6 - r() * 20 + (i % 2 ? W + 32 * r() + 6 : 0), 0, -4 - r() * 14); t.scale.setScalar(0.8 + r() * 0.6); env.add(t); }
     for (let i = 0; i < 10; i++) { const t = makeTree(r); t.position.set(W / 2 + (r() - 0.5) * (W + 20), 0, -5 - r() * 10); t.scale.setScalar(0.9 + r() * 0.5); env.add(t); }

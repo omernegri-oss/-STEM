@@ -3,6 +3,9 @@ import { Game } from './game.js';
 import { MAX_PLAYERS, TICK_RATE, PLAYER_COLORS, PLAYER_ROLES } from '../shared/data.js';
 
 const r2 = v => Math.round(v * 100) / 100;
+const REACTIONS = new Set(['😡', '😵', '💢']);
+// carried things are sent as short codes: 'milk', 'f:shelf' (furniture box), 'raw:ribeye', 'pack:ribeye'
+const carryCode = (b) => b.ftype ? 'f:' + b.ftype : b.dept ? `${b.dept}:${b.pid}` : b.pid;
 
 export class Room {
   constructor(code, { save = null, isPublic = true, persistence }) {
@@ -33,7 +36,7 @@ export class Room {
     const p = {
       id: this.nextPid++, ws, name: String(name || 'Player').slice(0, 16) || 'Player', color,
       role: 'manager', x: s.doorX + 1 + (this.players.size - 1.5) * 0.8, z: s.d - 2, rot: Math.PI, anim: 0,
-      carry: [], station: null, host: this.players.size === 0, emote: '', emoteT: 0, ready: false,
+      carry: [], station: null, host: this.players.size === 0, emote: '', emoteT: 0, ready: false, floor: 0, stunUntil: 0,
     };
     this.players.set(p.id, p);
     this.emptySince = null;
@@ -48,7 +51,7 @@ export class Room {
   removePlayer(p) {
     if (!this.players.has(p.id)) return;
     // drop whatever they were carrying
-    for (const b of p.carry) this.game.spawnBox(b.pid, b.qty, b.exp, p.x, p.z, b.expired);
+    for (const b of p.carry) if (!b.dept) this.game.respawnBox(b, p.x, p.z, p.floor || 0);
     p.carry = [];
     this.players.delete(p.id);
     if (p.host && this.players.size) [...this.players.values()][0].host = true;
@@ -98,9 +101,10 @@ export class Room {
       case 'p': {
         if (typeof msg.x !== 'number' || typeof msg.z !== 'number') return;
         p.x = msg.x; p.z = msg.z; p.rot = +msg.rot || 0; p.anim = msg.anim | 0;
+        p.floor = Math.max(0, Math.min((g.s.floors || 1) - 1, msg.floor | 0));
         if (p.station) {
           const f = g.fixture(p.station);
-          if (!f || Math.hypot(f._back[0] + 0.5 - p.x, f._back[1] + 0.5 - p.z) > 1.3) p.station = null;
+          if (!f || (f.floor || 0) !== p.floor || Math.hypot(f._back[0] + 0.5 - p.x, f._back[1] + 0.5 - p.z) > 1.3) p.station = null;
         }
         return;
       }
@@ -160,11 +164,12 @@ export class Room {
 
   snapshot() {
     const g = this.game, s = g.s;
-    const P = [...this.players.values()].map(p => [p.id, r2(p.x), r2(p.z), r2(p.rot), p.anim, p.carry.map(b => b.pid), p.station, p.emote]);
-    const C = g.customers.map(c => [c.id, r2(c.x), r2(c.z), r2(c.rot), c.moving ? 1 : 0, c.thought || '',
-      c.basket.slice(0, 8).map(b => b.pid), c.seed, (c.cart ? 1 : 0) | (c.vip ? 2 : 0) | (c.mood < 25 ? 4 : 0) | (c.paid ? 8 : 0)]);
+    const now = Date.now();
+    const P = [...this.players.values()].map(p => [p.id, r2(p.x), r2(p.z), r2(p.rot), p.anim, p.carry.map(carryCode), p.station, p.emote, p.floor || 0, p.stunUntil > now ? 1 : 0]);
+    const C = g.customers.map(c => [c.id, r2(c.x), r2(c.z), r2(c.rot), c.moving ? 1 : 0, REACTIONS.has(c.thought) ? c.thought : '',
+      c.basket.slice(0, 8).map(b => b.pid), c.seed, (c.cart ? 1 : 0) | (c.vip ? 2 : 0) | (c.mood < 25 ? 4 : 0) | (c.paid ? 8 : 0) | (c.stunT > 0 ? 16 : 0), c.floor || 0]);
     const S = s.staff.filter(st => st.present).map(st => [st.id, r2(st.x), r2(st.z), r2(st.rot), st.moving ? 1 : 0, st.role,
-      st.carry ? st.carry.pid : '', st.seed, st.thought || '', st.state]);
+      st.carry ? carryCode(st.carry) : '', st.seed, REACTIONS.has(st.thought) ? st.thought : '', st.task && st.task.stage ? st.task.stage : st.state, st.floor || 0, st.stunT > 0 ? 1 : 0]);
     const K = [], N = [];
     for (const f of s.furniture) {
       const kind = f.type === 'checkout' || f.type === 'selfcheckout' ? 'k' : (f.type === 'butcher' || f.type === 'deli') ? 'n' : null;

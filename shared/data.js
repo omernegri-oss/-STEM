@@ -6,7 +6,10 @@ export const REAL_SECONDS_PER_MINUTE = 0.4; // 1 in-game minute at 1x speed
 export const OPEN_HOUR = 8;
 export const CLOSE_HOUR = 22;
 export const LAST_ENTRY_HOUR = 21.5;
-export const STARTING_CASH = 5000;
+export const STARTING_CASH = 400;
+export const MAX_CUSTOMERS = 15;       // never more than this many shoppers at once (no queue outside)
+export const FLOOR_H = 3.6;            // height of one storey
+export const STARTER_PRODUCTS = ['flour', 'oil', 'sugar']; // licensed from day one
 export const MAX_PLAYERS = 4;
 export const OUTSIDE_ROWS = 5;            // walkable rows in front of the store (wall row + 4)
 
@@ -34,8 +37,9 @@ export const PRODUCTS = [
   { id: 'coffee',      name: 'Morning Coffee',     cat: 'grocery', cost: 2.80, price: 6.49, box: 12, shape: 'can',     color: 0x44403c, life: 120, level: 2, icon: '☕' },
   { id: 'tomsauce',    name: 'Tomato Sauce',       cat: 'grocery', cost: 0.70, price: 1.89, box: 12, shape: 'jar',     color: 0xef4444, life: 100, level: 2, icon: '🍅' },
   { id: 'chocolate',   name: 'Milk Chocolate',     cat: 'grocery', cost: 0.70, price: 1.99, box: 12, shape: 'flatbox', color: 0x92400e, life: 80, level: 2, icon: '🍫' },
-  { id: 'oil',         name: 'Olive Oil',          cat: 'grocery', cost: 3.20, price: 7.49, box: 12, shape: 'bottle',  color: 0x65a30d, life: 150, level: 3, icon: '🫒' },
-  { id: 'flour',       name: 'Baking Flour',       cat: 'grocery', cost: 0.90, price: 2.29, box: 12, shape: 'bag',     color: 0xfef3c7, life: 120, level: 3, icon: '🌾' },
+  { id: 'oil',         name: 'Olive Oil',          cat: 'grocery', cost: 3.20, price: 7.49, box: 12, shape: 'bottle',  color: 0x65a30d, life: 150, level: 1, icon: '🫒' },
+  { id: 'flour',       name: 'Baking Flour',       cat: 'grocery', cost: 0.90, price: 2.29, box: 12, shape: 'bag',     color: 0xfef3c7, life: 120, level: 1, icon: '🌾' },
+  { id: 'sugar',       name: 'White Sugar',        cat: 'grocery', cost: 0.80, price: 1.99, box: 12, shape: 'bag',     color: 0xf1f5f9, life: 300, level: 1, icon: '🧂' },
   { id: 'pbutter',     name: 'Peanut Butter',      cat: 'grocery', cost: 1.50, price: 3.79, box: 12, shape: 'jar',     color: 0xd97706, life: 120, level: 3, icon: '🥜' },
   { id: 'honey',       name: 'Wildflower Honey',   cat: 'grocery', cost: 2.40, price: 5.49, box: 12, shape: 'jar',     color: 0xfbbf24, life: 200, level: 4, icon: '🍯' },
   { id: 'catfood',     name: 'Happy Cat Food',     cat: 'grocery', cost: 0.60, price: 1.59, box: 12, shape: 'can',     color: 0xa855f7, life: 150, level: 4, icon: '🐱' },
@@ -102,7 +106,7 @@ export const PRODUCT_MAP = Object.fromEntries(PRODUCTS.map(p => [p.id, p]));
 // minOrder = minimum boxes per order. time = delivery time in real seconds at 1x speed.
 // discounts: [boxes, percent off product subtotal]
 export const SUPPLIERS = [
-  { id: 'pantry',  name: 'Pantry Wholesale',   icon: '📦', cats: ['grocery'], fee: 20, time: 40, minOrder: 2, markup: 1.0,  discounts: [[6, 5], [12, 10], [24, 15]], level: 1, desc: 'Cheap dry goods in bulk.' },
+  { id: 'pantry',  name: 'Pantry Wholesale',   icon: '📦', cats: ['grocery'], fee: 10, time: 40, minOrder: 1, markup: 1.0,  discounts: [[6, 5], [12, 10], [24, 15]], level: 1, desc: 'Cheap dry goods in bulk.' },
   { id: 'dairy',   name: 'Daily Dairy Co.',    icon: '🐄', cats: ['fridge'],  fee: 25, time: 35, minOrder: 2, markup: 1.0,  discounts: [[6, 5], [12, 8]], level: 1, desc: 'Fresh milk & chilled goods every morning.' },
   { id: 'green',   name: 'Green Valley Farms', icon: '🚜', cats: ['produce'], fee: 20, time: 30, minOrder: 2, markup: 1.0,  discounts: [[8, 6], [16, 12]], level: 2, desc: 'Farm-fresh fruit and vegetables.' },
   { id: 'polar',   name: 'Polar Frozen Foods', icon: '🐻‍❄️', cats: ['frozen'], fee: 30, time: 50, minOrder: 2, markup: 1.0,  discounts: [[6, 6], [12, 12]], level: 3, desc: 'Everything sub-zero.' },
@@ -125,13 +129,18 @@ export const FURNITURE = {
   freezer:        { name: 'Chest Freezer',      cat: 'frozen',  kind: 'storage', w: 2, d: 1, slots: 2, cap: 15, cost: 800, power: 12, maint: 2, appeal: 0, level: 3, icon: '🧊', desc: 'Glass-top chest freezer.', temp: -18, maxTemp: -6 },
   freezer_upright:{ name: 'Upright Freezer',    cat: 'frozen',  kind: 'storage', w: 2, d: 1, slots: 4, cap: 10, cost: 1100,power: 15, maint: 3, appeal: 0, level: 6, icon: '🥶', desc: 'Tall frozen display with doors.', temp: -18, maxTemp: -6 },
   produce:        { name: 'Produce Stand',      cat: 'produce', kind: 'storage', w: 2, d: 1, slots: 4, cap: 12, cost: 320, power: 0, maint: 1, appeal: 2, level: 2, icon: '🧺', desc: 'Wooden crates of fresh produce.' },
-  butcher:        { name: 'Butcher Counter',    cat: 'meat',    kind: 'counter', w: 3, d: 1, slots: 4, cap: 8,  cost: 1800,power: 10, maint: 3, appeal: 2, level: 4, icon: '🔪', desc: 'Meat display + cutting station. Staff it to serve customers.', temp: 2, maxTemp: 7, presses: 5 },
-  deli:           { name: 'Deli Counter',       cat: 'deli',    kind: 'counter', w: 3, d: 1, slots: 4, cap: 8,  cost: 1600,power: 8, maint: 3, appeal: 2, level: 5, icon: '🧀', desc: 'Cheese, olives & cold cuts. Staff it to serve.', temp: 4, maxTemp: 8, presses: 4 },
+  // Departments are 3x3: back row = big walk-in fridge + prep station, middle row = staff aisle (walkable), front row = display counter.
+  butcher:        { name: 'Butcher Department', cat: 'meat',    kind: 'counter', w: 3, d: 3, tiles: [[0,0],[1,0],[2,0],[0,2],[1,2],[2,2]], staffRow: 1, slots: 4, cap: 8, cost: 1800,power: 10, maint: 3, appeal: 2, level: 4, icon: '🔪', desc: 'Display counter, big meat fridge and a cutting station behind it.', temp: 2, maxTemp: 7, presses: 5 },
+  deli:           { name: 'Deli Department',    cat: 'deli',    kind: 'counter', w: 3, d: 3, tiles: [[0,0],[1,0],[2,0],[0,2],[1,2],[2,2]], staffRow: 1, slots: 4, cap: 8, cost: 1600,power: 8, maint: 3, appeal: 2, level: 5, icon: '🧀', desc: 'Display counter, cheese fridge and a cheese slicer behind it.', temp: 4, maxTemp: 8, presses: 4 },
+  computer:       { name: 'Store Computer',     kind: 'computer', w: 2, d: 1, cost: 600, power: 1, maint: 0, appeal: 0, level: 1, icon: '🖥️', desc: 'Order stock, buy fixtures & licenses, hire staff, pay bills, read messages.' },
   checkout:       { name: 'Checkout Counter',   kind: 'checkout', w: 2, d: 1, cost: 500,  power: 2, maint: 2, appeal: 0, level: 1, icon: '🛒', desc: 'Belt + register. A player or cashier must operate it.' },
   selfcheckout:   { name: 'Self-Checkout Kiosk',kind: 'selfcheckout', w: 1, d: 1, cost: 1400, power: 3, maint: 4, appeal: 1, level: 6, icon: '🖥️', desc: 'Customers scan their own items (slowly).' },
   rack:           { name: 'Storage Rack',       kind: 'rack', w: 2, d: 1, boxes: 8, cost: 200, power: 0, maint: 0, appeal: -1, level: 1, icon: '🗃️', desc: 'Back-stock for 8 boxes. Stockers restock from here.' },
   bin:            { name: 'Trash Bin',          kind: 'decor', w: 1, d: 1, cost: 40,  power: 0, maint: 0, appeal: 0, level: 1, clean: 1, icon: '🗑️', desc: 'Fewer spills and litter nearby.' },
   plant:          { name: 'Potted Plant',       kind: 'decor', w: 1, d: 1, cost: 60,  power: 0, maint: 0, appeal: 2, level: 1, icon: '🪴', desc: 'A little green makes shoppers happy.' },
+  flowerpot:      { name: 'Flower Pot',         kind: 'decor', w: 1, d: 1, cost: 45,  power: 0, maint: 0, appeal: 1, level: 1, icon: '🌷', desc: 'A small pot of tulips.' },
+  cactus:         { name: 'Cactus',             kind: 'decor', w: 1, d: 1, cost: 70,  power: 0, maint: 0, appeal: 2, level: 2, icon: '🌵', desc: 'Low maintenance, high style.' },
+  plant_tall:     { name: 'Tall Ficus Tree',    kind: 'decor', w: 1, d: 1, cost: 160, power: 0, maint: 0, appeal: 4, level: 3, icon: '🌳', desc: 'An indoor tree for a fresh feel.' },
   lamp:           { name: 'Floor Lamp',         kind: 'decor', w: 1, d: 1, cost: 90,  power: 1, maint: 0, appeal: 2, level: 2, icon: '💡', desc: 'Warm cozy light.' },
   sign:           { name: 'Sale Sign',          kind: 'decor', w: 1, d: 1, cost: 70,  power: 0, maint: 0, appeal: 2, level: 2, icon: '🪧', desc: '"Fresh deals!" Shoppers notice.' },
   bench:          { name: 'Bench',              kind: 'decor', w: 2, d: 1, cost: 150, power: 0, maint: 0, appeal: 3, level: 3, icon: '🪑', desc: 'A place to rest tired feet.' },
@@ -153,13 +162,17 @@ export const FIXTURE_UPGRADES = {
 };
 
 export const EXPANSIONS = [
-  { w: 12, d: 9,  cost: 0,     level: 1, rent: 90 },
-  { w: 16, d: 10, cost: 2500,  level: 2, rent: 130 },
-  { w: 20, d: 12, cost: 6000,  level: 4, rent: 190 },
-  { w: 24, d: 13, cost: 12000, level: 6, rent: 260 },
-  { w: 28, d: 15, cost: 22000, level: 8, rent: 350 },
-  { w: 34, d: 17, cost: 40000, level: 10, rent: 480 },
+  { w: 12, d: 9,  cost: 0,     level: 1, rent: 40 },
+  { w: 16, d: 10, cost: 2500,  level: 3, rent: 70 },
+  { w: 20, d: 12, cost: 6000,  level: 5, rent: 110 },
+  { w: 24, d: 13, cost: 12000, level: 7, rent: 160 },
+  { w: 24, d: 13, cost: 25000, level: 9, rent: 240, floors: 2 }, // a real second floor with stairs
 ];
+// Stairs (used once the 2nd floor exists): a 2-tile wide ramp along the right wall.
+export function stairInfo(W) { return { x: W - 2, z0: 1, z1: 5 }; } // ramp tiles z0..z1-1, bottom entry at z1 (ground), landing at z0-1 (upstairs)
+export const FURNITURE_SUPPLIER = { id: 'fixtures', name: 'FixturePro Store Supply', icon: '🪑', fee: 25, time: 20 };
+export function licenseCost(p) { return STARTER_PRODUCTS.includes(p.id) ? 0 : Math.max(50, Math.min(200, Math.round(p.price * 25 / 10) * 10)); }
+export function priceLimits(p) { return [Math.ceil(p.cost * 1.05 * 20) / 20, Math.round(p.price * 2 * 100) / 100]; }
 
 export const FLOORS = [
   { id: 'white',   name: 'Clean White Tile', a: '#f1f5f9', b: '#e2e8f0', cost: 0,    level: 1 },
@@ -229,7 +242,7 @@ export const PLAYER_ROLES = {
 export const PLAYER_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
 
 // XP needed to *reach* each level (index = level-1)
-export const LEVEL_XP = [0, 250, 800, 1800, 3500, 6000, 9500, 14000, 20000, 28000, 38000, 50000, 65000, 85000, 110000];
+export const LEVEL_XP = [0, 150, 500, 1200, 2500, 4500, 7500, 12000, 18000, 26000];
 export const MAX_LEVEL = LEVEL_XP.length;
 
 export function levelForXp(xp) {

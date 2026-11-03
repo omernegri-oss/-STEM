@@ -1,212 +1,170 @@
-// Headless simulation test: drives the authoritative Game through a full business day without a browser.
+// Headless simulation test: drives the authoritative Game through the full new-player flow without a browser.
 import assert from 'node:assert/strict';
 import { Game } from '../server/game.js';
-import { FURNITURE, PRODUCT_MAP } from '../shared/data.js';
+import { spawnCustomer } from '../server/customers.js';
+import { PRODUCT_MAP, MAX_CUSTOMERS, licenseCost, priceLimits, EXPANSIONS } from '../shared/data.js';
 
 const fx = [];
 const g = new Game('TEST1', null, { fx: m => fx.push(m), isNameTaken: () => false, save: () => {} });
-const p = { id: 1, name: 'Tester', x: 6, z: 7, rot: 0, carry: [], station: null };
+const p = { id: 1, name: 'Tester', x: 6, z: 7, rot: 0, carry: [], station: null, floor: 0 };
 g.players.set(1, p);
 const act = (m) => g.act(p, m);
-const errs = () => fx.filter(f => f.k === 'err').map(f => f.text);
+const lastErr = () => fx.filter(f => f.k === 'err').map(f => f.text).at(-1);
 const tickFor = (sec, dt = 0.05) => { for (let t = 0; t < sec; t += dt) g.tick(dt); };
+const at = (x, z, rot = 0) => { p.x = x; p.z = z; p.rot = rot; };
+const computer = () => g.s.furniture.find(f => f.type === 'computer');
+const atComputer = () => { const c = computer(); at(c.x + 1.5, c.z + 1); };
 
-// --- naming
-assert.equal(g.s.phase, 'naming');
-assert.equal(act({ a: 'place', type: 'shelf', x: 1, z: 1, rot: 0 }), false, 'cannot build before naming');
-act({ a: 'nameDraft', name: 'Test Mart' });
-act({ a: 'nameVote' });
-assert.equal(g.s.phase, 'prep'); assert.equal(g.s.name, 'Test Mart');
+// --- start: empty store with a computer + checkout, $400, flour/oil/sugar licensed
+assert.equal(g.s.cash, 400);
+assert.deepEqual(g.s.furniture.map(f => f.type).sort(), ['checkout', 'computer']);
+assert.ok(g.s.licenses.includes('flour') && g.s.licenses.includes('sugar') && g.s.licenses.includes('oil'));
+act({ a: 'nameDraft', name: 'Test Mart' }); act({ a: 'nameVote' });
+assert.equal(g.s.phase, 'prep');
 
-// --- building
-const cash0 = g.s.cash;
-assert.ok(act({ a: 'place', type: 'shelf', x: 1, z: 1, rot: 0 }), 'place shelf ' + errs());
-assert.ok(act({ a: 'place', type: 'shelf', x: 4, z: 1, rot: 0 }), 'place shelf 2 ' + errs());
-assert.ok(act({ a: 'place', type: 'fridge', x: 8, z: 1, rot: 0 }), 'place fridge ' + errs());
-assert.ok(act({ a: 'place', type: 'checkout', x: 8, z: 5, rot: 0 }), 'place checkout ' + errs());
-assert.ok(act({ a: 'place', type: 'rack', x: 0, z: 6, rot: 1 }), 'place rack ' + errs());
-assert.equal(act({ a: 'place', type: 'shelf', x: 1, z: 1, rot: 0 }), false, 'overlap rejected');
-assert.equal(act({ a: 'place', type: 'shelf', x: g.s.doorX, z: g.s.d - 1, rot: 0 }), false, 'door blocked rejected');
-assert.equal(act({ a: 'place', type: 'freezer', x: 1, z: 4, rot: 0 }), false, 'locked furniture rejected');
-assert.equal(g.s.cash, cash0 - 250 * 2 - 700 - 500 - 200);
-// move & rotate
-const shelf2 = g.s.furniture[1];
-assert.ok(act({ a: 'move', id: shelf2.id, x: 4, z: 2, rot: 2 }), 'move ' + errs());
-assert.equal(shelf2.rot, 2);
-assert.ok(act({ a: 'move', id: shelf2.id, x: 4, z: 1, rot: 0 }));
+// --- the computer is the only place to buy things
+at(9, 2);
+assert.equal(act({ a: 'buyFurniture', type: 'shelf' }), false); assert.match(lastErr(), /computer/);
+atComputer();
+assert.ok(act({ a: 'buyFurniture', type: 'shelf' }), 'buy shelf ' + lastErr());
+assert.ok(act({ a: 'order', supplier: 'pantry', items: [{ pid: 'flour', boxes: 1 }, { pid: 'sugar', boxes: 1 }] }), 'order ' + lastErr());
+assert.equal(act({ a: 'order', supplier: 'dairy', items: [{ pid: 'milk', boxes: 1 }] }), false, 'milk needs a license');
+assert.match(lastErr(), /Unlock/);
+console.log('cash after shelf + flour + sugar:', g.s.cash);
+assert.ok(g.s.cash >= 0 && g.s.cash < 150, 'starting money is roughly a shelf and a few boxes');
+assert.equal(act({ a: 'license', pid: 'coffee' }), false, 'coffee is level 2'); assert.ok(licenseCost(PRODUCT_MAP.milk) >= 50 && licenseCost(PRODUCT_MAP.wine) <= 200);
 
-// --- ordering
-assert.ok(act({ a: 'order', supplier: 'pantry', items: [{ pid: 'cereal', boxes: 2 }, { pid: 'pasta', boxes: 1 }, { pid: 'chips', boxes: 1 }, { pid: 'soda', boxes: 2 }] }), 'order ' + errs());
-assert.ok(act({ a: 'order', supplier: 'dairy', items: [{ pid: 'milk', boxes: 2 }, { pid: 'yogurt', boxes: 1 }] }), 'order dairy ' + errs());
-assert.equal(act({ a: 'order', supplier: 'dairy', items: [{ pid: 'cereal', boxes: 3 }] }), false, 'wrong supplier rejected');
-assert.equal(g.s.orders.length, 2);
+// --- price limits
+assert.ok(act({ a: 'setPrice', pid: 'flour', price: 100 }));
+assert.equal(g.s.prices.flour, priceLimits(PRODUCT_MAP.flour)[1]);
+assert.ok(act({ a: 'setPrice', pid: 'flour', price: 0.01 }));
+assert.equal(g.s.prices.flour, priceLimits(PRODUCT_MAP.flour)[0]);
+act({ a: 'setPrice', pid: 'flour', price: 2.5 });
+
+// --- deliveries: furniture arrives in a box that you carry and place
 tickFor(45);
-assert.equal(g.s.orders.length, 0, 'orders delivered');
-assert.equal(g.s.boxes.length, 9, 'boxes on delivery pad');
+assert.equal(g.s.orders.length, 0);
+const fbox = g.s.boxes.find(b => b.ftype === 'shelf'); assert.ok(fbox, 'furniture box delivered');
 assert.ok(fx.some(f => f.k === 'delivery'));
-
-// --- carrying & stocking
-const shelfA = g.s.furniture[0], shelfB = g.s.furniture[1], fridge = g.s.furniture[2];
-function haul(box, target) {
-  p.x = box.x; p.z = box.z;
-  assert.ok(act({ a: 'pickup', id: box.id }), 'pickup ' + errs());
-  let guard = 0;
-  while (p.carry.length && guard++ < 20) { if (!act({ a: 'stock', id: target.id, n: 4 })) break; }
+assert.equal(act({ a: 'place', x: 2, z: 1, rot: 0 }), false, 'cannot place without carrying the box');
+at(fbox.x, fbox.z); assert.ok(act({ a: 'pickup', id: fbox.id }), 'pickup furniture box ' + lastErr());
+assert.ok(act({ a: 'place', x: 2, z: 1, rot: 0 }), 'place from box ' + lastErr());
+const shelf = g.s.furniture.find(f => f.type === 'shelf');
+for (const b of g.s.boxes.filter(b => b.pid)) {
+  at(b.x, b.z); assert.ok(act({ a: 'pickup', id: b.id }));
+  at(3, 2.5, Math.PI); let guard = 0; while (p.carry.length && guard++ < 10) act({ a: 'stock', id: shelf.id, n: 6 });
 }
-for (const b of [...g.s.boxes]) {
-  const prod = PRODUCT_MAP[b.pid];
-  if (prod.cat === 'fridge') haul(b, fridge);
-  else haul(b, ['cereal', 'pasta'].includes(b.pid) ? shelfA : shelfB);
-  if (p.carry.length) act({ a: 'drop' });
-}
-// wrong category
-const milkLeft = g.s.boxes.find(b => b.pid === 'milk');
-assert.ok(shelfA.slots.some(s => s.pid === 'cereal' && s.qty > 0), 'cereal stocked');
-assert.ok(fridge.slots.some(s => s.pid === 'milk' && s.qty > 0), 'milk stocked in fridge');
-console.log('shelfA', shelfA.slots.map(s => `${s.pid}:${s.qty}`).join(' '), '| shelfB', shelfB.slots.map(s => `${s.pid}:${s.qty}`).join(' '), '| fridge', fridge.slots.map(s => `${s.pid}:${s.qty}`).join(' '));
-console.log('leftover boxes', g.s.boxes.length, milkLeft ? 'milk box left' : '');
-// category mismatch check
-g.s.boxes.length && (p.x = g.s.boxes[0].x, p.z = g.s.boxes[0].z);
-const testBox = g.spawnBox('milk', 10, 10, p.x, p.z);
-act({ a: 'pickup', id: testBox.id });
-fx.length = 0;
-assert.equal(act({ a: 'stock', id: shelfA.id }), false);
-assert.ok(errs()[0].includes('Refrigerated'), 'category error: ' + errs()[0]);
-act({ a: 'rackPut', id: g.s.furniture[4].id });
-assert.equal(g.s.furniture[4].boxes.length, 1, 'box into rack');
+assert.equal(shelf.slots.filter(s => s.qty).length, 2, 'flour and sugar on the shelf');
 
-// --- staff
-const cashierCand = g.s.candidates.find(c => c.role === 'cashier') || (g.s.candidates[0].role = 'cashier', g.s.candidates[0]);
-assert.ok(act({ a: 'hire', id: cashierCand.id }), 'hire ' + errs());
-g.s.candidates.push({ id: g.id(), name: 'Stock Bot', role: 'stocker', skill: 3, speed: 1.1, salary: 60, seed: 5 });
-assert.ok(act({ a: 'hire', id: g.s.candidates[g.s.candidates.length - 1].id }));
-g.s.candidates.push({ id: g.id(), name: 'Clean Bot', role: 'cleaner', skill: 3, speed: 1.1, salary: 60, seed: 6 });
-act({ a: 'hire', id: g.s.candidates[g.s.candidates.length - 1].id }); // cleaner locked at level 1 -> rejected
-assert.equal(g.s.staff.length, 2);
-
-// --- open the store and simulate a day at 3x speed
-p.x = 3; p.z = 7;
+// --- open, run the register by hand
+const chk = g.s.furniture.find(f => f.type === 'checkout');
+at(chk._back[0] + 0.5, chk._back[1] + 0.5);
+assert.ok(act({ a: 'station', id: chk.id }));
 assert.ok(act({ a: 'open' }));
 act({ a: 'speed', v: 3 });
-let maxCust = 0, sawRegister = false, sawStockerCarry = false;
-for (let i = 0; i < 20 * 200 && g.s.phase !== 'report'; i++) {
+let maxC = 0;
+for (let i = 0; i < 20 * 260 && g.s.phase !== 'report'; i++) {
   g.tick(0.05);
-  maxCust = Math.max(maxCust, g.customers.length);
-  if (g.customers.some(c => c.state === 'register')) sawRegister = true;
-  if (g.s.staff.some(s => s.carry)) sawStockerCarry = true;
+  maxC = Math.max(maxC, g.customers.length);
+  if (g.customerAtRegister(chk)) act({ a: 'work' });
 }
-const L = g.s.report;
-console.log('report', L && { revenue: L.revenue, served: L.served, customers: L.customers, angry: L.angry, lost: L.lost, profit: L.profit, avgSat: L.avgSat, rep: Math.round(g.s.rep), xp: g.s.xp, level: g.s.level });
-console.log('max concurrent customers', maxCust, 'demand', JSON.stringify(g.s.demand));
-assert.equal(g.s.phase, 'report', 'day ended');
-assert.ok(L.customers > 20, 'customers came');
-assert.ok(L.served > 5, 'customers served by cashier');
-assert.ok(L.revenue > 30, 'made revenue');
-assert.ok(sawRegister, 'customers reached register');
-assert.ok(sawStockerCarry, 'stocker carried boxes to shelves');
-assert.ok(g.s.achievements.first_sale);
-assert.ok(L.salaries > 0 && L.rent > 0 && L.power > 0);
-
-// --- next day + expiry
+const r = g.s.report;
+console.log('day 1', { served: r.served, revenue: r.revenue, profit: r.profit, sat: r.avgSat, bill: r.bill, maxC, inbox: g.s.inbox.length });
+assert.equal(g.s.phase, 'report');
+assert.ok(r.served >= 3, 'customers served at the register');
+assert.ok(maxC <= MAX_CUSTOMERS, 'never more than 15 shoppers');
+assert.ok(g.s.inbox.some(m => m.icon === '🗣️'), 'missing products reported as computer messages');
+assert.ok(!fx.some(f => f.k === 'toast'), 'no toasts other than level-up and delivery');
+const bill = g.s.bills.find(b => !b.paid); assert.ok(bill, 'rent bill created');
 act({ a: 'continue' });
-assert.equal(g.s.phase, 'prep'); assert.equal(g.s.day, 2);
+atComputer();
+const cashBefore = g.s.cash;
+assert.ok(act({ a: 'payBill', id: bill.id }), 'pay bill ' + lastErr());
+assert.equal(g.s.cash, Math.round((cashBefore - bill.total) * 100) / 100);
 
-// --- player-operated checkout & counters at high level
-g.s.level = 6; g.s.cash = 50000;
-assert.ok(act({ a: 'place', type: 'butcher', x: 1, z: 4, rot: 0 }) || act({ a: 'place', type: 'butcher', x: 2, z: 4, rot: 0 }), 'butcher ' + errs());
+// --- fridges must be opened before stocking
+g.s.cash = 50000; g.s.level = 10;
+if (!g.licensed('milk')) assert.ok(act({ a: 'license', pid: 'milk' }));
+p.carry = [{ ftype: 'fridge' }]; at(8, 3);
+assert.ok(act({ a: 'place', x: 4, z: 0, rot: 0 }), 'place fridge ' + lastErr());
+const fridge = g.s.furniture.find(f => f.type === 'fridge');
+p.carry = [{ pid: 'milk', qty: 10, exp: 20 }]; at(5, 1.5, Math.PI);
+assert.equal(act({ a: 'stock', id: fridge.id }), false); assert.match(lastErr(), /Open/);
+assert.ok(act({ a: 'door', id: fridge.id })); assert.ok(fridge.open);
+assert.ok(act({ a: 'stock', id: fridge.id, n: 6 }));
+act({ a: 'door', id: fridge.id }); assert.equal(fridge.open, false);
+
+// --- butcher: take from the big fridge -> cut at the station -> hand over at the counter
+p.carry = [{ ftype: 'butcher' }]; at(8, 3);
+assert.ok(act({ a: 'place', x: 7, z: 1, rot: 0 }) || act({ a: 'place', x: 2, z: 4, rot: 0 }), 'place butcher ' + lastErr());
 const butcher = g.s.furniture.find(f => f.type === 'butcher');
-p.carry = [{ pid: 'ribeye', qty: 6, exp: 10 }];
-p.x = butcher._front[0] + 0.5; p.z = butcher._front[1] + 0.5;
-while (p.carry.length && act({ a: 'stock', id: butcher.id, n: 6 })) {}
-assert.ok(butcher.slots.some(s => s.pid === 'ribeye' && s.qty === 6), 'butcher stocked');
-// fire cashier so player has to work; put player at checkout
-g.s.staff = g.s.staff.filter(s => s.role !== 'cashier');
-const chk = g.s.furniture.find(f => f.type === 'checkout');
+butcher.slots[0] = { pid: 'ribeye', qty: 6, exp: 99, expired: false };
 act({ a: 'open' });
-p.x = chk._back[0] + 0.5; p.z = chk._back[1] + 0.5;
-assert.ok(act({ a: 'station', id: chk.id }), 'take station');
-// force a butcher-request customer
-const { spawnCustomer } = await import('../server/customers.js');
-const bc = spawnCustomer(g); bc.counterReq = { pid: 'ribeye', qty: 2, cat: 'meat' }; bc.list = ['cereal'];
-let served = 0, butcherServed = false;
-const p2 = { id: 2, name: 'Butch', x: butcher._back[0] + 0.5, z: butcher._back[1] + 0.5, rot: 0, carry: [], station: null };
+const bc = spawnCustomer(g); bc.list = []; bc.counterReq = { pid: 'ribeye', qty: 2, cat: 'meat' };
+const sp = butcher._spots;
+for (let i = 0; i < 20 * 40 && !g.customerAtCounter(butcher); i++) g.tick(0.05);
+assert.ok(g.customerAtCounter(butcher), 'customer waiting at butcher');
+at(...sp.fridgeSpot); assert.ok(act({ a: 'deptTake', id: butcher.id }), 'take ' + lastErr());
+assert.equal(p.carry[0].dept, 'raw'); assert.equal(butcher.slots[0].qty, 4);
+assert.equal(act({ a: 'deptServe', id: butcher.id }), false, 'must cut first');
+at(...sp.stationSpot); for (let i = 0; i < 5; i++) act({ a: 'deptCut', id: butcher.id });
+assert.equal(p.carry[0].dept, 'pack');
+at(...sp.counterSpot); assert.ok(act({ a: 'deptServe', id: butcher.id }), 'serve ' + lastErr());
+assert.equal(g.s.stats.butcher, 1); assert.ok(bc.basket.filter(b => b.pid === 'ribeye').length === 2);
+
+// --- butcher employee does the same routine
+p.x = 1; p.z = 8;
+g.s.candidates.push({ id: g.id(), name: 'Bob Butcher', role: 'butcher', skill: 4, speed: 1.2, salary: 90, seed: 2 });
+assert.ok(act({ a: 'hire', id: g.s.candidates.at(-1).id }) || (atComputer(), act({ a: 'hire', id: g.s.candidates.at(-1).id })));
+p.x = 1; p.z = 8;
+const bc2 = spawnCustomer(g); bc2.list = []; bc2.counterReq = { pid: 'ribeye', qty: 1, cat: 'meat' };
+const stages = new Set();
+for (let i = 0; i < 20 * 90 && g.s.stats.butcher < 2; i++) { g.tick(0.05); const st = g.s.staff[0]; if (st.task) stages.add(st.task.stage); }
+console.log('butcher stages', [...stages].join(' → '));
+assert.equal(g.s.stats.butcher, 2, 'butcher employee served the customer');
+assert.ok(stages.has('cutting') && stages.has('taking'));
+
+// --- punching
+const victim = spawnCustomer(g); victim.state = 'shop'; victim.x = 6; victim.z = 6; victim.floor = 0; victim.basket = [{ pid: 'flour', price: 2, src: shelf.id }];
+at(6, 5, 0); // facing +z towards the customer
+assert.ok(act({ a: 'punch' }));
+assert.equal(victim.state, 'leaving', 'punched customer leaves'); assert.equal(victim.basket.length, 0, 'and buys nothing');
+const p2 = { id: 2, name: 'Friend', x: 6, z: 5.9, rot: 0, carry: [{ pid: 'flour', qty: 12, exp: 99 }], station: null, floor: 0 };
 g.players.set(2, p2);
-assert.ok(g.act(p2, { a: 'station', id: butcher.id }), 'butcher station');
-for (let i = 0; i < 20 * 120; i++) {
-  g.tick(0.05);
-  if (g.customerAtRegister(chk)) { act({ a: 'work' }); }
-  if (g.customerAtCounter(butcher)) { g.act(p2, { a: 'work' }); butcherServed = true; }
-  served = g.s.ledger.served;
-  if (served >= 3 && g.s.stats.butcher > 0) break;
-}
-console.log('player-served customers', served, 'butcher served', g.s.stats.butcher, 'playerCheckouts', g.s.stats.playerCheckouts);
-assert.ok(g.s.stats.playerCheckouts >= 1, 'player checked out customers');
-assert.ok(g.s.stats.butcher >= 1 && butcherServed, 'player served butcher customer');
+await new Promise(r => setTimeout(r, 600));
+at(6, 5, 0);
+assert.ok(act({ a: 'punch' }));
+assert.ok(p2.stunUntil > Date.now(), 'friend is dizzy'); assert.equal(p2.carry.length, 0, 'friend dropped the box');
+assert.ok(fx.some(f => f.k === 'knock' && f.id === 2));
+assert.equal(g.act(p2, { a: 'drop' }), false, 'stunned players cannot act');
+g.players.delete(2);
 
-// --- events
-for (const t of ['rush', 'delay', 'breakdown', 'shortage', 'holiday', 'vip', 'sale', 'inspector', 'heatwave', 'influencer', 'pigeon', 'absence']) g.triggerEvent(t);
-const broken = g.s.furniture.find(f => f.broken);
-assert.ok(broken, 'breakdown event broke something');
-for (let i = 0; i < 6; i++) act({ a: 'repair', id: broken.id });
-assert.equal(broken.broken, false, 'repaired by hand');
-assert.ok(g.s.dirt.length > 0, 'pigeon mess');
-const d = g.s.dirt[0]; p.x = d.x; p.z = d.z;
-for (let i = 0; i < 3; i++) act({ a: 'clean', id: d.id });
-assert.ok(!g.s.dirt.includes(d), 'cleaned');
-assert.ok(act({ a: 'sale', accept: true }));
-assert.ok(g.s.saleActive);
+// --- second floor with stairs; shoppers walk upstairs
+for (let i = 0; i < 20 * 200 && g.s.phase !== 'report'; i++) { g.tick(0.05); if (g.s.phase === 'closing') { g.customers = []; } }
+act({ a: 'continue' });
+atComputer();
+while (g.s.expansion < EXPANSIONS.length - 1) assert.ok(act({ a: 'expand' }), 'expand ' + lastErr());
+assert.equal(g.s.floors, 2); assert.equal(g.grids.length, 2);
+p.floor = 1; p.x = 5; p.z = 5; p.carry = [{ ftype: 'shelf' }];
+assert.ok(act({ a: 'place', x: 4, z: 4, rot: 0 }), 'place upstairs ' + lastErr());
+const up = g.s.furniture.find(f => f.floor === 1);
+up.slots[0] = { pid: 'honey', qty: 12, exp: 99, expired: false };
+if (!g.licensed('honey')) g.s.licenses.push('honey');
+p.floor = 0; at(3, 10);
+act({ a: 'open' });
+const climber = spawnCustomer(g); climber.list = ['honey'];
+let reachedUp = false;
+for (let i = 0; i < 20 * 80 && !climber.basket.length; i++) { g.tick(0.05); if (climber.floor === 1) reachedUp = true; }
+assert.ok(reachedUp, 'customer climbed the stairs'); assert.equal(climber.basket[0]?.pid, 'honey', 'bought the upstairs product');
 
-// --- expansion & upgrades
-act({ a: 'leaveStation' }); g.act(p2, { a: 'leaveStation' });
-g.s.phase = 'prep';
-const w0 = g.s.w;
-assert.ok(act({ a: 'expand' }), 'expand ' + errs());
-assert.ok(g.s.w > w0);
-assert.ok(act({ a: 'buyUpgrade', id: 'handtruck' }));
-assert.equal(g.carryCap(), 3);
-assert.ok(act({ a: 'upgradeFixture', id: chk.id }));
-assert.ok(act({ a: 'floor', id: 'wood' }));
-assert.ok(act({ a: 'setPrice', pid: 'cereal', price: 4.5 }));
-assert.equal(g.s.prices.cereal, 4.5);
+// --- unpaid bills lead to eviction
+g.s.bills = [{ id: 999, day: g.s.day - 3, due: g.s.day - 1, items: { rent: 100, power: 10, maint: 5, late: 0 }, total: 115, paid: false }];
+g.customers = []; g.endDay(); g.beginNewDay(); g.beginNewDay();
+assert.equal(g.s.phase, 'bankrupt'); assert.equal(g.s.bankruptReason, 'evicted');
 
 // --- serialization round-trip
-const saved = JSON.parse(JSON.stringify(g.serialize()));
-const g2 = new Game('TEST1', saved, { fx: () => {}, isNameTaken: () => false });
-assert.equal(g2.s.name, 'Test Mart'); assert.equal(g2.s.furniture.length, g.s.furniture.length);
+const g2 = new Game('TEST1', JSON.parse(JSON.stringify(g.serialize())), { fx: () => {}, isNameTaken: () => false });
+assert.equal(g2.s.floors, 2); assert.equal(g2.s.furniture.length, g.s.furniture.length);
 g2.tick(0.05);
-// --- fresh store: cleaner, stocker from delivery pad, expiry, bankruptcy
-{
-  const g3 = new Game('TEST3', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
-  const q = { id: 1, name: 'Q', x: 6, z: 7, rot: 0, carry: [], station: null }; g3.players.set(1, q);
-  g3.act(q, { a: 'nameDraft', name: 'Clean Co' }); g3.act(q, { a: 'nameVote' });
-  g3.s.level = 3;
-  g3.act(q, { a: 'place', type: 'shelf', x: 1, z: 1, rot: 0 });
-  g3.act(q, { a: 'place', type: 'checkout', x: 8, z: 5, rot: 0 });
-  for (const role of ['cleaner', 'stocker', 'cashier']) { g3.s.candidates.push({ id: g3.id(), name: role, role, skill: 3, speed: 1.2, salary: 50, seed: 1 }); assert.ok(g3.act(q, { a: 'hire', id: g3.s.candidates.at(-1).id }), 'hire ' + role); }
-  for (let i = 0; i < 3; i++) g3.spawnBox('pasta', 12, 50, null, null);
-  g3.addDirt(5, 3, 'spill'); g3.addDirt(3, 6, 'litter');
-  const dirt0 = g3.s.dirt.length; assert.equal(dirt0, 2);
-  g3.act(q, { a: 'open' });
-  for (let i = 0; i < 20 * 25; i++) g3.tick(0.05);
-  const shelf = g3.s.furniture.find(f => f.type === 'shelf');
-  const units = shelf.slots.reduce((a, s) => a + (s.pid === 'pasta' ? s.qty : 0), 0);
-  console.log('stocker moved pasta to shelf:', units, '| dirt left', g3.s.dirt.length, '| boxes left', g3.s.boxes.length);
-  assert.ok(units >= 24, 'stocker hauled delivery boxes onto the shelf');
-  assert.ok(g3.s.dirt.filter(d => d.kind !== 'pigeon').length < dirt0 + 3, 'cleaner keeps the floor clean');
-  // expiry
-  shelf.slots[0].pid = 'milk'; shelf.slots[0].qty = 0;
-  shelf.slots[1].exp = g3.s.day + 1;
-  g3.endDay(); g3.beginNewDay();
-  assert.ok(shelf.slots[1].expired, 'slot expired overnight');
-  q.x = 2; q.z = 2.5;
-  assert.ok(g3.act(q, { a: 'clearExpired', id: shelf.id }));
-  assert.equal(shelf.slots[1].qty, 0);
-  // bankruptcy after 3 days in the red
-  g3.s.cash = -5000;
-  for (let d = 0; d < 3; d++) { g3.endDay(); if (g3.s.phase !== 'bankrupt') g3.beginNewDay(); }
-  assert.equal(g3.s.phase, 'bankrupt', 'bankrupt after 3 negative days');
-  assert.ok(g3.act(q, { a: 'restart' }));
-  assert.equal(g3.s.phase, 'prep'); assert.equal(g3.s.cash, 5000); assert.equal(g3.s.name, 'Clean Co');
-}
 console.log('✅ sim test passed');
 process.exit(0);

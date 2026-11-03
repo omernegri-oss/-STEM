@@ -12,7 +12,7 @@ export function spawnCustomer(game, opts = {}) {
   const c = {
     id: game.id(), seed: rndi(1, 1e6), name: pick(FIRST_NAMES),
     x: left ? -13 : s.w + 13, z: lane + rnd(-0.2, 0.2), rot: left ? Math.PI / 2 : -Math.PI / 2, moving: true,
-    state: 'arrive', wp: [[s.doorX + 1, lane], [s.doorX + 1, s.d + 1.2], [s.doorX + 1 + rnd(-0.4, 0.4), s.d - 0.5]],
+    state: 'arrive', floor: 0, wp: [[s.doorX + 1, lane, 0], [s.doorX + 1, s.d + 1.2, 0], [s.doorX + 1 + rnd(-0.4, 0.4), s.d - 0.5, 0]],
     path: null, goal: null, pathVer: 0, speed: rnd(1.6, 2.2),
     list: [], basket: [], counterReq: null, counterDone: false,
     patience: rnd(100, 160) * (s.upgrades.music ? 1.2 : 1), mood: 70, timer: 0, thought: '', thoughtT: 0,
@@ -30,7 +30,7 @@ export function spawnCustomer(game, opts = {}) {
 
 function buildList(game, c) {
   const s = game.s;
-  const avail = PRODUCTS.filter(p => s.level >= p.level && !COUNTER_CATS.includes(p.cat));
+  const avail = PRODUCTS.filter(p => s.level >= p.level && !COUNTER_CATS.includes(p.cat) && (s.licenses.includes(p.id) || Math.random() < 0.5));
   const stocked = new Set(), carried = new Set();
   const catPresent = new Set();
   for (const f of s.furniture) {
@@ -81,11 +81,11 @@ function buildList(game, c) {
 
 function say(c, t, dur = 2.5) { c.thought = t; c.thoughtT = dur; }
 
-function goTo(game, c, tx, tz) {
-  const p = game.grid.path(c.x, c.z, tx, tz);
+function goTo(game, c, tx, tz, tf = 0) {
+  const p = game.route(c, tx, tz, tf);
   if (!p) return false;
-  c.path = p.map(([x, z]) => [x + 0.5, z + 0.5]);
-  c.goal = [tx, tz]; c.pathVer = game.gridVersion;
+  c.path = p;
+  c.goal = [tx, tz, tf]; c.pathVer = game.gridVersion;
   return true;
 }
 
@@ -93,10 +93,10 @@ function goTo(game, c, tx, tz) {
 function walk(game, c, dt) {
   const list = c.path && c.path.length ? c.path : c.wp;
   if (!list || !list.length) { c.moving = false; return true; }
-  const [tx, tz] = list[0];
+  const [tx, tz, tf] = list[0];
   const dx = tx - c.x, dz = tz - c.z; const d = Math.hypot(dx, dz);
   const step = c.speed * dt;
-  if (d <= step) { c.x = tx; c.z = tz; list.shift(); }
+  if (d <= step) { c.x = tx; c.z = tz; if (tf !== undefined) c.floor = tf; list.shift(); }
   else { c.x += dx / d * step; c.z += dz / d * step; c.rot = Math.atan2(dx, dz); }
   c.moving = true;
   return !list.length && !(c.wp && c.wp.length) && !(c.path && c.path.length);
@@ -110,8 +110,9 @@ function face(c, f) {
 
 function nearestFront(game, c, f) {
   let best = null, bd = Infinity;
+  const g = game.gridOf(f.floor);
   for (const t of f._fronts || [f._front]) {
-    if (!game.grid.isInterior(t[0], t[1]) || game.grid.isBlocked(t[0], t[1])) continue;
+    if (!g.isInterior(t[0], t[1]) || g.isBlocked(t[0], t[1])) continue;
     const d = Math.hypot(t[0] + 0.5 - c.x, t[1] + 0.5 - c.z);
     if (d < bd) { bd = d; best = t; }
   }
@@ -146,6 +147,13 @@ function leave(game, c, reason) {
     say(c, c.missed ? '😞' : '🙁', 3);
     c.mood = Math.min(c.mood, 38);
     s.ledger.lost++;
+  } else if (reason === 'hit') {
+    returnBasket(game, c);
+    c.mood = 0;
+    say(c, '😵', 2);
+    s.ledger.angry++; s.stats.angry++;
+    s.rep = clamp(s.rep - 1.5, 0, 100);
+    game.msg('Someone punched a customer! They stormed out without buying anything.', '🥊', `hit:${s.day}`);
   } else if (reason === 'nocheckout') {
     returnBasket(game, c);
     say(c, '🤷', 3);
@@ -154,7 +162,7 @@ function leave(game, c, reason) {
     game.toast('A customer left because there is no checkout counter!', 'bad', '🛒');
   }
   const sat = clamp(c.mood, 0, 100);
-  s.rep = clamp(s.rep + (sat - s.rep) * (c.paid ? 0.03 : reason === 'angry' ? 0.03 : 0.012), 0, 100);
+  s.rep = clamp(s.rep + (sat - s.rep) * (c.paid ? 0.03 : reason === 'angry' || reason === 'hit' ? 0.03 : 0.012), 0, 100);
   if (c.paid) { s.ledger.served++; s.stats.customers++; }
   s.ledger.satSum += sat;
   // count every leaving customer in satisfaction average
@@ -169,7 +177,7 @@ function chooseCheckout(game, c) {
     const k = FURNITURE[f.type].kind;
     if (k !== 'checkout' && k !== 'selfcheckout') continue;
     const rt = game.rt.get(f.id); if (!rt) continue;
-    let score = rt.queue.length * 1.0 + Math.hypot(f.x - c.x, f.z - c.z) * 0.06;
+    let score = rt.queue.length * 1.0 + Math.hypot(f.x - c.x, f.z - c.z) * 0.06 + ((f.floor || 0) !== (c.floor || 0) ? 3 : 0);
     if (k === 'checkout' && !game.operatorOf(f)) score += 2.5;
     if (k === 'selfcheckout') score += c.basket.length > 6 ? 2 : 0.6;
     if (score < bs) { bs = score; best = f; }
@@ -188,9 +196,8 @@ function updateQueueTarget(game, c, f) {
   const spots = f._queue || [f._front];
   const spot = spots[Math.min(idx, spots.length - 1)];
   if (!c.goal || c.goal[0] !== spot[0] || c.goal[1] !== spot[1]) {
-    if (!goTo(game, c, spot[0], spot[1])) {
-      // spot unreachable (layout changed) – fall back to front tile
-      goTo(game, c, f._front[0], f._front[1]);
+    if (!goTo(game, c, spot[0], spot[1], f.floor || 0)) {
+      goTo(game, c, f._front[0], f._front[1], f.floor || 0);
     }
   }
   return idx;
@@ -203,7 +210,7 @@ export function updateCustomers(game, dt, dMin) {
     if (c.thoughtT > 0) { c.thoughtT -= dt; if (c.thoughtT <= 0) c.thought = ''; }
     // repath if the layout changed underneath us
     if (c.path && c.path.length && c.pathVer !== game.gridVersion && c.goal) {
-      if (!goTo(game, c, c.goal[0], c.goal[1])) { c.path = null; c.reroute = true; }
+      if (!goTo(game, c, c.goal[0], c.goal[1], c.goal[2] || 0)) { c.path = null; c.reroute = true; }
     }
     if (c.reroute) {
       c.reroute = false;
@@ -223,8 +230,8 @@ export function updateCustomers(game, dt, dMin) {
       // litter
       if (Math.random() < 0.0015 * dMin) {
         const tx = Math.floor(c.x), tz = Math.floor(c.z);
-        const nearBin = s.furniture.some(f => f.type === 'bin' && Math.abs(f.x - tx) <= 4 && Math.abs(f.z - tz) <= 4);
-        if (!nearBin || Math.random() < 0.3) game.addDirt(tx, tz, Math.random() < 0.5 ? 'spill' : 'litter');
+        const nearBin = s.furniture.some(f => f.type === 'bin' && (f.floor || 0) === (c.floor || 0) && Math.abs(f.x - tx) <= 4 && Math.abs(f.z - tz) <= 4);
+        if (!nearBin || Math.random() < 0.3) game.addDirt(tx, tz, Math.random() < 0.5 ? 'spill' : 'litter', c.floor || 0);
       }
     }
     if (c.patience <= 0 && c.state !== 'leaving' && c.state !== 'arrive') {
@@ -264,17 +271,19 @@ export function updateCustomers(game, dt, dMin) {
         if (c.list.length) {
           const pid = c.list.shift();
           const opts = s.furniture.filter(f => f.slots && f.slots.some(sl => sl.pid === pid && sl.qty > 0 && !sl.expired) && FURNITURE[f.type].kind === 'storage');
-          opts.sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z));
+          const cost = (f) => Math.hypot(f.x - c.x, f.z - c.z) + ((f.floor || 0) !== (c.floor || 0) ? 10 : 0);
+          opts.sort((a, b) => cost(a) - cost(b));
           let ok = false;
           for (const f of opts) {
             const t = nearestFront(game, c, f);
-            if (t && goTo(game, c, t[0], t[1])) { c.state = 'toItem'; c.target = f.id; c.want = pid; ok = true; break; }
+            if (t && goTo(game, c, t[0], t[1], f.floor || 0)) { c.state = 'toItem'; c.target = f.id; c.want = pid; ok = true; break; }
           }
           if (!ok) {
             const p = PRODUCT_MAP[pid];
             s.demand[pid] = (s.demand[pid] || 0) + 1;
             c.mood -= c.carried && c.carried.has(pid) ? 6 : 2; c.missed++;
-            say(c, '❓' + p.icon, 2.2);
+            const n = s.demand[pid];
+            game.msg(`${c.name}: "I couldn't find ${p.name} ${p.icon}"${n > 1 ? ` (${n} customers asked today)` : ''}`, '🗣️', `miss:${s.day}:${pid}`);
             c.timer = 0.7;
             if (c.vip === pid) { c.mood -= 15; game.toast(`The VIP couldn't find ${p.name}... 😢`, 'bad', '🕶️'); }
             game.dirtyMeta();
@@ -392,11 +401,12 @@ export function updateCustomers(game, dt, dMin) {
       }
 
       case 'leaving': {
+        if (c.stunT > 0) { c.stunT -= dt; c.moving = false; break; }
         if (!c.wp && !c.path) {
-          if (c.z < s.d) {
-            if (!goTo(game, c, s.doorX + (Math.random() < 0.5 ? 0 : 1), s.d - 1)) { c.dead = true; break; }
+          if (c.z < s.d || (c.floor || 0) > 0) {
+            if (!goTo(game, c, s.doorX + (Math.random() < 0.5 ? 0 : 1), s.d - 1, 0)) { c.dead = true; break; }
           }
-          c.wp = [[s.doorX + 1, s.d + 1.2], [s.doorX + 1, s.d + 3.6], [c.exitSide, s.d + 3.6]];
+          c.wp = [[s.doorX + 1, s.d + 1.2, 0], [s.doorX + 1, s.d + 3.6, 0], [c.exitSide, s.d + 3.6, 0]];
           if (c.z >= s.d) c.path = [];
         }
         if (c.path && c.path.length) { walk(game, c, dt); break; }

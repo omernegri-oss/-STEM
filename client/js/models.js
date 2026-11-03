@@ -1,7 +1,7 @@
 // Procedural stylized low-poly models built from primitives (no external assets).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { FURNITURE, CATEGORIES } from '/shared/data.js';
+import { FURNITURE, CATEGORIES, PRODUCT_MAP } from '/shared/data.js';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -51,7 +51,7 @@ function based(g) { g.computeBoundingBox(); g.translate(0, -g.boundingBox.min.y,
 export const UNIT_GEOS = {
   box: based(new THREE.BoxGeometry(0.17, 0.27, 0.08)),
   flatbox: based(new THREE.BoxGeometry(0.21, 0.15, 0.12)),
-  bag: based(new THREE.SphereGeometry(0.11, 8, 6).scale(1, 1.15, 0.55)),
+  bag: based(new THREE.BoxGeometry(0.17, 0.25, 0.08)),
   can: based(new THREE.CylinderGeometry(0.058, 0.058, 0.15, 10)),
   bottle: based(new THREE.CylinderGeometry(0.035, 0.058, 0.28, 8)),
   jar: based(new THREE.CylinderGeometry(0.065, 0.068, 0.14, 10)),
@@ -83,7 +83,7 @@ export function slotLayout(type) {
     case 'fridge_large': return [0.2, 0.55, 0.9, 1.25, 1.6].map(y => ({ x0: -1.14, y, z0: 0.16, cols: 7, rows: 2, dx: 0.38, dz: -0.24 }));
     case 'freezer': return [-0.45, 0.45].map(x => ({ x0: x - 0.36, y: 0.42, z0: 0.22, cols: 5, rows: 3, dx: 0.18, dz: -0.22 }));
     case 'produce': return [[-0.48, 0.42, 0.2], [0.48, 0.42, 0.2], [-0.48, 0.72, -0.18], [0.48, 0.72, -0.18]].map(([x, y, z]) => ({ x0: x - 0.3, y, z0: z + 0.08, cols: 4, rows: 3, dx: 0.2, dz: -0.08, pile: true }));
-    case 'butcher': case 'deli': return [-1.05, -0.35, 0.35, 1.05].map(x => ({ x0: x - 0.225, y: 0.62, z0: 0.18, cols: 4, rows: 2, dx: 0.15, dz: -0.2 }));
+    case 'butcher': case 'deli': return [-1.05, -0.35, 0.35, 1.05].map(x => ({ x0: x - 0.225, y: 0.62, z0: 1.18, cols: 4, rows: 2, dx: 0.15, dz: -0.2 }));
   }
   return [];
 }
@@ -146,7 +146,7 @@ export function makeFurniture(type, f = {}) {
       for (const y of ys) { B(g, W - 0.12, 0.04, 0.8, 0xffffff, 0, y - 0.02, 0); B(g, W - 0.12, 0.06, 0.02, cc, 0, y - 0.04, 0.41, { shadow: false }); }
       B(g, W - 0.04, 0.08, 0.86, 0x94a3b8, 0, 0.04, 0);
       B(g, W - 0.04, 0.22, 0.04, type === 'endcap' ? 0xef4444 : cc, 0, h + 0.11, -0.36);
-      if (type === 'endcap') { const s = makeSprite('SALE!', 0.22, { bg: '#ef4444', color: '#fff', size: 40 }); s.position.set(0, h + 0.4, 0); g.add(s); }
+      if (type === 'endcap') { const l = makeLabel('SALE', 0.12, { bg: '#ef4444', color: '#fff', size: 36 }, 0.4); l.position.set(-W / 2 + 0.25, h + 0.11, -0.335); g.add(l); }
       break;
     }
     case 'fridge': case 'freezer_upright': case 'fridge_large': {
@@ -160,17 +160,20 @@ export function makeFurniture(type, f = {}) {
       B(g, W - 0.1, h - 0.3, 0.02, type === 'freezer_upright' ? 0x93c5fd : 0xe0f2fe, 0, h / 2 + 0.05, -0.39, { emissive: 0x7dd3fc, ei: 0.35 });
       for (const s of slotLayout(type)) B(g, W - 0.12, 0.03, 0.78, 0xe2e8f0, 0, s.y - 0.015, -0.02, { opacity: 0.9 });
       B(g, W, 0.24, 0.05, cc, 0, h + 0.2, 0.4);
-      const lbl = makeLabel(CATEGORIES[def.cat].icon + ' ' + (type === 'freezer_upright' ? 'FROZEN' : 'CHILLED'), 0.2, { bg: null, color: '#fff', size: 40 }, W - 0.3);
-      lbl.position.set(0, h + 0.2, 0.43); g.add(lbl);
+      const lbl = makeLabel(type === 'freezer_upright' ? 'Frozen' : 'Chilled', 0.1, { bg: null, color: '#fff', size: 34 }, 0.5);
+      lbl.position.set(-W / 2 + 0.3, h + 0.2, 0.43); g.add(lbl);
       if (type !== 'fridge_large') {
         const doors = W > 2.5 ? 3 : 2;
+        g.userData.doors = [];
         for (let i = 0; i < doors; i++) {
           const dw = W / doors;
           const door = new THREE.Group(); door.position.set(-W / 2 + dw * i, 0, 0.44);
           B(door, dw - 0.04, h - 0.25, 0.03, 0xbae6fd, dw / 2, h / 2 + 0.06, 0, { opacity: 0.22, rough: 0.05, shadow: false });
           B(door, 0.04, h - 0.25, 0.05, 0x94a3b8, 0.02, h / 2 + 0.06, 0);
+          B(door, dw - 0.04, 0.04, 0.05, 0x94a3b8, dw / 2, 0.2, 0);
+          B(door, dw - 0.04, 0.04, 0.05, 0x94a3b8, dw / 2, h - 0.08, 0);
           B(door, 0.03, 0.4, 0.06, 0x475569, dw - 0.1, h / 2, 0.03);
-          g.add(door);
+          g.add(door); g.userData.doors.push(door);
         }
       } else {
         B(g, W, 0.08, 0.2, 0x0f172a, 0, 0.22, 0.38); // air curtain strip
@@ -182,14 +185,16 @@ export function makeFurniture(type, f = {}) {
     case 'freezer': {
       B(g, W, 0.78, 0.9, 0xf1f5f9, 0, 0.39, 0);
       B(g, W - 0.1, 0.05, 0.8, 0xbfdbfe, 0, 0.4, 0, { emissive: 0x93c5fd, ei: 0.4 });
-      B(g, W - 0.06, 0.03, 0.84, 0xbae6fd, 0, 0.82, 0, { opacity: 0.25, rough: 0.05, shadow: false });
-      B(g, 0.04, 0.06, 0.86, 0x94a3b8, 0, 0.82, 0);
+      const lid = new THREE.Group(); g.add(lid); g.userData.lid = lid;
+      B(lid, W / 2 - 0.04, 0.03, 0.84, 0xbae6fd, -W / 4, 0.82, 0, { opacity: 0.25, rough: 0.05, shadow: false });
+      B(lid, 0.04, 0.05, 0.86, 0x94a3b8, 0, 0.82, 0);
+      B(g, W / 2 - 0.04, 0.03, 0.84, 0xbae6fd, W / 4, 0.815, 0, { opacity: 0.25, rough: 0.05, shadow: false });
       B(g, W, 0.12, 0.92, cc, 0, 0.74, 0);
       B(g, W, 0.1, 0.92, DARK, 0, 0.05, 0);
       const led = B(g, 0.1, 0.05, 0.02, 0x22c55e, W / 2 - 0.15, 0.6, 0.46, { emissive: 0x22c55e });
       g.userData.led = led;
-      const lbl = makeLabel('🧊 FROZEN', 0.16, { bg: '#818cf8', color: '#fff', size: 40 }, W - 0.4);
-      lbl.position.set(0, 0.62, 0.465); g.add(lbl);
+      const lbl = makeLabel('Frozen', 0.09, { bg: '#818cf8', color: '#fff', size: 32 }, 0.4);
+      lbl.position.set(-W / 2 + 0.28, 0.62, 0.465); g.add(lbl);
       break;
     }
     case 'produce': {
@@ -209,27 +214,104 @@ export function makeFurniture(type, f = {}) {
       break;
     }
     case 'butcher': case 'deli': {
-      const accent = type === 'butcher' ? 0xdc2626 : 0xeab308;
-      B(g, W, 0.55, 0.85, type === 'butcher' ? 0x7f1d1d : 0x713f12, 0, 0.28, 0);
-      B(g, W, 0.06, 0.85, 0xf8fafc, 0, 0.58, 0);
-      B(g, W - 0.08, 0.02, 0.6, type === 'butcher' ? 0xfecaca : 0xfef9c3, 0, 0.615, 0.03, { emissive: 0xffffff, ei: 0.08 });
-      const glass = B(g, W - 0.04, 0.5, 0.03, 0xe0f2fe, 0, 0.88, 0.32, { opacity: 0.25, rough: 0.05, shadow: false }); glass.rotation.x = -0.35;
-      B(g, W - 0.04, 0.03, 0.4, 0xe0f2fe, 0, 1.12, 0.02, { opacity: 0.3, shadow: false });
-      B(g, W, 0.06, 0.06, accent, 0, 0.62, 0.43);
-      // back work top
-      B(g, W, 0.06, 0.3, 0xe2e8f0, 0, 1.0, -0.36);
-      B(g, 0.6, 0.04, 0.26, type === 'butcher' ? 0xd6a76c : 0xf8fafc, -0.6, 1.05, -0.36);
-      if (type === 'butcher') { B(g, 0.03, 0.02, 0.22, 0x94a3b8, -0.5, 1.08, -0.36, { metal: 0.8, rough: 0.2 }); B(g, 0.05, 0.03, 0.1, 0x1e293b, -0.5, 1.08, -0.5); }
-      else { C(g, 0.12, 0.12, 0.08, 0xfacc15, 0.6, 1.07, -0.36); C(g, 0.08, 0.08, 0.1, 0xfde68a, 0.9, 1.08, -0.36); }
-      // sign + awning
-      for (let i = 0; i < 8; i++) B(g, W / 8, 0.04, 0.45, i % 2 ? 0xffffff : accent, -W / 2 + W / 16 + i * W / 8, 2.2, 0.05, { shadow: false }).rotation.x = 0.35;
-      C(g, 0.03, 0.03, 2.2, 0x475569, -W / 2 + 0.05, 1.1, -0.4); C(g, 0.03, 0.03, 2.2, 0x475569, W / 2 - 0.05, 1.1, -0.4);
-      const s = makeSprite(type === 'butcher' ? '🔪 BUTCHER' : '🧀 DELI', 0.32, { bg: type === 'butcher' ? '#dc2626' : '#ca8a04', color: '#fff', size: 44 });
-      s.position.set(0, 2.55, 0); g.add(s);
-      if (type === 'butcher') for (let i = 0; i < 4; i++) { const sg = C(g, 0.03, 0.03, 0.25, 0xb45309, -1.2 + i * 0.12, 1.85, -0.3); sg.rotation.z = 0.1; }
-      const led = B(g, 0.1, 0.05, 0.02, 0x22c55e, W / 2 - 0.15, 0.4, 0.43, { emissive: 0x22c55e });
+      // 3x3 department: back row = walk-in fridge + prep station, middle = staff aisle, front = display counter
+      const meat = type === 'butcher';
+      const accent = meat ? 0xdc2626 : 0xeab308;
+      // --- big fridge (back left, 2 tiles)
+      const fx = -0.5, fz = -1;
+      B(g, 2, 0.12, 0.9, DARK, fx, 0.06, fz);
+      B(g, 2, 2.3, 0.08, 0xe2e8f0, fx, 1.15, fz - 0.41);
+      B(g, 0.08, 2.3, 0.9, 0xe2e8f0, fx - 0.96, 1.15, fz); B(g, 0.08, 2.3, 0.9, 0xe2e8f0, fx + 0.96, 1.15, fz);
+      B(g, 2, 0.12, 0.9, 0xe2e8f0, fx, 2.32, fz);
+      B(g, 1.85, 2.1, 0.02, meat ? 0xfee2e2 : 0xfef9c3, fx, 1.15, fz - 0.36, { emissive: 0xffffff, ei: 0.18 });
+      for (const y of [0.55, 1.15]) B(g, 1.85, 0.03, 0.75, 0xcbd5e1, fx, y, fz);
+      if (meat) {
+        B(g, 1.85, 0.03, 0.03, 0x64748b, fx, 2.1, fz - 0.1, { metal: 0.8 });
+        for (let i = 0; i < 4; i++) { const h = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.38, 3, 8), mat(i % 2 ? 0xb91c1c : 0x991b1b)); h.position.set(fx - 0.65 + i * 0.43, 1.7, fz - 0.1); h.castShadow = true; g.add(h); B(g, 0.02, 0.15, 0.02, 0x94a3b8, fx - 0.65 + i * 0.43, 2.02, fz - 0.1); }
+        for (let i = 0; i < 5; i++) { B(g, 0.28, 0.06, 0.2, [0xb91c1c, 0xfda4af, 0x9a3412][i % 3], fx - 0.7 + i * 0.35, 0.6, fz); B(g, 0.28, 0.06, 0.2, [0x991b1b, 0xbe123c][i % 2], fx - 0.7 + i * 0.35, 1.2, fz); }
+      } else {
+        for (let i = 0; i < 4; i++) { C(g, 0.17, 0.17, 0.14, i % 2 ? 0xfacc15 : 0xfde68a, fx - 0.6 + i * 0.4, 0.64, fz, { seg: 14 }); C(g, 0.15, 0.15, 0.12, 0xfbbf24, fx - 0.6 + i * 0.4, 1.24, fz, { seg: 14 }); }
+        for (let i = 0; i < 4; i++) { const sal = C(g, 0.05, 0.05, 0.35, 0x9f1239, fx - 0.6 + i * 0.4, 1.75, fz - 0.1); sal.rotation.z = Math.PI / 2; }
+      }
+      g.userData.doors = [];
+      for (let i = 0; i < 2; i++) {
+        const door = new THREE.Group(); door.position.set(fx - 1 + i, 0, fz + 0.45);
+        B(door, 0.96, 2.05, 0.03, 0xbae6fd, 0.5, 1.15, 0, { opacity: 0.25, rough: 0.05, shadow: false });
+        B(door, 0.04, 2.05, 0.05, 0x94a3b8, 0.02, 1.15, 0); B(door, 0.96, 0.05, 0.05, 0x94a3b8, 0.5, 0.15, 0); B(door, 0.96, 0.05, 0.05, 0x94a3b8, 0.5, 2.15, 0);
+        B(door, 0.03, 0.5, 0.06, 0x334155, 0.88, 1.15, 0.03);
+        g.add(door); g.userData.doors.push(door);
+      }
+      const plaque = makeLabel(meat ? 'Butcher' : 'Deli', 0.12, { bg: meat ? '#dc2626' : '#ca8a04', color: '#fff', size: 34 }, 0.6);
+      plaque.position.set(fx - 0.6, 2.2, fz + 0.47); g.add(plaque);
+      // --- prep station (back right)
+      const sx = 1, sz = -1;
+      B(g, 0.92, 0.9, 0.8, 0xcbd5e1, sx, 0.45, sz, { metal: 0.5, rough: 0.35 });
+      B(g, 0.96, 0.05, 0.84, 0xe5e7eb, sx, 0.92, sz, { metal: 0.6, rough: 0.2 });
+      if (meat) {
+        B(g, 0.6, 0.12, 0.45, 0xb7834f, sx - 0.05, 1.0, sz + 0.05);
+        const cleaver = new THREE.Group(); cleaver.position.set(sx + 0.05, 1.09, sz + 0.1); g.add(cleaver);
+        B(cleaver, 0.22, 0.01, 0.12, 0xe5e7eb, 0, 0, 0, { metal: 0.9, rough: 0.15 }); B(cleaver, 0.03, 0.03, 0.14, 0x1e293b, -0.15, 0.01, 0);
+        C(g, 0.1, 0.12, 0.28, 0x94a3b8, sx + 0.28, 1.08, sz - 0.2, { metal: 0.7 }); C(g, 0.12, 0.05, 0.1, 0x94a3b8, sx + 0.28, 1.27, sz - 0.2, { metal: 0.7 });
+        g.userData.tool = cleaver;
+      } else {
+        // cheese slicer machine with a round blade
+        B(g, 0.5, 0.12, 0.4, 0xef4444, sx, 1.0, sz);
+        B(g, 0.12, 0.3, 0.3, 0xef4444, sx - 0.18, 1.2, sz);
+        const blade = new THREE.Group(); blade.position.set(sx - 0.05, 1.22, sz); g.add(blade);
+        const bl = C(blade, 0.17, 0.17, 0.02, 0xe5e7eb, 0, 0, 0, { metal: 0.9, rough: 0.15, seg: 24 }); bl.rotation.z = Math.PI / 2;
+        B(g, 0.3, 0.02, 0.25, 0x94a3b8, sx + 0.12, 1.08, sz, { metal: 0.7 });
+        C(g, 0.09, 0.09, 0.2, 0xfacc15, sx + 0.12, 1.16, sz, { seg: 12 }).rotation.z = Math.PI / 2;
+        g.userData.tool = blade;
+      }
+      // --- display counter (front row)
+      const cz = 1;
+      B(g, 3, 0.55, 0.85, meat ? 0x7f1d1d : 0x713f12, 0, 0.28, cz);
+      B(g, 3, 0.06, 0.85, 0xf8fafc, 0, 0.58, cz);
+      B(g, 2.92, 0.02, 0.6, meat ? 0xfecaca : 0xfef9c3, 0, 0.615, cz + 0.03, { emissive: 0xffffff, ei: 0.08 });
+      const glass = B(g, 2.96, 0.5, 0.03, 0xe0f2fe, 0, 0.88, cz + 0.32, { opacity: 0.25, rough: 0.05, shadow: false }); glass.rotation.x = -0.35;
+      B(g, 2.96, 0.03, 0.4, 0xe0f2fe, 0, 1.12, cz + 0.02, { opacity: 0.3, shadow: false });
+      B(g, 3, 0.06, 0.06, accent, 0, 0.62, cz + 0.43);
+      B(g, 3, 0.05, 0.28, 0xe2e8f0, 0, 1.1, cz - 0.3);
+      B(g, 0.5, 0.1, 0.28, 0xf8fafc, 0.9, 1.15, cz - 0.3); // scale
+      const led = B(g, 0.1, 0.05, 0.02, 0x22c55e, 1.35, 0.4, cz + 0.43, { emissive: 0x22c55e });
       g.userData.led = led;
-      staffMat(g, 0);
+      // staff aisle mat
+      const mt = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 0.9), new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.9 }));
+      mt.rotation.x = -Math.PI / 2; mt.position.set(0, 0.006, 0); mt.receiveShadow = true; g.add(mt);
+      break;
+    }
+    case 'computer': {
+      B(g, 1.8, 0.05, 0.7, 0x8b5a2b, 0, 0.76, 0);
+      for (const x of [-0.85, 0.85]) for (const z of [-0.3, 0.3]) B(g, 0.05, 0.75, 0.05, 0x334155, x, 0.37, z);
+      B(g, 1.7, 0.4, 0.04, 0x8b5a2b, 0, 0.55, -0.32);
+      // monitor facing the front (+z)
+      C(g, 0.1, 0.14, 0.03, 0x1e293b, -0.2, 0.8, -0.15); B(g, 0.05, 0.3, 0.05, 0x1e293b, -0.2, 0.95, -0.17);
+      B(g, 0.85, 0.52, 0.05, 0x111827, -0.2, 1.3, -0.15);
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.45), new THREE.MeshBasicMaterial({ map: textTexture('🛒 SuperOS', { size: 40, bg: '#0ea5e9', color: '#ffffff', pad: 30, radius: 4 }).tex }));
+      scr.position.set(-0.2, 1.3, -0.12); g.add(scr); g.userData.screen = scr;
+      B(g, 0.5, 0.02, 0.16, 0x334155, -0.2, 0.79, 0.12);
+      B(g, 0.07, 0.02, 0.1, 0x334155, 0.2, 0.79, 0.12);
+      B(g, 0.3, 0.14, 0.26, 0xe5e7eb, 0.6, 0.85, -0.1); // printer
+      B(g, 0.16, 0.06, 0.1, 0x1e293b, 0.65, 0.8, 0.18); // phone
+      break;
+    }
+    case 'flowerpot': {
+      C(g, 0.14, 0.1, 0.24, 0x7c3aed, 0, 0.12, 0);
+      for (let i = 0; i < 6; i++) { const a = i * 1.05; C(g, 0.008, 0.008, 0.28, 0x16a34a, Math.cos(a) * 0.05, 0.36, Math.sin(a) * 0.05); S(g, 0.045, [0xf43f5e, 0xfacc15, 0xf97316][i % 3], Math.cos(a) * 0.06, 0.52, Math.sin(a) * 0.06, { flat: true }); }
+      break;
+    }
+    case 'cactus': {
+      C(g, 0.18, 0.14, 0.26, 0xc2410c, 0, 0.13, 0);
+      C(g, 0.11, 0.12, 0.7, 0x15803d, 0, 0.6, 0, { seg: 8, flat: true });
+      const arm = C(g, 0.06, 0.06, 0.3, 0x16a34a, 0.15, 0.7, 0, { seg: 8 }); arm.rotation.z = -0.9;
+      C(g, 0.06, 0.06, 0.25, 0x16a34a, 0.26, 0.88, 0, { seg: 8 });
+      S(g, 0.04, 0xf472b6, 0, 0.98, 0);
+      break;
+    }
+    case 'plant_tall': {
+      C(g, 0.24, 0.2, 0.4, 0xe7e5e4, 0, 0.2, 0);
+      C(g, 0.04, 0.06, 1.3, 0x7c4a1e, 0, 1.0, 0);
+      for (let i = 0; i < 7; i++) S(g, 0.28 - (i % 3) * 0.04, i % 2 ? 0x15803d : 0x22c55e, Math.cos(i * 0.9) * 0.22, 1.5 + (i % 3) * 0.2, Math.sin(i * 0.9) * 0.22, { flat: true, w: 8, h: 6 });
       break;
     }
     case 'checkout': {
@@ -343,7 +425,7 @@ export function makeFurniture(type, f = {}) {
     default: B(g, W, 1, D, 0x94a3b8, 0, 0.5, 0);
   }
   const ud = g.userData;
-  mergeStatic(g, new Set([ud.led, ud.belt, ud.screen, ud.lamp, ...ud.anim.map(a => a.obj)]));
+  mergeStatic(g, new Set([ud.led, ud.belt, ud.screen, ud.lamp, ud.lid, ud.tool, ...(ud.doors || []), ...ud.anim.map(a => a.obj)]));
   return g;
 }
 
@@ -491,12 +573,55 @@ export function animateCharacter(ch, dt, moving, pose, speed = 1) {
 }
 
 // ------------------------------------------------------------------ props
+const prodTexCache = new Map();
+// A printed package label: product colour, a white band with the product name.
+export function productTexture(p) {
+  if (prodTexCache.has(p.id)) return prodTexCache.get(p.id);
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+  const g = c.getContext('2d');
+  const col = '#' + p.color.toString(16).padStart(6, '0');
+  g.fillStyle = col; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = 'rgba(255,255,255,0.92)'; g.fillRect(0, 40, 128, 50);
+  g.fillStyle = '#1e293b'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const words = p.name.split(' ');
+  const lines = words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [p.name];
+  for (let i = 0; i < lines.length; i++) {
+    let size = 22; g.font = `800 ${size}px Nunito, sans-serif`;
+    while (g.measureText(lines[i]).width > 120 && size > 10) { size--; g.font = `800 ${size}px Nunito, sans-serif`; }
+    g.fillText(lines[i], 64, lines.length === 1 ? 65 : 54 + i * 22);
+  }
+  g.font = '24px "Segoe UI Emoji", "Apple Color Emoji", sans-serif'; g.fillText(p.icon, 64, 20);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  prodTexCache.set(p.id, t);
+  return t;
+}
+const LABELLED = new Set(['box', 'flatbox', 'carton', 'bag', 'can', 'bottle', 'jar', 'tub', 'slab', 'wedge']);
+export function productMaterial(p) {
+  const key = 'pm:' + p.id; let m = matCache.get(key);
+  if (!m) {
+    m = LABELLED.has(p.shape) ? new THREE.MeshStandardMaterial({ map: productTexture(p), roughness: 0.55 }) : new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.55 });
+    matCache.set(key, m);
+  }
+  return m;
+}
+export function makeFBox(type) {
+  const def = FURNITURE[type];
+  const g = new THREE.Group();
+  B(g, 0.95, 0.5, 0.75, 0xb98b55, 0, 0.25, 0);
+  B(g, 0.1, 0.005, 0.76, 0xe7d3a8, 0, 0.502, 0, { shadow: false });
+  const lbl = makeLabel(def.icon + ' ' + def.name, 0.12, { bg: '#ffffff', color: '#1e293b', size: 34 }, 0.85);
+  lbl.position.set(0, 0.3, 0.38); g.add(lbl);
+  const l2 = lbl.clone(); l2.rotation.y = Math.PI; l2.position.z = -0.38; g.add(l2);
+  return g;
+}
+
 export function makeBox(pid, color) {
   const g = new THREE.Group();
   B(g, 0.5, 0.36, 0.42, 0xc8a26b, 0, 0.18, 0);
   B(g, 0.08, 0.005, 0.43, 0xe7d3a8, 0, 0.362, 0, { shadow: false });
-  B(g, 0.26, 0.16, 0.005, color, 0, 0.2, 0.213, { shadow: false });
-  B(g, 0.005, 0.16, 0.26, color, 0.253, 0.2, 0, { shadow: false });
+  const p = PRODUCT_MAP[pid];
+  const lm = p ? new THREE.MeshStandardMaterial({ map: productTexture(p), roughness: 0.6 }) : mat(color);
+  for (const [z, ry] of [[0.212, 0], [-0.212, Math.PI]]) { const l = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), lm); l.position.set(0, 0.19, z); l.rotation.y = ry; g.add(l); }
   return g;
 }
 export function makeBasket(color = 0xef4444) {

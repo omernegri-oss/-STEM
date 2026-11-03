@@ -72,25 +72,15 @@
           <button data-speed="0" title="Pause">⏸</button><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="3">3×</button>
         </div>
         <button id="h-open" class="btn primary glow">🔓 Open Store</button>
+        <button id="h-msgs" class="msgs" title="Messages and bills are on the store computer">📨 0</button>
         <div class="tb-audio"><button id="h-sfx" title="Sound effects">🔊</button><button id="h-music" title="Music">🎵</button><button id="h-gfx"></button><button id="h-help" title="How to play (?)">❔</button><button id="h-exit" title="Leave store (progress is saved)">🚪</button></div>
       </header>
 
-      <aside id="tasks">
-        <div class="goal-card"><div class="goal-title">🎯 Goal</div><div id="g-text">—</div><div id="g-reward" class="reward"></div></div>
-        <div class="goal-card daily" id="c-card"><div class="goal-title">⭐ Daily challenge</div><div id="c-text">—</div><div class="bar" style="margin-top:5px"><div id="c-bar" style="width:0;background:linear-gradient(90deg,#facc15,#f97316)"></div></div><div id="c-reward" class="reward"></div></div>
-        <div class="tasks-title">📋 To-do <span id="t-count"></span></div>
-        <ul id="t-list"></ul>
-        <div id="ev-active"></div>
-      </aside>
 
       <nav id="dock">
-        <button data-panel="build"><i>🛠️</i><span>Build</span><kbd>B</kbd></button>
-        <button data-panel="orders"><i>🚚</i><span>Order</span><kbd>O</kbd></button>
+        <button data-panel="build"><i>🛠️</i><span>Arrange</span><kbd>B</kbd></button>
         <button data-panel="inventory"><i>📦</i><span>Stock</span><kbd>I</kbd></button>
-        <button data-panel="prices"><i>🏷️</i><span>Prices</span><kbd>P</kbd></button>
-        <button data-panel="staff"><i>👥</i><span>Staff</span><kbd>H</kbd></button>
-        <button data-panel="finance"><i>📊</i><span>Money</span><kbd>F</kbd></button>
-        <button data-panel="upgrades"><i>⬆️</i><span>Upgrade</span><kbd>U</kbd></button>
+        <button data-panel="finance"><i>📊</i><span>Money</span><kbd>M</kbd></button>
         <button data-panel="stats"><i>🏆</i><span>Progress</span><kbd>K</kbd></button>
       </nav>
 
@@ -100,7 +90,7 @@
       <div id="toasts"></div>
       <div id="chat"><div id="chat-log"></div><input id="chat-input" maxlength="140" placeholder="Press Enter to chat…" /></div>
       <div id="playerlist"></div>
-      <div id="emote-hint">1-6 emotes · G ping · Enter chat</div>
+      <div id="emote-hint">F punch · 1-6 emotes · G ping · Enter chat</div>
 
       <!-- panels -->
       <div id="panel" class="hidden"><div class="panel-head"><h2 id="p-title"></h2><button class="x" id="p-close">✕</button></div><div id="p-body"></div></div>
@@ -132,23 +122,16 @@
             <div class="kv"><span>Interact (hold to repeat)</span><b>E / Space</b></div>
             <div class="kv"><span>Drop carried box</span><b>Q</b></div>
             <div class="kv"><span>Call repair technician</span><b>X</b></div>
-            <div class="kv"><span>Build mode (R rotate, M move, X sell, U upgrade)</span><b>B</b></div>
-            <div class="kv"><span>Order · Stock · Prices · Staff</span><b>O · I · P · H</b></div>
-            <div class="kv"><span>Money · Upgrades · Progress</span><b>F · U · K</b></div>
+            <div class="kv"><span>Punch (friends get dizzy, customers walk out!)</span><b>F</b></div>
+            <div class="kv"><span>Arrange furniture (R rotate, M move, P pack, X sell)</span><b>B</b></div>
+            <div class="kv"><span>Stock · Money · Progress</span><b>I · M · K</b></div>
             <div class="kv"><span>Chat · Emotes · Ping</span><b>Enter · 1-6 · G</b></div>
           </div>
           <div>
-            <div class="section-title">🏪 The loop</div>
-            <ol class="goals" style="padding-left:18px">
-              <li><b>Build</b> shelves, fridges and a checkout (B).</li>
-              <li><b>Order</b> products from suppliers (O). Trucks drop boxes at the yellow loading area.</li>
-              <li><b>Carry</b> boxes inside (E) and <b>stock</b> the right fixture — milk goes in a fridge!</li>
-              <li><b>Open the store</b>. Stand on the blue STAFF mat behind a checkout and press E to work the register.</li>
-              <li><b>Hire staff</b> (H) to automate jobs, and set <b>prices</b> (P) for profit.</li>
-              <li>At closing time read the <b>daily report</b>. Don't stay in debt for 3 days!</li>
-              <li>Level up to unlock produce, frozen food, the butcher, the deli, expansions and more.</li>
-            </ol>
-            <p class="note">Tip: split up! One player runs the till, another hauls deliveries, another builds and orders.</p>
+            <div class="section-title">🖥️ The store computer</div>
+            <p class="note" style="font-size:13px">Walk to the computer and press E. There you order stock, unlock new products, buy furniture and plants (delivered in boxes), set prices, hire staff, pay your bills and read messages from customers.</p>
+            <div class="section-title">🧊 Fridges & counters</div>
+            <p class="note" style="font-size:13px">Open fridge doors (E) before stocking them. At the butcher and deli: take the product from the big fridge, cut it at the station, hand it over at the counter.</p>
           </div>
         </div>
         <div style="text-align:center;margin-top:12px"><button class="btn primary" id="help-close">Got it!</button></div>

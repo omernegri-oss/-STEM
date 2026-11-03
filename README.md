@@ -25,50 +25,38 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
 | Move / sprint | `WASD` / `Shift` |
 | Rotate camera / zoom | drag mouse, `Z`/`C` · mouse wheel |
 | Interact (hold to repeat) | `E` or `Space` |
-| Drop a carried box | `Q` |
-| Build mode (rotate / move / sell / upgrade) | `B` (`R` / `M` / `X` / `U`) |
-| Order stock · Inventory · Prices · Staff | `O` · `I` · `P` · `H` |
-| Finances · Team upgrades · Progress | `F` · `U` · `K` |
+| Drop what you carry | `Q` |
+| Punch (friends get dizzy, customers walk out) | `F` |
+| Arrange furniture (move / rotate / pack / sell) | `B` (`M` / `R` / `P` / `X`) |
+| Stock overview · money · progress | `I` · `M` · `K` |
 | Chat · emotes · ping a spot | `Enter` · `1`–`6` · `G` |
 | Help | `?` |
 
-**The core loop**
+**How it works**
 
-1. **Build** shelves, fridges and a checkout counter in the empty store. The build preview shows valid
-   placement, the customer side in yellow and the staff side in blue.
-2. **Order** from suppliers. Each has its own catalog, minimum order, delivery fee, delivery time and bulk discounts.
-   Trucks drop **physical boxes** at the yellow loading area outside.
-3. **Carry** boxes inside and **stock** the right fixture. Shelves visibly fill up and empty out, and milk won't go on a dry-goods shelf.
-4. **Open the store.** Customers walk in, browse departments, fill baskets or carts and queue at checkouts.
-   Stand on the blue **STAFF** mat behind a register and tap `E` to scan items and take payment.
-5. **Hire employees**: cashiers, shelf stockers, cleaners, butchers and deli clerks, each with a name, salary, skill, speed,
-   happiness and shift.
-6. At closing time you get a **daily report** covering revenue, expenses, profit, satisfaction, best sellers and what customers wanted.
-   Three days in debt and the store goes bankrupt.
-
-## Features
-
-- **Multiplayer co-op (1–4).** Authoritative server, real-time sync, shared money and permissions, public room
-  list and invite codes, team naming vote (names are unique across stores), role badges, chat, emotes, pings,
-  late joining and save/resume.
-- **Building.** 24 fixtures and decorations, placement validation (no blocked aisles or entrances), move, rotate,
-  sell (full refund if bought today before opening), per-fixture upgrades, 7 floor styles, 8 wall colours,
-  5 lighting styles (up to a party disco) and 5 store expansions.
-- **Departments.** Grocery, refrigerated, frozen, produce, an interactive **butcher counter** and a **deli counter**
-  where customers request specific cuts and quantities that a player or a hired specialist prepares.
-- **62 products** from **8 suppliers**, with expiry dates, spoilage and inventory tracking.
-- **Customer AI.** Shopping lists, price sensitivity, patience, reactions (thought bubbles) to prices, cleanliness, empty
-  shelves and expired food, litter, and angry walk-outs when lines are too long. Reputation drives foot traffic.
-- **Employees** who visibly do their jobs: cashiers scan, stockers haul boxes from the loading area and racks, cleaners mop,
-  and butchers chop. Happiness, raises, shifts, sick days and quitting are all modelled.
-- **Economy.** Revenue, cost of goods, salaries, rent, electricity, maintenance, tips, profit history chart and margins.
-- **Progression.** A fresh **daily challenge** every day, 15 store levels unlock products, suppliers, fixtures, roles, decor and expansions. There are 23 guided
-  goals with cash rewards, 24 achievements and 9 team upgrades (hand trucks, pallet jacks, shopping carts, LED lighting…).
-- **Random events.** Customer rushes, supplier delays, fridge breakdowns, product shortages, holidays, a VIP food
-  blogger, staff absences, flash sales, health inspections, heatwaves, going viral, and a pigeon that gets inside.
-- **Presentation.** Stylized low-poly 3D built entirely from code, with a day/night cycle, sliding doors, delivery
-  trucks, flying-product stocking animation, checkout belts, confetti and synthesized sound effects and music.
-  There is a low-graphics toggle for weaker machines.
+- You start in an empty building with **$400**, a **store computer** and one checkout counter. That's enough
+  for a shelf and a few boxes of flour, oil or sugar, the only products you're licensed to sell at first.
+- **Everything is bought on the computer.** Walk to it and press `E`. From there you can:
+  - order stock from suppliers;
+  - buy a **license** for each new product ($50–$200 each);
+  - buy furniture and plants;
+  - set prices (each product has a minimum and maximum price);
+  - hire staff, buy upgrades and expansions;
+  - pay your **bills**;
+  - read **messages**.
+- Deliveries arrive as boxes at the loading area. Furniture comes in a box too: carry it inside, press `E`
+  and place it wherever you like. Nobody tells you how to lay out your store.
+- **Fridges and freezers have doors**: open them before stocking.
+- **At the register**, click each product on the belt to pass it over the scanner, then take the payment.
+- **Butcher and deli departments** have a big fridge and a prep station (cleaver block or cheese slicer) behind
+  the counter. To serve an order, take it from the fridge, cut and wrap it at the station, then hand it over at the counter.
+- Customers don't show their wishes above their heads. If they can't find a product, they tell you in the
+  computer's messages.
+- At most **15 shoppers** are in the store at once.
+- Every evening a bill for rent, electricity and maintenance arrives. Pay it within 2 days or late fees stack
+  up, and after 3 days you're evicted. Salaries are paid automatically.
+- The chat only shows your team's messages, level-ups and deliveries.
+- There are **10 store levels**. The last expansion adds a **second floor** with stairs, which customers and players walk up.
 
 ## Architecture
 

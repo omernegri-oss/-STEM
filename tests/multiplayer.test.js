@@ -60,23 +60,30 @@ for (const c of [A, ...others]) c.act('nameVote');
 for (const c of [A, ...others]) await c.waitFor(c => c.state.meta.phase === 'prep');
 assert.equal(others[1].state.world.name, 'Quad Market');
 
-// shared building + shared cash
-others[0].act('place', { type: 'shelf', x: 2, z: 2, rot: 0 });
-await A.waitFor(c => c.state.world.furniture.length === 1);
-await others[2].waitFor(c => c.state.meta.cash === 4750);
-// shared ordering, delivery visible to all
-others[1].act('order', { supplier: 'pantry', items: [{ pid: 'cereal', boxes: 2 }] });
+// buying happens on the store computer; everyone shares the cash
+const comp = A.state.world.furniture.find(f => f.type === 'computer');
+others[0].send({ t: 'p', x: comp.x + 1.5, z: comp.z + 1, rot: 0, anim: 0 }); await sleep(100);
+others[0].act('buyFurniture', { type: 'shelf' });
+await others[2].waitFor(c => c.state.meta.cash === 400 - 250 - 25);
+others[1].send({ t: 'p', x: comp.x + 1.5, z: comp.z + 1, rot: 0, anim: 0 }); await sleep(100);
+others[1].act('order', { supplier: 'pantry', items: [{ pid: 'flour', boxes: 2 }] });
 A.act('speed', { v: 3 });
-await others[2].waitFor(c => c.state.world.boxes.length === 2, 20000);
+await others[2].waitFor(c => c.state.world.boxes.length === 3, 30000);
+// a furniture box is carried and placed
+const fbox = A.state.world.boxes.find(b => b.ftype === 'shelf');
+A.send({ t: 'p', x: fbox.x, z: fbox.z, rot: 0, anim: 0 }); await sleep(100);
+A.act('pickup', { id: fbox.id }); await sleep(150);
+A.act('place', { x: 2, z: 1, rot: 0 });
+await others[1].waitFor(c => c.state.world.furniture.some(f => f.type === 'shelf'));
 
 // positions are relayed; carried boxes are visible to others
-const box = others[2].state.world.boxes[0];
+const box = others[2].state.world.boxes.find(b => b.pid);
 others[2].send({ t: 'p', x: box.x, z: box.z, rot: 0, anim: 0 }); await sleep(100);
 others[2].act('pickup', { id: box.id });
 await A.waitFor(c => { const p = c.state.snap?.P.find(p => p[0] === others[2].id); return p && p[5].length === 1 && Math.abs(p[1] - box.x) < 0.01; });
 // disconnecting while carrying drops the box back into the world
 others[2].ws.close();
-await A.waitFor(c => c.state.world.boxes.length === 2 && c.state.lobby.players.length === 3 || c.state.world.boxes.length === 2);
+await A.waitFor(c => c.state.world.boxes.filter(b => b.pid).length === 2);
 // chat
 others[0].send({ t: 'chat', text: 'hello team' });
 await A.waitFor(c => c.msgs.some(m => m.t === 'chat' && m.text === 'hello team' && m.from === 'Ben'));
@@ -95,7 +102,7 @@ rooms.delete(code);
 G.send({ t: 'create', load: code, name: 'Gus' });
 await G.waitFor(c => c.state.lobby && c.state.lobby.loaded);
 G.send({ t: 'start' });
-await G.waitFor(c => c.state.world && c.state.world.furniture.length === 1 && c.state.meta.phase === 'prep');
+await G.waitFor(c => c.state.world && c.state.world.furniture.length === 3 && c.state.meta.phase === 'prep');
 // a second store cannot take the same name
 const H = await new Client('Hal').connect(); H.send({ t: 'create', name: 'Hal' });
 await H.waitFor(c => c.state.lobby); H.send({ t: 'start' }); await H.waitFor(c => c.state.meta);

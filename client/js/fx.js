@@ -31,8 +31,9 @@ export class FX {
   fly(shape, color, from, to, n = 2) {
     for (let i = 0; i < Math.min(4, n); i++) {
       const m = new THREE.Mesh(UNIT_GEOS[shape] || UNIT_GEOS.box, mat(color));
-      m.position.set(from.x, 1.1, from.z); m.visible = false; this.scene.add(m);
-      this.items.push({ obj: m, t: -i * 0.07, life: 0.38, kind: 'fly', from: new THREE.Vector3(from.x, 1.1, from.z), to: new THREE.Vector3(to.x + (Math.random() - 0.5) * 0.8, 0.6 + Math.random() * 0.9, to.z + (Math.random() - 0.5) * 0.3) });
+      const yb = from.y || 0;
+      m.position.set(from.x, yb + 1.1, from.z); m.visible = false; this.scene.add(m);
+      this.items.push({ obj: m, t: -i * 0.07, life: 0.38, kind: 'fly', from: new THREE.Vector3(from.x, yb + 1.1, from.z), to: new THREE.Vector3(to.x + (Math.random() - 0.5) * 0.8, yb + 0.6 + Math.random() * 0.9, to.z + (Math.random() - 0.5) * 0.3) });
     }
   }
   sparkle(x, z) { this.burst(x, 0.3, z, 8, [0xffffff, 0x7dd3fc, 0xfef08a], 1.5); }

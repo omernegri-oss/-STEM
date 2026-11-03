@@ -69,6 +69,10 @@ const SOUNDS = {
   dayend: () => { [784, 659, 523, 392].forEach((f, i) => tone(f, 0.3, { vol: 0.12, at: i * 0.15 })); },
   ping: () => { tone(1400, 0.15, { vol: 0.15 }); tone(1400, 0.15, { vol: 0.08, at: 0.18 }); },
   coin: () => { tone(1975, 0.06, { type: 'square', vol: 0.06 }); tone(2637, 0.15, { type: 'square', vol: 0.06, at: 0.06 }); },
+  punch: () => { tone(120, 0.12, { vol: 0.45, slide: -60 }); noise(0.1, { vol: 0.3, freq: 800, q: 0.7 }); },
+  whoosh: () => { noise(0.18, { vol: 0.12, freq: 1800, q: 0.6 }); },
+  fridgeOpen: () => { tone(300, 0.12, { type: 'triangle', vol: 0.08, slide: 120 }); noise(0.2, { vol: 0.05, freq: 500 }); },
+  fridgeClose: () => { tone(160, 0.1, { vol: 0.2, slide: -40 }); },
   step: () => { noise(0.03, { vol: 0.03, freq: 600 }); },
 };
 

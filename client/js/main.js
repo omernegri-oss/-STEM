@@ -1,6 +1,7 @@
 // Supermarket Tycoons – client entry point: menus, lobby, networking glue and the main loop.
 import * as THREE from 'three';
-import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, fmtMoney } from '/shared/data.js';
+import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, FLOOR_H, fmtMoney } from '/shared/data.js';
+import { heightAt } from '/shared/grid.js';
 import { Net } from './net.js';
 import { createScene } from './scene.js';
 import { World } from './world.js';
@@ -39,7 +40,7 @@ world.set({ name: 'Supermarket Tycoons', w: 12, d: 9, doorX: 5, floor: 'checker'
 
 const ui = new UI({ G, net, onPanel: (p) => togglePanel(p) });
 const gfxBtn = $('h-gfx');
-const syncGfx = () => { gfxBtn.textContent = lowGfx ? '🖥️ Low' : '🖥️ High'; gfxBtn.title = 'Graphics quality (click to toggle)'; };
+const syncGfx = () => { gfxBtn.textContent = lowGfx ? '🔅' : '🔆'; gfxBtn.title = `Graphics: ${lowGfx ? 'Low' : 'High'} (click to toggle)`; };
 gfxBtn.onclick = () => { lowGfx = !lowGfx; try { localStorage.setItem('st_gfx', lowGfx ? 'low' : 'high'); } catch {} S.setQuality(lowGfx); syncGfx(); };
 syncGfx();
 const toggleHelp = (on) => $('help').classList.toggle('hidden', on === undefined ? undefined : !on);
@@ -52,7 +53,7 @@ window.__dbg.build = build;
 
 function togglePanel(p) {
   if (!G.started) return;
-  if (p === 'build') { ui.closePanel(); build.toggle(me.x, me.z); syncDock(); return; }
+  if (p === 'build') { ui.closePanel(); build.toggle(me); syncDock(); return; }
   if (build.active) build.exit();
   ui.openPanel(p); syncDock();
 }
@@ -138,8 +139,10 @@ net.on('s', (s) => {
   G.snap = s;
   const mine = s.P.find(p => p[0] === G.me);
   if (mine) {
-    if (firstSnap) { me.x = mine[1]; me.z = mine[2]; me.rot = mine[3]; firstSnap = false; }
+    if (firstSnap) { me.x = mine[1]; me.z = mine[2]; me.rot = mine[3]; me.floor = mine[8] || 0; firstSnap = false; }
+    const prevTop = (G.carry || []).at(-1);
     G.carry = mine[5]; G.station = mine[6];
+    if ((G.carry || []).at(-1) !== prevTop) G.deptProgress = 0;
   }
   actors.applySnapshot(s, G.me, me);
   world.setCheckouts(s.K);
@@ -149,44 +152,41 @@ net.on('close', () => { if (G.code) { loading(true, 'Disconnected from server. R
 
 net.on('fx', (m) => {
   switch (m.k) {
-    case 'toast': ui.toast(m.text, m.kind, m.icon); if (m.kind === 'bad') play('error'); break;
-    case 'info': ui.toast(m.text, 'info', 'ℹ️'); break;
     case 'err': ui.error(m.text); break;
     case 'snd': play(m.name, m.x, m.z); break;
-    case 'float': fx.float(m.text, m.x, m.z, m.color); if (m.text.startsWith('+$')) fx.burst(m.x, 1.2, m.z, 6, [0xfacc15, 0x22c55e], 1.5); break;
-    case 'levelup': ui.showLevelUp(m.level, m.unlocks); play('levelup'); fx.burst(me.x, 2, me.z, 40); break;
-    case 'goal': ui.toast(`Goal complete: ${m.text}${m.reward ? ` (+${fmtMoney(m.reward)})` : ''}`, 'good', '🎯'); fx.burst(me.x, 2, me.z, 20); break;
-    case 'ach': ui.toast(`Achievement unlocked: ${m.name} — ${m.desc}`, 'good', m.icon); play('fanfare'); break;
-    case 'event': ui.showEvent(m); break;
+    case 'float': fx.float(m.text, m.x, m.z, m.color, (m.floor || 0) * FLOOR_H + 1.8); if (m.text.startsWith('+$')) fx.burst(m.x, (m.floor || 0) * FLOOR_H + 1.2, m.z, 6, [0xfacc15, 0x22c55e], 1.5); break;
+    case 'levelup': ui.system(`⭐ Level ${m.level}! New products and furniture are available on the computer.`); play('levelup'); fx.burst(me.x, (me.y || 0) + 2, me.z, 40); break;
     case 'report': ui.showReport(m.report); break;
-    case 'delivery': fx.truck(m.x, m.z, m.supplier); setTimeout(() => play('honk', m.x, m.z), 2200); break;
+    case 'delivery': ui.system(`📦 A delivery from ${m.name} arrived at the loading area.`); fx.truck(m.x, m.z, m.supplier); setTimeout(() => play('honk', m.x, m.z), 2200); break;
     case 'stocked': {
       const e = world.furn.get(m.id); if (!e) break;
       const src = m.by > 0 ? actors.players.get(m.by) : actors.staff.get(-m.by);
       const p = PRODUCT_MAP[m.pid];
-      if (src && p) fx.fly(p.shape, p.color, src, e.group.position, m.n);
+      const yb = (e.data.floor || 0) * FLOOR_H;
+      if (src && p) fx.fly(p.shape, p.color, { x: src.x, z: src.z, y: yb }, { x: e.group.position.x, z: e.group.position.z, y: yb }, m.n);
       play('pop', e.group.position.x, e.group.position.z); setTimeout(() => play('pop', e.group.position.x, e.group.position.z), 90);
       break;
     }
-    case 'placed': fx.burst(m.x + 1, 0.4, m.z + 0.5, 12, [0xffffff, 0xe2e8f0, 0xfde68a], 2); break;
-    case 'named': ui.toast(`Welcome to ${m.name}!`, 'good', '🎉'); fx.burst(me.x, 2.5, me.z, 60); break;
+    case 'placed': fx.burst(m.x + 1, (m.floor || 0) * FLOOR_H + 0.4, m.z + 0.5, 12, [0xffffff, 0xe2e8f0, 0xfde68a], 2); break;
+    case 'named': fx.burst(me.x, 2.5, me.z, 60); break;
     case 'expanded': fx.burst(me.x, 3, me.z, 60); break;
     case 'bankrupt': play('dayend'); break;
     case 'ping': fx.ping(m.x, m.z, m.color, m.name); play('ping', m.x, m.z); break;
-    case 'take': break;
+    case 'swing': actors.swing(m.id); break;
+    case 'pow': fx.float('POW!', m.x, m.z, '#f97316', (m.floor || 0) * FLOOR_H + 1.6); fx.burst(m.x, (m.floor || 0) * FLOOR_H + 1.3, m.z, 10, [0xfacc15, 0xffffff, 0xf97316], 2.5); break;
+    case 'knock': if (m.id === G.me) { me.knock(m.dx, m.dz); ui.error(`${m.by} punched you! 💫`); } break;
   }
 });
 
 function enterGame() {
   showScreen('hud');
-  ui.updateHud(); ui.renderTasks();
+  ui.updateHud(); ui.renderSide();
   canvas.focus();
-  setTimeout(() => ui.toast('Tip: WASD to move, drag the mouse to look around, E to interact. Press ? for help.', 'info', '🎮'), 800);
   try { if (!localStorage.getItem('st_seen_help')) { toggleHelp(true); localStorage.setItem('st_seen_help', '1'); } } catch {}
 }
 
 // ----------------------------------------------------------------------------------- key commands
-const PANEL_KEYS = { b: 'build', o: 'orders', i: 'inventory', p: 'prices', h: 'staff', f: 'finance', u: 'upgrades', k: 'stats' };
+const PANEL_KEYS = { b: 'build', i: 'inventory', m: 'finance', k: 'stats' };
 const EMOTES = { 1: '👋', 2: '😂', 3: '👍', 4: '❤️', 5: '😱', 6: '🎉' };
 addEventListener('keydown', (e) => {
   initAudio();
@@ -200,12 +200,13 @@ addEventListener('keydown', (e) => {
     if (ui.panel) { ui.closePanel(); return; }
     return; // build mode handles its own escape
   }
-  if (build.active && ['u', 'x', 'm', 'r'].includes(k) && k !== 'b') return; // build-mode shortcuts
+  if (build.active && ['u', 'x', 'm', 'r', 'p'].includes(k)) return; // build-mode shortcuts
+  if (k === 'f' && !build.active && G.meta?.phase !== 'naming') { net.act('punch'); actors.swing(G.me); play('whoosh'); return; }
   if (PANEL_KEYS[k] && G.meta?.phase !== 'naming') { togglePanel(PANEL_KEYS[k]); e.preventDefault(); return; }
   if (EMOTES[k]) { net.send({ t: 'emote', e: EMOTES[k] }); return; }
   if (k === 'g' && !build.active) {
     const ray = new THREE.Raycaster(); ray.setFromCamera({ x: input.mouse.nx, y: input.mouse.ny }, S.camera);
-    const p = new THREE.Vector3(); if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p)) net.send({ t: 'ping', x: p.x, z: p.z });
+    const p = new THREE.Vector3(); if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -me.floor * FLOOR_H), p)) net.send({ t: 'ping', x: p.x, z: p.z, floor: me.floor });
   }
 });
 addEventListener('mousedown', () => initAudio());
@@ -220,7 +221,8 @@ function frame(now) {
   if (inGame) {
     if (!build.active) {
       const blockMove = G.meta?.phase === 'naming';
-      if (!blockMove) me.update(dt, input, rig.yaw, world.grid, (G.carry || []).length);
+      if (!blockMove) me.update(dt, input, rig.yaw, world, (G.carry || []).length);
+      me.y = heightAt(G.world.w, G.world.floors || 1, me.floor, me.x, me.z);
       rig.update(dt, input, me);
     } else {
       build.update(dt, input);
@@ -230,7 +232,10 @@ function frame(now) {
     if (me.moving) { stepT += dt; if (stepT > 0.32) { stepT = 0; play('step'); } }
     // send our position
     sendT += dt;
-    if (sendT > 1 / 15) { sendT = 0; net.send({ t: 'p', x: +me.x.toFixed(2), z: +me.z.toFixed(2), rot: +me.rot.toFixed(2), anim: me.moving ? 1 : 0 }); }
+    if (sendT > 1 / 15) { sendT = 0; net.send({ t: 'p', x: +me.x.toFixed(2), z: +me.z.toFixed(2), rot: +me.rot.toFixed(2), anim: me.moving ? 1 : 0, floor: me.floor }); }
+    const viewFloor = build.active ? build.floor : ((me.y || 0) > 1.8 ? 1 : 0);
+    world.setViewFloor(viewFloor); actors.setDims(G.world.w, G.world.floors || 1, viewFloor);
+    if (ui.panel && ui.isComputerTab(ui.panel)) { const c = G.world.furniture.find(f => f.type === 'computer' && (f.floor || 0) === me.floor && world.fixtureDistance(f, me.x, me.z) < 2.6); if (!c) ui.closePanel(); }
     // interaction
     currentInter = build.active ? null : findInteraction(G, world, me, G.carry || [], G.station);
     window.__dbg.lastInter = currentInter;
@@ -243,16 +248,30 @@ function frame(now) {
     ui.stationBar(currentInter);
     const carry = G.carry || [];
     const ce = $('carry');
-    if (carry.length && !build.active) { const t = `Carrying: ${carry.map(pid => PRODUCT_MAP[pid]?.icon).join(' ')}  ·  Q drop`; if (ce.textContent !== t) ce.textContent = t; ce.classList.remove('hidden'); } else ce.classList.add('hidden');
-    if (!input.typing() && !build.active) {
+    const nameOf = (c) => c.startsWith('f:') ? FURNITURE[c.slice(2)].name + ' (box)' : c.includes(':') ? `${c.startsWith('raw') ? 'Raw' : 'Wrapped'} ${PRODUCT_MAP[c.split(':')[1]]?.name}` : PRODUCT_MAP[c]?.name;
+    if (carry.length && !build.active) { const t = `Carrying: ${carry.map(nameOf).join(', ')}  ·  Q drop`; if (ce.textContent !== t) ce.textContent = t; ce.classList.remove('hidden'); } else ce.classList.add('hidden');
+    me.cutting = !!(currentInter && currentInter.cutting && input.down('e'));
+    const doAct = (a) => {
+      if (a.a === '_computer') { ui.openComputer(); return; }
+      if (a.a === '_place') { const top = (G.carry || []).at(-1); if (top && top.startsWith('f:')) { build.enter(me, top.slice(2)); syncDock(); } return; }
+      if (a.a === 'deptCut') G.deptProgress = (G.deptProgress || 0) + 1;
+      net.act(a.a, a);
+    };
+    if (!input.typing() && !build.active && !me.stunned) {
       if (currentInter && currentInter.action) {
-        if (input.hit('e') || input.hit(' ')) { net.act(currentInter.action.a, currentInter.action); holdT = now; }
-        else if ((input.down('e') || input.down(' ')) && currentInter.repeat && now - holdT > 190) { holdT = now; net.act(currentInter.action.a, currentInter.action); }
+        if (input.hit('e') || input.hit(' ')) { doAct(currentInter.action); holdT = now; }
+        else if ((input.down('e') || input.down(' ')) && currentInter.repeat && now - holdT > 190) { holdT = now; doAct(currentInter.action); }
+      }
+      const click = input.mouse.clicked;
+      if (click && click.button === 0 && G.station && world.beltItems.length) {
+        const ray = new THREE.Raycaster(); ray.setFromCamera({ x: input.mouse.nx, y: input.mouse.ny }, S.camera);
+        const hit = ray.intersectObjects(world.beltItems, false)[0];
+        if (hit) { net.act('work'); hit.object.position.x += 0.4; }
       }
       if (currentInter && currentInter.alt && input.hit('x')) net.act(currentInter.alt.a, currentInter.alt);
       if (input.hit('q')) net.act('drop');
     }
-    tasksT += dt; if (tasksT > 0.5) { tasksT = 0; ui.renderTasks(); ui.updateHud(); }
+    tasksT += dt; if (tasksT > 0.5) { tasksT = 0; ui.renderSide(); ui.updateHud(); }
     ui.tickHud(dt);
     ui.maybeRender();
   } else {
@@ -264,7 +283,8 @@ function frame(now) {
   const lighting = S.updateLighting(G.snap ? G.snap.time : 11 * 60, G.snap ? G.snap.phase : 'open', ls.id, ls.color);
   void lighting;
   actors.update(dt, inGame ? me : null);
-  world.update(dt, actors.positions(), S.camera, inGame ? me : null);
+  const chars = actors.positions(); if (inGame) chars.push(me);
+  world.update(dt, chars, S.camera, inGame ? me : null);
   fx.update(dt);
   S.renderer.render(S.scene, S.camera);
   input.endFrame();

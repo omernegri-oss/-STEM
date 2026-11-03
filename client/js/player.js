@@ -1,7 +1,7 @@
 // Local player movement (client-predicted), third-person camera, input, and context-sensitive interaction.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, CATEGORIES } from '/shared/data.js';
-import { resolveCollision, dims, center } from '/shared/grid.js';
+import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo } from '/shared/data.js';
+import { resolveCollision, dims, center, heightAt, deptSpots } from '/shared/grid.js';
 
 export class Input {
   constructor(canvas) {
@@ -44,10 +44,12 @@ export class Input {
 }
 
 export class LocalPlayer {
-  constructor() { this.x = 6; this.z = 6; this.rot = Math.PI; this.moving = false; this.vx = 0; this.vz = 0; this.stepT = 0; }
-  update(dt, input, yaw, grid, carryN) {
+  constructor() { this.x = 6; this.z = 6; this.rot = Math.PI; this.moving = false; this.vx = 0; this.vz = 0; this.floor = 0; this.stunUntil = 0; this.kx = 0; this.kz = 0; }
+  knock(dx, dz, ms = 2000) { this.kx = dx; this.kz = dz; this.stunUntil = performance.now() + ms; }
+  get stunned() { return performance.now() < this.stunUntil; }
+  update(dt, input, yaw, world, carryN) {
     let mx = 0, mz = 0;
-    if (!input.typing()) {
+    if (!input.typing() && !this.stunned) {
       if (input.down('w') || input.down('arrowup')) mz -= 1;
       if (input.down('s') || input.down('arrowdown')) mz += 1;
       if (input.down('a') || input.down('arrowleft')) mx -= 1;
@@ -59,18 +61,29 @@ export class LocalPlayer {
     let tvx = 0, tvz = 0;
     if (len > 0) {
       mx /= len; mz /= len;
-      // rotate input by camera yaw
       const c = Math.cos(yaw), s = Math.sin(yaw);
       const wx = mx * c + mz * s, wz = -mx * s + mz * c;
       tvx = wx * speed; tvz = wz * speed;
-      const target = Math.atan2(wx, wz);
-      let d = target - this.rot; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+      let d = Math.atan2(wx, wz) - this.rot; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
       this.rot += d * Math.min(1, dt * 14);
     }
     const acc = 1 - Math.exp(-dt * 14);
     this.vx += (tvx - this.vx) * acc; this.vz += (tvz - this.vz) * acc;
-    let nx = this.x + this.vx * dt, nz = this.z + this.vz * dt;
-    if (grid) [nx, nz] = resolveCollision(grid, nx, nz, 0.28);
+    // knockback impulse from a punch
+    this.kx *= Math.exp(-dt * 6); this.kz *= Math.exp(-dt * 6);
+    let nx = this.x + (this.vx + this.kx) * dt, nz = this.z + (this.vz + this.kz) * dt;
+    const st = world && world.state && (world.state.floors || 1) > 1 ? stairInfo(world.state.w) : null;
+    const inLane = (x) => st && x >= st.x && x < st.x + 2;
+    const clampLane = (x) => Math.max(st.x + 0.3, Math.min(st.x + 1.7, x));
+    if (st && this.floor === 0 && inLane(this.x) && ((this.z >= st.z0 && this.z < st.z1) || (this.z >= st.z1 && nz < st.z1 && inLane(nx)))) {
+      // on the stairs (or stepping onto them from the bottom)
+      nx = clampLane(nx);
+      if (nz < st.z0) { this.floor = 1; nz = Math.max(nz, st.z0 - 0.95); }
+    } else if (st && this.floor === 1 && inLane(this.x) && this.z < st.z0 && nz >= st.z0 && inLane(nx)) {
+      this.floor = 0; nx = clampLane(nx); // stepping down into the stairwell
+    } else if (world) {
+      [nx, nz] = resolveCollision(world.gridFor(this.floor), nx, nz, 0.28);
+    }
     this.moving = Math.hypot(nx - this.x, nz - this.z) > 0.3 * dt;
     this.x = nx; this.z = nz;
   }
@@ -88,7 +101,7 @@ export class CameraRig {
       if (input.down('c')) this.yaw -= dt * 1.8;
     }
     if (m.wheel) this.dist = Math.min(this.build ? 40 : 22, Math.max(4.5, this.dist * (1 + m.wheel * 0.1)));
-    this.target.set(focus.x, 0.8, focus.z);
+    this.target.set(focus.x, (focus.y || 0) + 0.8, focus.z);
     this.cur.lerp(this.target, 1 - Math.exp(-dt * 10));
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     this.camera.position.set(this.cur.x + Math.sin(this.yaw) * cp * this.dist, this.cur.y + sp * this.dist, this.cur.z + Math.cos(this.yaw) * cp * this.dist);
@@ -96,83 +109,119 @@ export class CameraRig {
   }
 }
 
-// Decide what pressing E would do right now. Returns { label, action, repeat, warn, hint }.
+// Decide what pressing E would do right now. Returns { label, action, repeat, warn, station }.
+const DOORS = new Set(['fridge', 'freezer_upright', 'freezer']);
 export function findInteraction(G, world, me, carry, station) {
   const W = G.world; if (!W) return null;
+  const fl = me.floor || 0;
   const fx = Math.sin(me.rot), fz = Math.cos(me.rot);
   const byId = (id) => W.furniture.find(f => f.id === id);
-  // 1) operating a station
+  const furn = W.furniture.filter(f => (f.floor || 0) === fl);
+  const top = carry[carry.length - 1] || '';
+  const isFBox = top.startsWith('f:'), dept = top.startsWith('raw:') ? 'raw' : top.startsWith('pack:') ? 'pack' : null;
+  const prodPid = top && !isFBox && !dept ? top : null;
+  // 1) running a checkout
   if (station) {
     const f = byId(station);
-    if (f) {
-      const def = FURNITURE[f.type];
-      if (def.kind === 'checkout') {
-        const k = (G.snap?.K || []).find(k => k[0] === f.id);
-        if (k && k[1]) {
-          const [, , scanned, total, pids] = k;
-          if (scanned < total) return { label: `Scan item ${scanned + 1}/${total}`, action: { a: 'work' }, repeat: true, station: { kind: 'checkout', scanned, total, pids } };
-          const sum = pids.reduce((a, pid) => a + (W.prices[pid] || PRODUCT_MAP[pid].price) * (W.saleActive ? 0.85 : 1), 0);
-          return { label: `💳 Take payment ($${sum.toFixed(2)})`, action: { a: 'work' }, repeat: false, station: { kind: 'checkout', scanned, total, pids, pay: true } };
-        }
-        return { label: 'Waiting for customers… (walk away to leave)', action: null, station: { kind: 'checkout', idle: true, queue: k ? k[5] : 0 } };
+    if (f && f.type === 'checkout') {
+      const k = (G.snap?.K || []).find(k => k[0] === f.id);
+      if (k && k[1]) {
+        const [, , scanned, total, pids] = k;
+        if (scanned < total) return { label: `Scan the products (click them or E) ${scanned}/${total}`, action: { a: 'work' }, repeat: true, station: { kind: 'checkout', scanned, total, pids } };
+        const sum = pids.reduce((a, pid) => a + (W.prices[pid] || PRODUCT_MAP[pid].price) * (W.saleActive ? 0.85 : 1), 0);
+        return { label: `💳 Take payment ($${sum.toFixed(2)})`, action: { a: 'work' }, station: { kind: 'checkout', scanned, total, pids, pay: true } };
       }
-      if (def.kind === 'counter') {
-        const n = (G.snap?.N || []).find(n => n[0] === f.id);
-        if (n && n[1]) {
-          const [, , pid, qty, progress] = n; const p = PRODUCT_MAP[pid];
-          return { label: `${f.type === 'butcher' ? '🔪 Cut' : '🥄 Prepare'} ${qty}× ${p.name} (${p.unit})`, action: { a: 'work' }, repeat: true, station: { kind: 'counter', pid, qty, progress, presses: def.presses } };
-        }
-        return { label: 'Waiting for customers… (walk away to leave)', action: null, station: { kind: 'counter', idle: true } };
-      }
+      return { label: 'Waiting for customers… (walk away to leave)', action: null, station: { kind: 'checkout', idle: true, queue: k ? k[5] : 0 } };
     }
   }
-  // 2) step behind a checkout / counter
+  // 2) butcher / deli aisle: fridge -> station -> counter
+  for (const f of furn) {
+    if (FURNITURE[f.type].kind !== 'counter') continue;
+    const sp = deptSpots(f);
+    const dist = (p) => Math.hypot(p[0] - me.x, p[1] - me.z);
+    const spots = [['fridge', sp.fridgeSpot], ['station', sp.stationSpot], ['counter', sp.counterSpot]].filter(([, p]) => dist(p) < 0.62);
+    if (!spots.length) continue;
+    const [where] = spots.sort((a, b) => dist(a[1]) - dist(b[1]))[0];
+    const n = (G.snap?.N || []).find(n => n[0] === f.id);
+    const req = n && n[1] ? { pid: n[2], qty: n[3] } : null;
+    const reqP = req && PRODUCT_MAP[req.pid];
+    const def = FURNITURE[f.type];
+    const info = { kind: 'dept', req, dept, presses: def.presses, progress: G.deptProgress || 0, where, meat: f.type === 'butcher' };
+    if (where === 'fridge') {
+      if (prodPid && PRODUCT_MAP[prodPid].cat === def.cat) return { label: `📥 Stock ${PRODUCT_MAP[prodPid].name} into the fridge`, action: { a: 'stock', id: f.id, n: 3 }, repeat: true, station: info };
+      if (dept) return { label: '↩️ Put it back in the fridge', action: { a: 'deptReturn', id: f.id }, station: info };
+      if (!carry.length && req) return { label: `🚪 Open the fridge & take ${req.qty}× ${reqP.name}`, action: { a: 'deptTake', id: f.id }, station: info };
+      if (!carry.length) return { label: 'No orders waiting — customers order at the front counter', action: null, station: info };
+    }
+    if (where === 'station') {
+      if (dept === 'raw') return { label: `${f.type === 'butcher' ? '🔪 Cut' : '🧀 Slice'} & wrap (hold E)`, action: { a: 'deptCut', id: f.id }, repeat: true, station: info, cutting: true };
+      if (dept === 'pack') return { label: 'Wrapped! Bring it to the counter', action: null, station: info };
+      return { label: 'Take the product from the fridge first', action: null, station: info };
+    }
+    if (where === 'counter') {
+      if (dept === 'pack') return { label: req ? `🤝 Hand ${reqP.name} to the customer` : 'Nobody is waiting', action: req ? { a: 'deptServe', id: f.id } : null, station: info };
+      return { label: req ? `Customer wants ${req.qty}× ${reqP.name} (${reqP.unit}) — get it from the fridge` : 'Waiting for customers…', action: null, station: info };
+    }
+  }
+  // 3) step behind a checkout
   if (!carry.length) {
-    for (const f of W.furniture) {
-      const def = FURNITURE[f.type];
-      if (def.kind !== 'checkout' && def.kind !== 'counter') continue;
+    for (const f of furn) {
+      if (f.type !== 'checkout') continue;
       const bt = backTileOf(f);
       if (Math.hypot(bt[0] + 0.5 - me.x, bt[1] + 0.5 - me.z) < 0.8) {
         const busy = (G.snap?.P || []).some(p => p[0] !== G.me && p[6] === f.id);
-        if (busy) continue;
-        return { label: def.kind === 'checkout' ? '💵 Work the register' : `${f.type === 'butcher' ? '🔪' : '🧀'} Work the ${def.name}`, action: { a: 'station', id: f.id } };
+        if (!busy) return { label: '💵 Work the register', action: { a: 'station', id: f.id } };
       }
     }
   }
   const reach = (f) => world.fixtureDistance(f, me.x, me.z);
   const facing = (f) => { const [cx, cz] = center(f.type, f.x, f.z, f.rot); const dx = cx - me.x, dz = cz - me.z; const d = Math.hypot(dx, dz) || 1; return (dx * fx + dz * fz) / d; };
-  const near = W.furniture.filter(f => reach(f) < 0.95 && facing(f) > -0.1).sort((a, b) => reach(a) - reach(b) - (facing(a) - facing(b)) * 0.3);
-  if (carry.length) {
-    const pid = carry[carry.length - 1]; const p = PRODUCT_MAP[pid];
+  const near = furn.filter(f => reach(f) < 0.95 && facing(f) > -0.1).sort((a, b) => reach(a) - reach(b) - (facing(a) - facing(b)) * 0.3);
+  // 4) the computer
+  const comp = near.find(f => f.type === 'computer');
+  if (comp && !isFBox) return { label: '🖥️ Use the computer', action: { a: '_computer' } };
+  if (isFBox) return { label: `🪑 Place the ${FURNITURE[top.slice(2)].name}  ·  Q drop`, action: { a: '_place' } };
+  if (dept) return { label: 'Bring it to the department station', action: null };
+  if (prodPid) {
+    const p = PRODUCT_MAP[prodPid];
     for (const f of near) {
       const def = FURNITURE[f.type];
-      if (f.slots) {
+      if (f.slots && def.kind !== 'counter') {
         if (def.cat === p.cat) {
-          const free = f.slots.some(s => (s.pid === pid && s.qty < def.cap && !s.expired) || s.qty === 0);
-          if (!free) return { label: `${def.name} is full`, action: null, warn: true };
-          return { label: `📥 Stock ${p.icon} ${p.name} → ${def.name}`, action: { a: 'stock', id: f.id, n: 3 }, repeat: true };
+          if (DOORS.has(f.type) && !f.open) return { label: `🚪 Open the ${def.name}`, action: { a: 'door', id: f.id } };
+          const free = f.slots.some(s => (s.pid === prodPid && s.qty < def.cap && !s.expired) || s.qty === 0);
+          if (!free) return { label: `${def.name} is full${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: null, warn: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };
+          return { label: `📥 Stock ${p.name}${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: { a: 'stock', id: f.id, n: 3 }, repeat: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };
         }
         const need = CATEGORIES[p.cat];
-        return { label: `${p.name} needs a ${need.icon} ${FURNITURE[need.fixtures[0]].name}`, action: null, warn: true };
+        return { label: `${p.name} needs a ${FURNITURE[need.fixtures[0]].name}`, action: null, warn: true };
       }
       if (def.kind === 'rack') return { label: '🗃️ Store box on rack', action: { a: 'rackPut', id: f.id } };
       if (f.type === 'bin') return { label: '🗑️ Throw box away', action: { a: 'trash', id: f.id } };
     }
     if (carry.length < (G.meta?.carryCap || 1)) {
       const b = nearestBox(world, me);
-      if (b) return { label: `📦 Pick up another box (${PRODUCT_MAP[b.pid].name})`, action: { a: 'pickup', id: b.id } };
+      if (b && b.pid) return { label: `📦 Pick up another box (${PRODUCT_MAP[b.pid].name})`, action: { a: 'pickup', id: b.id } };
     }
     return null;
   }
   // empty hands
   const b = nearestBox(world, me);
-  if (b) { const p = PRODUCT_MAP[b.pid]; const bb = W.boxes.find(x => x.id === b.id); return { label: `📦 Pick up ${p.icon} ${p.name} (${bb ? bb.qty : '?'})${b.expired ? ' — EXPIRED' : ''}`, action: { a: 'pickup', id: b.id }, warn: b.expired }; }
-  const d = W.dirt.find(d => Math.hypot(d.x - me.x, d.z - me.z) < 1.1);
+  if (b) {
+    if (b.ftype) return { label: `📦 Pick up ${FURNITURE[b.ftype].name} box`, action: { a: 'pickup', id: b.id } };
+    const p = PRODUCT_MAP[b.pid]; const bb = W.boxes.find(x => x.id === b.id);
+    return { label: `📦 Pick up ${p.name} (${bb ? bb.qty : '?'})${b.expired ? ' — EXPIRED' : ''}`, action: { a: 'pickup', id: b.id }, warn: b.expired };
+  }
+  const d = W.dirt.find(d => (d.floor || 0) === fl && Math.hypot(d.x - me.x, d.z - me.z) < 1.1);
   if (d) return { label: `🧽 Clean up mess (${d.hp ?? 3} scrubs)`, action: { a: 'clean', id: d.id }, repeat: true };
   for (const f of near) {
     const def = FURNITURE[f.type];
-    if (f.broken) return { label: `🔧 Repair ${def.name} (${f.repair || 0}/6)  ·  [X] Call technician $180`, action: { a: 'repair', id: f.id }, repeat: true, alt: { a: 'callTech', id: f.id } };
-    if (f.slots && f.slots.some(s => s.expired && s.qty > 0)) return { label: `🤢 Clear expired items from ${def.name}`, action: { a: 'clearExpired', id: f.id } };
+    if (f.broken) return { label: `🔧 Repair ${def.name} (${f.repair || 0}/6)  ·  [X] call technician $180`, action: { a: 'repair', id: f.id }, repeat: true, alt: { a: 'callTech', id: f.id } };
+    if (f.slots && f.slots.some(s => s.expired && s.qty > 0)) {
+      if (DOORS.has(f.type) && !f.open) return { label: `🚪 Open the ${def.name}`, action: { a: 'door', id: f.id } };
+      return { label: `🤢 Clear expired items`, action: { a: 'clearExpired', id: f.id } };
+    }
+    if (DOORS.has(f.type)) return { label: `🚪 ${f.open ? 'Close' : 'Open'} the ${def.name}`, action: { a: 'door', id: f.id } };
     if (f.boxes && f.boxes.length) return { label: `🗃️ Take box from rack (${f.boxes.length})`, action: { a: 'rackTake', id: f.id } };
   }
   return null;
@@ -193,13 +242,13 @@ export { backTileOf };
 function nearestBox(world, me) {
   let best = null, bd = 1.25;
   for (const b of world.boxList) {
-    if (b.id < 0) continue;
+    if (b.id < 0 || (b.floor || 0) !== (me.floor || 0)) continue;
     const d = Math.hypot(b.x - me.x, b.z - me.z) - b.y * 0.01;
     if (d < bd || (best && Math.abs(d - bd) < 0.05 && b.y > best.y)) { if (d < bd) bd = d; best = b; }
   }
   // prefer top of the stack at that spot
   if (best) {
-    const top = world.boxList.filter(b => b.id >= 0 && Math.abs(b.x - best.x) < 0.3 && Math.abs(b.z - best.z) < 0.3).sort((a, b) => b.y - a.y)[0];
+    const top = world.boxList.filter(b => b.id >= 0 && (b.floor || 0) === (me.floor || 0) && Math.abs(b.x - best.x) < 0.3 && Math.abs(b.z - best.z) < 0.3).sort((a, b) => b.y - a.y)[0];
     if (top) best = top;
   }
   return best;

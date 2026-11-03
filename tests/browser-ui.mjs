@@ -1,10 +1,12 @@
-// UI interaction test: butcher counter, build selection card, panels, events, level-up and report overlays.
+// UI interaction test: butcher routine with real keys, fridge doors, build card, computer tabs (prices, staff,
+// bills, messages / flash sale), level-up chat line, report -> next day.
 import { createRequire } from 'node:module';
 import os from 'node:os'; import fs from 'node:fs'; import path from 'node:path';
 import assert from 'node:assert/strict';
 const { chromium } = createRequire(import.meta.url)('playwright');
 process.env.SAVES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'st-ui-'));
 const { startServer, rooms } = await import('../server/index.js');
+const { deptSpots } = await import('../shared/grid.js');
 const OUT = process.env.SHOTS || './shots';
 const port = 3131;
 const srv = startServer(port);
@@ -20,110 +22,100 @@ await page.click('#m-create'); await sleep(400); await page.click('#l-start'); a
 const code = await page.evaluate(() => window.__G.code);
 const room = rooms.get(code), g = room.game, p = [...room.players.values()][0];
 const E = (fn) => page.evaluate(fn);
-const waitFor = async (fn, ms = 10000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await E(fn)) return true; await sleep(150); } throw new Error('timeout: ' + fn); };
+const waitFor = async (fn, ms = 12000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await E(fn)) return true; await sleep(150); } throw new Error('timeout: ' + fn); };
+const tp = (x, z, rot = 0) => page.evaluate(([x, z, rot]) => { const m = window.__dbg.me; m.x = x; m.z = z; m.rot = rot; }, [x, z, rot]);
 g.act(p, { a: 'nameDraft', name: 'UI Test ' + Date.now() % 1000 }); g.act(p, { a: 'nameVote' });
 g.s.level = 6; g.s.cash = 80000;
-g.act(p, { a: 'place', type: 'butcher', x: 2, z: 2, rot: 0 });
-g.act(p, { a: 'place', type: 'checkout', x: 7, z: 5, rot: 0 });
-const butcher = g.s.furniture.find(f => f.type === 'butcher');
+const put = (type, x, z, rot = 0) => { g.s.furniture.push(g.newFixture(type, x, z, rot, 0)); g.rebuildGrid(); g.dirtyWorld(); return g.s.furniture.at(-1); };
+const butcher = put('butcher', 2, 1, 0);
+const fridge = put('fridge', 7, 0, 0);
 butcher.slots[0] = { pid: 'ribeye', qty: 8, exp: 99, expired: false };
-g.dirtyWorld();
-await waitFor(() => window.__G.world.furniture.length === 2);
+await waitFor(() => window.__G.world.furniture.length === 4);
 
-// --- butcher counter: player stands on the staff mat and serves a request
+// --- fridge doors: open with E, then stock, then close
+p.carry = [{ pid: 'milk', qty: 10, exp: 99 }];
+await tp(fridge.x + 1, fridge.z + 1.45, Math.PI);
+await waitFor(() => window.__dbg.lastInter?.action?.a === 'door');
+await page.keyboard.press('e');
+await waitFor(() => window.__G.world.furniture.find(f => f.type === 'fridge').open);
+await waitFor(() => window.__dbg.lastInter?.action?.a === 'stock');
+await page.keyboard.down('e'); await waitFor(() => !(window.__G.carry || []).length, 15000); await page.keyboard.up('e');
+await page.screenshot({ path: `${OUT}/70-fridge-open.png` });
+await waitFor(() => window.__dbg.lastInter?.action?.a === 'door');
+await page.keyboard.press('e');
+await waitFor(() => !window.__G.world.furniture.find(f => f.type === 'fridge').open);
+console.log('fridge door ✓');
+
+// --- butcher: fridge -> station -> counter with real keys
 g.act(p, { a: 'open' });
 const { spawnCustomer } = await import('../server/customers.js');
 const c = spawnCustomer(g); c.counterReq = { pid: 'ribeye', qty: 2, cat: 'meat' }; c.list = [];
-await page.evaluate(([x, z]) => { const m = window.__dbg.me; m.x = x; m.z = z; m.rot = 0; }, [butcher._back[0] + 0.5, butcher._back[1] + 0.5]);
-await waitFor(() => window.__dbg.lastInter?.action?.a === 'station');
+const sp = deptSpots(butcher);
+await tp(...sp.counterSpot, 0);
+await waitFor(() => (window.__G.snap?.N || []).some(n => n[1]), 40000);
+await tp(...sp.fridgeSpot, Math.PI);
+await waitFor(() => window.__dbg.lastInter?.action?.a === 'deptTake');
+await page.screenshot({ path: `${OUT}/71-butcher-fridge.png` });
 await page.keyboard.press('e');
-await waitFor(() => !!window.__G.station);
-await waitFor(() => window.__dbg.lastInter?.station?.pid === 'ribeye', 30000);
-await page.screenshot({ path: `${OUT}/40-butcher-station.png` });
-await page.keyboard.down('e'); await waitFor(() => window.__G.meta.stats.butcher >= 1, 15000); await page.keyboard.up('e');
-assert.equal(butcher.slots[0].qty, 6, 'two ribeyes cut and handed over');
-console.log('butcher served ✓');
+await waitFor(() => (window.__G.carry || [])[0] === 'raw:ribeye');
+await tp(...sp.stationSpot, Math.PI);
+await waitFor(() => window.__dbg.lastInter?.action?.a === 'deptCut');
+await page.keyboard.down('e'); await waitFor(() => (window.__G.carry || [])[0] === 'pack:ribeye', 15000); await page.keyboard.up('e');
+await tp(...sp.counterSpot, 0);
+await waitFor(() => window.__dbg.lastInter?.action?.a === 'deptServe');
+await page.screenshot({ path: `${OUT}/72-butcher-serve.png` });
+await page.keyboard.press('e');
+await waitFor(() => window.__G.meta.stats.butcher >= 1);
+assert.equal(butcher.slots[0].qty, 6);
+console.log('butcher routine ✓');
 
-// --- walking away leaves the station
-await page.evaluate(() => { window.__dbg.me.x += 3; });
-await waitFor(() => !window.__G.station);
-console.log('left station ✓');
+// --- build card: pack the fridge into a box
+await tp(9, 5); await page.keyboard.press('b'); await sleep(300);
+await page.evaluate((id) => { window.__dbg.build.selected = id; window.__dbg.build.render(); }, fridge.id);
+await page.click('#buildbar [data-act="pack"]');
+await waitFor(() => window.__G.world.boxes.some(b => b.ftype === 'fridge'));
+await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+console.log('pack into box ✓');
 
-// --- build mode: select a fixture via its card, rotate, upgrade, sell
-await page.keyboard.press('b'); await sleep(300);
-await page.evaluate((id) => { window.__dbg.build.selected = id; window.__dbg.build.render(); }, butcher.id);
-await page.click('#buildbar [data-act="upgrade"]');
-await waitFor(() => window.__G.world.furniture.find(f => f.type === 'butcher')?.upg === true);
-await page.screenshot({ path: `${OUT}/41-build-selected.png` });
-await page.click('#buildbar [data-act="tab"][data-v="style"]'); await sleep(200);
-await page.click('#buildbar [data-act="floor"][data-v="marble"]');
-await waitFor(() => window.__G.world.floor === 'marble');
-await page.click('#buildbar [data-act="tab"][data-v="expand"]'); await sleep(200);
-await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await sleep(200);
-assert.equal(await E(() => window.__dbg.build.active), false);
-console.log('build card / floor ✓');
-
-// --- prices panel: edit a price via input
-await page.keyboard.press('p'); await sleep(300);
-await page.fill('input[data-price="cereal"]', '5.25'); await page.keyboard.press('Tab');
-await waitFor(() => window.__G.world.prices.cereal === 5.25);
-await page.click('[data-act="price"][data-pid="pasta"][data-d="0.1"]');
-await waitFor(() => Math.abs(window.__G.world.prices.pasta - 2.09) < 0.001);
-await page.keyboard.press('Escape');
-console.log('prices ✓');
-
-// --- staff panel: hire, change shift, raise
+// --- computer tabs
+const comp = g.s.furniture.find(f => f.type === 'computer');
+await tp(comp.x + 1.5, comp.z + 1, -Math.PI / 2);
+await waitFor(() => window.__dbg.lastInter?.action?.a === '_computer');
+await page.keyboard.press('e'); await sleep(300);
+await page.click('[data-goto="prices"]'); await sleep(300);
+await page.fill('input[data-price="flour"]', '99'); await page.keyboard.press('Tab');
+await waitFor(() => window.__G.world.prices.flour === 4.58);
+console.log('price max limit ✓');
 g.s.candidates.push({ id: g.id(), name: 'Testy McTest', role: 'deli', skill: 5, speed: 1.2, salary: 99, seed: 3 }); g.dirtyMeta();
-await page.keyboard.press('h'); await sleep(500);
+await page.click('[data-goto="staff"]'); await sleep(500);
 await page.click(`[data-act="hire"][data-id="${g.s.candidates.at(-1).id}"]`);
 await waitFor(() => window.__G.meta.staff.length === 1);
-await sleep(500);
-const sid = g.s.staff[0].id;
-await page.selectOption(`select[data-shift="${sid}"]`, 'evening');
-await waitFor(() => window.__G.meta.staff[0].shift === 'evening');
-await page.click(`[data-act="raise"][data-id="${sid}"]`);
-await waitFor(() => window.__G.meta.staff[0].salary > 99);
-await page.screenshot({ path: `${OUT}/42-staff.png` });
-await page.keyboard.press('Escape');
-console.log('staff ✓');
-
-// --- inventory reorder button pre-fills an order
-await page.keyboard.press('i'); await sleep(400);
-await page.click('[data-act="reorder"][data-pid="ribeye"]'); await sleep(300);
-assert.equal(await E(() => window.__dbg.ui.panel), 'orders');
-assert.ok(await E(() => (window.__dbg.ui.cart.prime || {}).ribeye >= 1), 'reorder filled the cart');
-await page.click('[data-act="order"]');
-await waitFor(() => window.__G.meta.orders.length === 1);
-await page.keyboard.press('Escape');
-console.log('reorder ✓');
-
-// --- events: flash sale card with buttons
+console.log('hire ✓');
 g.triggerEvent('sale');
-await waitFor(() => !!document.getElementById('ev-yes'));
-await page.click('#ev-yes');
+await page.click('[data-goto="messages"]'); await sleep(500);
+await page.screenshot({ path: `${OUT}/73-messages-sale.png` });
+await page.click('[data-act="sale"][data-v="1"]');
 await waitFor(() => window.__G.meta.saleActive === true);
-console.log('sale event ✓');
+console.log('flash sale via messages ✓');
 
-// --- level up overlay
-g.addXp(100000);
-await waitFor(() => !document.getElementById('levelup').classList.contains('hidden'));
-await page.screenshot({ path: `${OUT}/43-levelup.png` });
-console.log('level up ✓');
+// --- level up appears in chat
+g.addXp(8000);
+await waitFor(() => document.getElementById('chat-log').textContent.includes('Level'));
+console.log('level-up chat ✓');
 
-// --- end of day report and "start next day"
+// --- report, then pay the bill on the computer
 g.customers = []; g.s.minute = 22 * 60 + 1; g.s.phase = 'closing';
 await waitFor(() => window.__G.meta.phase === 'report');
 await waitFor(() => !document.getElementById('report').classList.contains('hidden'));
 await page.click('#r-next');
-await waitFor(() => window.__G.meta.day === 2 && window.__G.meta.phase === 'prep');
-console.log('report → day 2 ✓');
-
-// --- chat + emote
-await page.keyboard.press('Enter'); await page.keyboard.type('hello!'); await page.keyboard.press('Enter');
-await waitFor(() => document.getElementById('chat-log').textContent.includes('hello!'));
-await page.keyboard.press('1'); await sleep(300);
-assert.ok(room.players.values().next().value.emote === '👋');
-console.log('chat/emote ✓');
-
+await waitFor(() => window.__G.meta.day === 2);
+await page.keyboard.press('Escape'); await sleep(200);
+await waitFor(() => window.__dbg.lastInter?.action?.a === '_computer');
+await page.keyboard.press('e'); await sleep(300);
+await page.click('[data-goto="bills"]'); await sleep(400);
+await page.screenshot({ path: `${OUT}/74-bills.png` });
+await page.click('[data-act="paybill"]');
+await waitFor(() => window.__G.meta.bills.every(b => b.paid));
+console.log('bill paid ✓');
 console.log('errors:', errors.length ? errors.join('\n') : 'none');
 await browser.close(); srv.close(); process.exit(errors.length ? 1 : 0);

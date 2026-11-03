@@ -1,9 +1,10 @@
 // Grid geometry & pathfinding shared by server (NPC AI, validation) and client (preview, collision).
 //
 // Coordinate system: tile (x, z) covers world [x, x+1] x [z, z+1]. Interior is 0<=x<W, 0<=z<D.
-// Row z=D is the storefront wall (only the 2 door tiles are open). Rows D+1 .. D+OUTSIDE_ROWS-1 are
-// the sidewalk / delivery area outside. Back wall at z=0, side walls at x=0 and x=W.
-import { FURNITURE, OUTSIDE_ROWS } from './data.js';
+// Ground floor: row z=D is the storefront wall (only the 2 door tiles are open), rows beyond are the
+// sidewalk. Upper floor (floor 1, optional): same W x D footprint, no outside. A 2-wide ramp of stairs
+// along the right wall connects them (see stairInfo in data.js).
+import { FURNITURE, OUTSIDE_ROWS, FLOOR_H, stairInfo } from './data.js';
 
 // rotation r -> facing direction (the "front" of a fixture, where customers stand)
 export const FACING = [[0, 1], [1, 0], [0, -1], [-1, 0]];
@@ -13,9 +14,21 @@ export function dims(type, rot) {
   return (rot % 2 === 0) ? [f.w, f.d] : [f.d, f.w];
 }
 
+// local tile (i, j) of an unrotated w x d fixture -> tile offset inside the rotated bounding rect
+export function rotTile(i, j, w, d, rot) {
+  switch (rot) {
+    case 1: return [j, w - 1 - i];
+    case 2: return [w - 1 - i, d - 1 - j];
+    case 3: return [d - 1 - j, i];
+    default: return [i, j];
+  }
+}
+
 export function footprint(type, x, z, rot) {
-  const [w, d] = dims(type, rot);
+  const def = FURNITURE[type];
   const tiles = [];
+  if (def.tiles) { for (const [i, j] of def.tiles) { const [a, b] = rotTile(i, j, def.w, def.d, rot); tiles.push([x + a, z + b]); } return tiles; }
+  const [w, d] = dims(type, rot);
   for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) tiles.push([x + i, z + j]);
   return tiles;
 }
@@ -38,8 +51,14 @@ export function frontTiles(type, x, z, rot) {
   return out;
 }
 
-// tiles directly behind the fixture (staff side for checkouts / counters)
+// tiles where staff stand: behind checkouts, or inside the aisle of a department
 export function backTiles(type, x, z, rot) {
+  const def = FURNITURE[type];
+  if (def.staffRow !== undefined) {
+    const out = [];
+    for (let i = 0; i < def.w; i++) { const [a, b] = rotTile(i, def.staffRow, def.w, def.d, rot); out.push([x + a, z + b]); }
+    return out;
+  }
   const [w, d] = dims(type, rot);
   const [fx, fz] = FACING[rot];
   const out = [];
@@ -60,24 +79,53 @@ export function serviceTiles(f) {
   const fr = frontTiles(f.type, f.x, f.z, f.rot);
   const bk = backTiles(f.type, f.x, f.z, f.rot);
   const mid = Math.floor((fr.length - 1) / 2);
-  return { front: fr[mid], back: bk[mid], fronts: fr, backs: bk };
+  return { front: fr[mid], back: bk[Math.floor((bk.length - 1) / 2)], fronts: fr, backs: bk };
+}
+
+// World position (centre) of a department's sub-parts: 'fridge' (back left/middle), 'station' (back right),
+// and the staff standing spots in the aisle in front of each part.
+export function deptSpots(f) {
+  const def = FURNITURE[f.type];
+  const at = (i, j) => { const [a, b] = rotTile(i, j, def.w, def.d, f.rot); return [f.x + a + 0.5, f.z + b + 0.5]; };
+  return {
+    fridge: at(0.5, 0), station: at(2, 0), counter: at(1, 2),
+    fridgeSpot: at(0, 1), stationSpot: at(2, 1), counterSpot: at(1, 1),
+  };
 }
 
 export class Grid {
-  constructor(W, D, doorX) {
-    this.W = W; this.D = D; this.doorX = doorX;
+  constructor(W, D, doorX, floor = 0, floors = 1) {
+    this.W = W; this.D = D; this.doorX = doorX; this.floor = floor; this.floors = floors;
     this.H = D + OUTSIDE_ROWS; // total rows incl. wall + outside
     this.blocked = new Uint8Array(W * this.H);
     this.owner = new Int32Array(W * this.H).fill(-1);
+    this.stair = floors > 1 ? stairInfo(W) : null;
     this.resetWalls();
   }
   idx(x, z) { return z * this.W + x; }
   inBounds(x, z) { return x >= 0 && z >= 0 && x < this.W && z < this.H; }
   isInterior(x, z) { return x >= 0 && z >= 0 && x < this.W && z < this.D; }
-  isDoor(x, z) { return z === this.D && (x === this.doorX || x === this.doorX + 1); }
+  isDoor(x, z) { return this.floor === 0 && z === this.D && (x === this.doorX || x === this.doorX + 1); }
+  inLane(x) { return this.stair && x >= this.stair.x && x < this.stair.x + 2; }
+  // tiles that can never hold furniture (entrance, stairs, landings)
+  isReserved(x, z) {
+    if (this.floor === 0 && z >= this.D - 1 && (x === this.doorX || x === this.doorX + 1)) return true;
+    if (this.stair && this.inLane(x) && z >= this.stair.z0 - 1 && z <= this.stair.z1) return true;
+    return false;
+  }
   resetWalls() {
     this.blocked.fill(0); this.owner.fill(-1);
-    for (let x = 0; x < this.W; x++) if (!this.isDoor(x, this.D)) this.blocked[this.idx(x, this.D)] = 2;
+    for (let x = 0; x < this.W; x++) {
+      if (this.floor === 0) { if (!this.isDoor(x, this.D)) this.blocked[this.idx(x, this.D)] = 2; }
+      else for (let z = this.D; z < this.H; z++) this.blocked[this.idx(x, z)] = 2;
+    }
+    if (this.stair) {
+      const s = this.stair;
+      for (let x = s.x; x < s.x + 2; x++) {
+        if (this.floor === 0) for (let z = s.z0 - 1; z < s.z1; z++) this.blocked[this.idx(x, z)] = 3; // ramp + space under the landing
+        else for (let z = s.z0; z < s.z1; z++) this.blocked[this.idx(x, z)] = 3; // the stairwell hole
+      }
+    }
   }
   isBlocked(x, z) {
     if (!this.inBounds(x, z)) return true;
@@ -85,7 +133,7 @@ export class Grid {
   }
   build(furniture) {
     this.resetWalls();
-    for (const f of furniture) this.mark(f, 1);
+    for (const f of furniture) if ((f.floor || 0) === this.floor) this.mark(f, 1);
   }
   mark(f, v) {
     for (const [tx, tz] of footprint(f.type, f.x, f.z, f.rot)) {
@@ -95,21 +143,25 @@ export class Grid {
     }
   }
   ownerAt(x, z) { return this.inBounds(x, z) ? this.owner[this.idx(x, z)] : -1; }
+  // where reachability floods from: the door (ground) or the stair landing (upstairs)
+  entryTile() { return this.floor === 0 ? [this.doorX, this.D - 1] : [this.stair.x, this.stair.z0 - 1]; }
 
   // Can a fixture be placed here? Returns { ok, reason }.
   canPlace(furniture, type, x, z, rot, ignoreId = null) {
     const tiles = footprint(type, x, z, rot);
     for (const [tx, tz] of tiles) {
       if (!this.isInterior(tx, tz)) return { ok: false, reason: 'Must be inside the store' };
-      if (tz >= this.D - 1 && (tx === this.doorX || tx === this.doorX + 1)) return { ok: false, reason: 'Keep the entrance clear' };
+      if (this.isReserved(tx, tz)) return { ok: false, reason: this.floor === 0 && tz >= this.D - 1 && !this.inLane(tx) ? 'Keep the entrance clear' : 'Keep the stairs clear' };
       const o = this.ownerAt(tx, tz);
       if (o !== -1 && o !== ignoreId) return { ok: false, reason: 'Space is occupied' };
     }
     // Build a hypothetical grid and check every fixture's service tiles remain reachable.
-    const g = new Grid(this.W, this.D, this.doorX);
-    const list = furniture.filter(f => f.id !== ignoreId).concat([{ id: -99, type, x, z, rot }]);
+    const g = new Grid(this.W, this.D, this.doorX, this.floor, this.floors);
+    const list = furniture.filter(f => f.id !== ignoreId && (f.floor || 0) === this.floor).concat([{ id: -99, type, x, z, rot, floor: this.floor }]);
     g.build(list);
-    const reach = g.floodFrom(this.doorX, this.D - 1);
+    const [ex, ez] = g.entryTile();
+    const reach = g.floodFrom(ex, ez);
+    if (this.floor === 0 && this.stair) { const s = this.stair; if (!reach[g.idx(s.x, s.z1)] && !reach[g.idx(s.x + 1, s.z1)]) return { ok: false, reason: 'Keep the stairs reachable' }; }
     for (const f of list) {
       const fr = frontTiles(f.type, f.x, f.z, f.rot);
       if (!fr.some(([a, b]) => g.isInterior(a, b) && reach[g.idx(a, b)])) {
@@ -118,7 +170,7 @@ export class Grid {
       if (needsBack(f.type)) {
         const bk = backTiles(f.type, f.x, f.z, f.rot);
         if (!bk.some(([a, b]) => g.isInterior(a, b) && reach[g.idx(a, b)])) {
-          return { ok: false, reason: f.id === -99 ? 'Staff need room behind it' : 'Would block a staff position' };
+          return { ok: false, reason: f.id === -99 ? 'Staff need a way in behind it' : 'Would block a staff position' };
         }
       }
     }
@@ -147,7 +199,6 @@ export class Grid {
     sx = Math.floor(sx); sz = Math.floor(sz); tx = Math.floor(tx); tz = Math.floor(tz);
     if (!this.inBounds(tx, tz)) return null;
     if (this.isBlocked(sx, sz)) {
-      // start inside something (furniture just placed on us) - find nearest free neighbour
       const n = this.nearestFree(sx, sz);
       if (!n) return null; sx = n[0]; sz = n[1];
     }
@@ -162,7 +213,7 @@ export class Grid {
     g[s] = 0; heap.push(s, this.h(sx, sz, tx, tz));
     const dirs = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
     let iter = 0;
-    while (heap.size && iter++ < 20000) {
+    while (heap.size && iter++ < 30000) {
       const cur = heap.pop();
       if (cur === t) break;
       if (closed[cur]) continue;
@@ -221,10 +272,49 @@ class MinHeap {
   }
 }
 
+// ---------------------------------------------------------------- multi-floor helpers
+// Height of a character standing at (x, z) on `floor`, including the stairs ramp.
+export function heightAt(W, floors, floor, x, z) {
+  if (floors > 1) {
+    const s = stairInfo(W);
+    if (x >= s.x && x < s.x + 2) {
+      if (z >= s.z0 - 1 && z < s.z0) return FLOOR_H;
+      if (z >= s.z0 && z < s.z1) return Math.max(0, Math.min(FLOOR_H, (s.z1 - z) / (s.z1 - s.z0) * FLOOR_H));
+    }
+  }
+  return floor * FLOOR_H;
+}
+export function onRamp(W, floors, x, z) {
+  if (floors < 2) return false;
+  const s = stairInfo(W);
+  return x >= s.x && x < s.x + 2 && z >= s.z0 && z < s.z1;
+}
+
+// Route between any two points on any floor. Returns [[x, z, floor], ...] (tile centres + stair waypoints) or null.
+export function route(grids, from, to) {
+  const g0 = grids[0];
+  const ff = from.floor || 0, tf = to.floor || 0;
+  const pts = (g, sx, sz, tx, tz, f) => { const p = g.path(sx, sz, tx, tz); return p ? p.map(([x, z]) => [x + 0.5, z + 0.5, f]) : null; };
+  if (ff === tf) return pts(grids[ff], from.x, from.z, to.x, to.z, ff);
+  if (!grids[1]) return null;
+  const s = stairInfo(g0.W);
+  const lx = Math.abs(from.x - (s.x + 0.5)) <= Math.abs(from.x - (s.x + 1.5)) ? s.x : s.x + 1;
+  const ramp = [[lx + 0.5, s.z1 - 0.3, 0], [lx + 0.5, s.z0 + 0.15, 0]];
+  if (ff === 0) {
+    const a = pts(g0, from.x, from.z, lx, s.z1, 0); if (!a) return null;
+    const b = pts(grids[1], lx, s.z0 - 1, to.x, to.z, 1); if (!b) return null;
+    return [...a, ...ramp, [lx + 0.5, s.z0 - 0.5, 1], ...b];
+  }
+  const a = pts(grids[1], from.x, from.z, lx, s.z0 - 1, 1); if (!a) return null;
+  const b = pts(g0, lx, s.z1, to.x, to.z, 0); if (!b) return null;
+  return [...a, ...ramp.slice().reverse(), [lx + 0.5, s.z1 + 0.5, 0], ...b];
+}
+
 // Client-side circle collision vs the store's solid tiles. Outside the grid (left/right of the
 // store on the sidewalk) is open ground.
 export function solidAt(grid, tx, tz) {
   if (tz < 0) return true;
+  if (grid.floor > 0) { if (tz >= grid.D || tx < 0 || tx >= grid.W) return true; return grid.isBlocked(tx, tz); }
   if (tz < grid.D) { if (tx < 0 || tx >= grid.W) return true; return grid.isBlocked(tx, tz); }
   if (tz === grid.D) {
     if (tx < 0 || tx >= grid.W) return false; // walking around the building corner outside
@@ -236,17 +326,14 @@ export function solidAt(grid, tx, tz) {
 }
 
 export function resolveCollision(grid, x, z, r = 0.3) {
-  // the building's side walls extend to the storefront: block tiles at tz<D outside 0..W
   for (let pass = 0; pass < 2; pass++) {
     const tx0 = Math.floor(x - r), tx1 = Math.floor(x + r), tz0 = Math.floor(z - r), tz1 = Math.floor(z + r);
     for (let tx = tx0; tx <= tx1; tx++) for (let tz = tz0; tz <= tz1; tz++) {
       if (!solidAt(grid, tx, tz)) continue;
-      // closest point on tile AABB
       const cx = Math.max(tx, Math.min(x, tx + 1)), cz = Math.max(tz, Math.min(z, tz + 1));
       let dx = x - cx, dz = z - cz; const d2 = dx * dx + dz * dz;
       if (d2 >= r * r) continue;
       if (d2 < 1e-8) {
-        // centre inside tile: push out along the shallowest axis
         const l = x - tx, rr = tx + 1 - x, t = z - tz, b = tz + 1 - z;
         const m = Math.min(l, rr, t, b);
         if (m === l) x = tx - r; else if (m === rr) x = tx + 1 + r; else if (m === t) z = tz - r; else z = tz + 1 + r;

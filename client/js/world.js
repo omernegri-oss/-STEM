@@ -1,99 +1,84 @@
-// Renders the shared world state: the store building, furniture, products on shelves, boxes, dirt.
+// Renders the shared world state: the store building (1 or 2 floors), furniture, labelled products, boxes, dirt.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, CATEGORIES } from '/shared/data.js';
-import { Grid, center, dims, footprint, frontTiles } from '/shared/grid.js';
-import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, ACCENT_GEOS, makeSprite, setSpriteText, textTexture, catColor } from './models.js';
+import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo } from '/shared/data.js';
+import { Grid, center, dims } from '/shared/grid.js';
+import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, productMaterial, makeBox, makeFBox } from './models.js';
 import { tileTexture } from './scene.js';
 
-const MAX_UNITS = 5000;
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(1, 1, 1), tmpC = new THREE.Color();
 const EXPIRED = new THREE.Color(0x6b5b3e);
 const UP = new THREE.Vector3(0, 1, 0);
+const DOOR_TYPES = new Set(['fridge', 'freezer_upright', 'freezer', 'butcher', 'deli']);
 
 export class World {
   constructor(scene) {
     this.scene = scene;
     this.root = new THREE.Group(); scene.add(this.root);
     this.shell = new THREE.Group(); this.root.add(this.shell);
-    this.furnRoot = new THREE.Group(); this.root.add(this.furnRoot);
-    this.furn = new Map();       // id -> { group, key, data }
+    this.floorRoots = [new THREE.Group(), new THREE.Group()];
+    this.floorRoots[1].position.y = FLOOR_H;
+    for (const r of this.floorRoots) this.root.add(r);
+    this.upperShell = new THREE.Group(); this.root.add(this.upperShell); // upper floor slab & walls (hidden when you're downstairs)
+    this.furn = new Map();
     this.state = null;
-    this.grid = new Grid(12, 9, 5);
+    this.grids = [new Grid(12, 9, 5)];
+    this.grid = this.grids[0];
     this.shellKey = '';
-    this.doors = [];
-    this.fadeWalls = [];
+    this.doors = []; this.fadeWalls = []; this.frontMats = [];
     this.time = 0;
-    // product instancing
-    this.units = {};
-    for (const [shape, geo] of Object.entries(UNIT_GEOS)) {
-      const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55 }), MAX_UNITS);
-      m.count = 0; m.castShadow = true; m.receiveShadow = false; m.frustumCulled = false;
-      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      this.root.add(m); this.units[shape] = m;
-    }
-    this.accents = {};
-    for (const [shape, geo] of Object.entries(ACCENT_GEOS)) {
-      const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }), MAX_UNITS);
-      m.count = 0; m.frustumCulled = false; this.root.add(m); this.accents[shape] = m;
-    }
-    // boxes (instanced: body, tape, label front, label side)
-    const bg = new THREE.BoxGeometry(0.5, 0.36, 0.42).translate(0, 0.18, 0);
-    this.boxBody = new THREE.InstancedMesh(bg, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }), 600);
-    this.boxBody.castShadow = true; this.boxBody.receiveShadow = true; this.boxBody.frustumCulled = false; this.root.add(this.boxBody);
-    this.boxTape = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.006, 0.43).translate(0, 0.363, 0), mat(0xe7d3a8), 600);
-    this.boxTape.frustumCulled = false; this.root.add(this.boxTape);
-    this.boxLabel = new THREE.InstancedMesh(new THREE.BoxGeometry(0.26, 0.16, 0.43).translate(0, 0.2, 0.0), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), 600);
-    this.boxLabel.frustumCulled = false; this.root.add(this.boxLabel);
-    this.boxList = [];  // rendered box positions for picking: {id, x, y, z, pid, rack}
-    // dirt
-    this.dirtRoot = new THREE.Group(); this.root.add(this.dirtRoot);
+    this.units = new Map();      // `${floor}:${pid}` -> InstancedMesh
+    this.boxRoots = [new THREE.Group(), new THREE.Group()];
+    this.floorRoots.forEach((r, i) => r.add(this.boxRoots[i]));
+    this.boxMeshes = new Map(); this.boxList = [];
     this.dirtMeshes = new Map();
-    // checkout belt items
-    this.beltRoot = new THREE.Group(); this.root.add(this.beltRoot);
+    this.beltRoot = new THREE.Group(); this.root.add(this.beltRoot); this.beltItems = [];
     this.beltKey = '';
-    this.counterKey = '';
+    this.viewFloor = 0;
+    this.chars = [];
   }
 
-  // ---------------------------------------------------------------------------- full sync
   set(w) {
-    const prev = this.state;
     this.state = w;
-    const key = [w.w, w.d, w.doorX, w.floor, w.wall, w.name].join('|');
+    const key = [w.w, w.d, w.doorX, w.floor, w.wall, w.name, w.floors].join('|');
     if (key !== this.shellKey) { this.shellKey = key; this.buildShell(w); this.shellChanged = true; }
-    this.grid = new Grid(w.w, w.d, w.doorX);
-    this.grid.build(w.furniture);
+    this.grids = [new Grid(w.w, w.d, w.doorX, 0, w.floors || 1)];
+    if ((w.floors || 1) > 1) this.grids.push(new Grid(w.w, w.d, w.doorX, 1, w.floors));
+    for (const g of this.grids) g.build(w.furniture);
+    this.grid = this.grids[0];
     this.syncFurniture(w);
     this.rebuildUnits(w);
-    this.rebuildBoxes(w);
+    this.syncBoxes(w);
     this.syncDirt(w);
-    void prev;
+  }
+  gridFor(floor) { return this.grids[floor] || this.grids[0]; }
+
+  setViewFloor(f) {
+    this.viewFloor = f;
+    this.floorRoots[1].visible = f >= 1;
+    this.upperShell.visible = f >= 1;
   }
 
+  // ---------------------------------------------------------------------------- building
   buildShell(w) {
-    this.shell.clear(); this.doors = []; this.fadeWalls = [];
-    const W = w.w, D = w.d;
+    this.shell.clear(); this.upperShell.clear(); this.doors = []; this.fadeWalls = [];
+    const W = w.w, D = w.d, floors = w.floors || 1;
     const fl = FLOORS.find(f => f.id === w.floor) || FLOORS[0];
     const wl = WALLS.find(x => x.id === w.wall) || WALLS[0];
-    const tex = tileTexture(fl.a, fl.b, 64, 2, { checker: fl.id === 'checker' || fl.id === 'terra' || fl.id === 'night' || fl.id === 'mint' || fl.id === 'white', plank: fl.plank, marble: fl.marble });
-    tex.repeat.set(W / 2, D / 2);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: tex, roughness: fl.marble ? 0.25 : 0.6, metalness: 0.02 }));
+    const floorTex = () => { const t = tileTexture(fl.a, fl.b, 64, 2, { checker: true }); t.repeat.set(W / 2, D / 2); return t; };
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTex(), roughness: 0.6 }));
     floor.rotation.x = -Math.PI / 2; floor.position.set(W / 2, 0.002, D / 2); floor.receiveShadow = true; this.shell.add(floor);
-    // floor under the storefront wall row
     const sill = new THREE.Mesh(new THREE.PlaneGeometry(W, 1), mat(0xd6d3d1)); sill.rotation.x = -Math.PI / 2; sill.position.set(W / 2, 0.003, D + 0.5); this.shell.add(sill);
     const H = 3.4, wc = new THREE.Color(wl.color).getHex();
-    const wallMat = () => new THREE.MeshStandardMaterial({ color: wc, roughness: 0.9, transparent: true, opacity: 1 });
-    const mkWall = (w_, d_, x, z, side) => {
+    const mkWall = (parent, w_, d_, x, z, side, y0 = 0, h = H) => {
       const g = new THREE.Group();
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w_, H, d_), wallMat()); m.position.set(x, H / 2, z); m.castShadow = true; m.receiveShadow = true; g.add(m);
-      const base = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.18, d_ + 0.02), new THREE.MeshStandardMaterial({ color: 0x475569, transparent: true })); base.position.set(x, 0.09, z); g.add(base);
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.22, d_ + 0.02), new THREE.MeshStandardMaterial({ color: 0xf97316, transparent: true })); stripe.position.set(x, 2.7, z); g.add(stripe);
-      this.shell.add(g); this.fadeWalls.push({ g, side, mats: [m.material, base.material, stripe.material] });
-      return g;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w_, h, d_), new THREE.MeshStandardMaterial({ color: wc, roughness: 0.9, transparent: true })); m.position.set(x, y0 + h / 2, z); m.castShadow = true; m.receiveShadow = true; g.add(m);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.18, d_ + 0.02), new THREE.MeshStandardMaterial({ color: 0x475569, transparent: true })); base.position.set(x, y0 + 0.09, z); g.add(base);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.22, d_ + 0.02), new THREE.MeshStandardMaterial({ color: 0xf97316, transparent: true })); stripe.position.set(x, y0 + 2.7, z); g.add(stripe);
+      parent.add(g); this.fadeWalls.push({ side, mats: [m.material, base.material, stripe.material] });
     };
-    mkWall(W + 0.4, 0.2, W / 2, -0.1, 'back');
-    mkWall(0.2, D + 1, -0.1, (D + 1) / 2, 'left');
-    mkWall(0.2, D + 1, W + 0.1, (D + 1) / 2, 'right');
-    // department signage on the back wall
+    mkWall(this.shell, W + 0.4, 0.2, W / 2, -0.1, 'back');
+    mkWall(this.shell, 0.2, D + 1, -0.1, (D + 1) / 2, 'left');
+    mkWall(this.shell, 0.2, D + 1, W + 0.1, (D + 1) / 2, 'right');
     // storefront
     const front = new THREE.Group(); this.shell.add(front);
     const fz = D + 0.5, dx0 = w.doorX, dx1 = w.doorX + 2;
@@ -101,168 +86,222 @@ export class World {
     const baseM = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.8, transparent: true });
     const frameM = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, transparent: true });
     const fasciaM = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.6, transparent: true });
-    const seg = (x0, x1) => {
+    const glassRow = (parent, x0, x1, y0, withBase) => {
       if (x1 - x0 <= 0.01) return;
       const cx = (x0 + x1) / 2, ww = x1 - x0;
-      const b = new THREE.Mesh(new THREE.BoxGeometry(ww, 0.5, 0.25), baseM); b.position.set(cx, 0.25, fz); b.castShadow = true; front.add(b);
-      const gl = new THREE.Mesh(new THREE.BoxGeometry(ww, 2.1, 0.04), glassM); gl.position.set(cx, 1.55, fz); front.add(gl);
-      for (let x = x0; x <= x1 + 0.01; x += Math.max(1, ww / Math.round(ww / 2))) {
-        const mu = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.1, 0.08), frameM); mu.position.set(Math.min(x, x1), 1.55, fz); front.add(mu);
-      }
+      if (withBase) { const b = new THREE.Mesh(new THREE.BoxGeometry(ww, 0.5, 0.25), baseM); b.position.set(cx, y0 + 0.25, fz); b.castShadow = true; parent.add(b); }
+      const gl = new THREE.Mesh(new THREE.BoxGeometry(ww, 2.1, 0.04), glassM); gl.position.set(cx, y0 + 1.55, fz); parent.add(gl);
+      for (let x = x0; x <= x1 + 0.01; x += Math.max(1, ww / Math.round(ww / 2))) { const mu = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.1, 0.08), frameM); mu.position.set(Math.min(x, x1), y0 + 1.55, fz); parent.add(mu); }
     };
-    seg(0, dx0); seg(dx1, W);
+    glassRow(front, 0, dx0, 0, true); glassRow(front, dx1, W, 0, true);
     const top = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.1, 0.3), frameM); top.position.set(W / 2, 2.62, fz); front.add(top);
     const fascia = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.95, 0.3), fasciaM); fascia.position.set(W / 2, 3.12, fz); fascia.castShadow = true; front.add(fascia);
-    // store name sign
     const name = w.name || 'Your Supermarket';
     const sign = textTexture(name.toUpperCase(), { size: 96, bg: '#ffffff', color: '#ea580c', pad: 26, radius: 30, border: '#fdba74', font: 'Fredoka' });
     const sh = 0.78, swid = Math.min(W - 1, sh * sign.aspect);
     const signM = new THREE.MeshStandardMaterial({ map: sign.tex, emissive: 0xffffff, emissiveMap: sign.tex, emissiveIntensity: 0.25, transparent: true });
     const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(swid, swid / sign.aspect), signM); signMesh.position.set(W / 2, 3.12, fz + 0.16); front.add(signMesh);
-    // door frame + sliding doors
     for (const x of [dx0, dx1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.2), frameM); p.position.set(x, 1.3, fz); front.add(p); }
     for (let i = 0; i < 2; i++) {
       const door = new THREE.Group();
       const pane = new THREE.Mesh(new THREE.BoxGeometry(0.98, 2.4, 0.05), glassM); pane.position.y = 1.2; door.add(pane);
-      const fr = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.07), frameM); fr.position.y = 2.38; door.add(fr);
-      const fr2 = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.07), frameM); fr2.position.y = 0.04; door.add(fr2);
+      for (const y of [2.38, 0.04]) { const fr = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.07), frameM); fr.position.y = y; door.add(fr); }
       const edge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.4, 0.07), frameM); edge.position.set(i === 0 ? 0.47 : -0.47, 1.2, 0); door.add(edge);
       const base = dx0 + 0.5 + i;
       door.position.set(base, 0, fz + (i ? 0.03 : -0.03));
       door.userData = { base, dir: i === 0 ? -1 : 1, open: 0 };
       front.add(door); this.doors.push(door);
     }
-    // awning over the entrance
-    for (let i = 0; i < 6; i++) {
-      const a = B(front, 0.52, 0.05, 1.3, i % 2 ? 0xffffff : 0xef4444, dx0 - 0.5 + 0.26 + i * 0.52 + 0.0, 2.45, fz + 0.65, { shadow: true });
-      a.rotation.x = 0.28;
-    }
-    // welcome mat
+    for (let i = 0; i < 6; i++) B(front, 0.52, 0.05, 1.3, i % 2 ? 0xffffff : 0xef4444, dx0 - 0.5 + 0.26 + i * 0.52, 2.45, fz + 0.65).rotation.x = 0.28;
     const matM = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), mat(0x7f1d1d)); matM.rotation.x = -Math.PI / 2; matM.position.set(dx0 + 1, 0.006, D - 0.6); this.shell.add(matM);
     this.frontMats = [baseM, frameM, fasciaM, signM];
-    this.fasciaGroup = front;
+    // entrance pylon sign with the store name (outside, next to the door)
+    const py = new THREE.Group(); py.position.set(dx0 - 1.2, 0, D + 1.6); this.shell.add(py);
+    C(py, 0.08, 0.1, 2.6, 0x334155, 0, 1.3, 0);
+    B(py, 1.9, 0.7, 0.18, 0xf97316, 0, 2.75, 0);
+    const pt = textTexture(name, { size: 64, bg: '#ffffff', color: '#ea580c', pad: 18, radius: 16, font: 'Fredoka' });
+    const pw = Math.min(1.75, 0.55 * pt.aspect), pm = new THREE.MeshStandardMaterial({ map: pt.tex, emissive: 0xffffff, emissiveMap: pt.tex, emissiveIntensity: 0.35 });
+    for (const [z, r] of [[0.1, 0], [-0.1, Math.PI]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, pw / pt.aspect), pm); m.position.set(0, 2.75, z); m.rotation.y = r; py.add(m); }
+    const op = makeLabel('OPEN 8:00 – 22:00', 0.12, { bg: '#1e293b', color: '#fde047', size: 32 }, 1.2); op.position.set(0, 2.25, 0.1); py.add(op);
+
+    if (floors > 1) this.buildUpperFloor(w, floorTex, mkWall, glassRow, glassM, frameM, fasciaM);
   }
 
+  buildUpperFloor(w, floorTex, mkWall, glassRow, glassM, frameM, fasciaM) {
+    const W = w.w, D = w.d, s = stairInfo(W), U = this.upperShell;
+    // slab with a hole for the stairwell
+    const slabM = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.8 });
+    const slab = (x0, x1, z0, z1) => { if (x1 <= x0 || z1 <= z0) return; const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.2, z1 - z0), slabM); m.position.set((x0 + x1) / 2, FLOOR_H - 0.1, (z0 + z1) / 2); m.receiveShadow = true; m.castShadow = true; U.add(m); };
+    slab(0, s.x, 0, D + 1); slab(s.x, W, 0, s.z0); slab(s.x, W, s.z1, D + 1);
+    const tex = floorTex();
+    const top = (x0, x1, z0, z1) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 })); m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, FLOOR_H + 0.003, (z0 + z1) / 2); m.receiveShadow = true; U.add(m); };
+    top(0, s.x, 0, D); top(s.x, W, 0, s.z0); top(s.x, W, s.z1, D);
+    // railings around the stairwell
+    const railM = new THREE.MeshStandardMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.35, depthWrite: false });
+    const rail = (x, z, w_, d_) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w_, 1, d_), railM); m.position.set(x, FLOOR_H + 0.5, z); U.add(m); B(U, w_ + 0.02, 0.05, d_ + 0.02, 0x475569, x, FLOOR_H + 1.02, z); };
+    rail(s.x, (s.z0 + s.z1) / 2, 0.05, s.z1 - s.z0); rail(s.x + 1, s.z1, 2, 0.05);
+    // upper walls + storefront glass
+    mkWall(U, W + 0.4, 0.2, W / 2, -0.1, 'back', FLOOR_H);
+    mkWall(U, 0.2, D + 1, -0.1, (D + 1) / 2, 'left', FLOOR_H);
+    mkWall(U, 0.2, D + 1, W + 0.1, (D + 1) / 2, 'right', FLOOR_H);
+    const fz = D + 0.5;
+    const up = new THREE.Group(); U.add(up);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.5, 0.25), new THREE.MeshStandardMaterial({ color: 0xb45309, transparent: true })); base.position.set(W / 2, FLOOR_H + 0.25, fz); up.add(base);
+    glassRow(up, 0, W, FLOOR_H, false);
+    const fas = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.6, 0.3), fasciaM); fas.position.set(W / 2, FLOOR_H + 2.95, fz); up.add(fas);
+    this.frontMats.push(base.material);
+    // stairs (always visible, part of the ground floor)
+    const st = new THREE.Group(); this.shell.add(st);
+    const steps = 14, run = (s.z1 - s.z0) / steps, rise = FLOOR_H / steps;
+    for (let i = 0; i < steps; i++) {
+      const z = s.z1 - (i + 0.5) * run, y = (i + 1) * rise;
+      B(st, 1.96, rise, run + 0.01, i % 2 ? 0xd6d3d1 : 0xe7e5e4, s.x + 1, y - rise / 2, z);
+    }
+    const stringer = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, Math.hypot(s.z1 - s.z0, FLOOR_H)), mat(0x475569));
+    stringer.position.set(s.x + 0.02, FLOOR_H / 2 + 0.25, (s.z0 + s.z1) / 2); stringer.rotation.x = Math.atan2(FLOOR_H, s.z1 - s.z0); st.add(stringer);
+    const handrail = stringer.clone(); handrail.scale.set(0.5, 0.25, 1); handrail.position.y += 0.9; st.add(handrail);
+    for (let i = 0; i <= 4; i++) { const z = s.z1 - i * (s.z1 - s.z0) / 4; C(st, 0.025, 0.025, 1, 0x475569, s.x + 0.02, (s.z1 - z) / (s.z1 - s.z0) * FLOOR_H + 0.5, z); }
+    B(st, 2, FLOOR_H, 1, 0xcbd5e1, s.x + 1, FLOOR_H / 2, s.z0 - 0.5); // closet under the landing
+    const lb = makeLabel('⬆️ Floor 2', 0.18, { bg: '#1e293b', color: '#fff', size: 34 }, 1); lb.position.set(s.x + 1, 0.9, s.z1 + 0.02); st.add(lb);
+  }
+
+  // ---------------------------------------------------------------------------- furniture
   syncFurniture(w) {
     const seen = new Set();
     for (const f of w.furniture) {
       seen.add(f.id);
       let e = this.furn.get(f.id);
-      const key = `${f.type}|${f.upg}`;
+      const key = `${f.type}|${f.upg}|${f.floor || 0}`;
       if (!e || e.key !== key) {
-        if (e) this.furnRoot.remove(e.group);
+        if (e) e.group.removeFromParent();
         const group = makeFurniture(f.type, f);
-        if (f.upg) { const s = makeSprite('⭐', 0.22, { bg: null }); s.position.set(FURNITURE[f.type].w / 2 - 0.15, 2.3, 0.3); group.add(s); }
+        if (f.upg) { const s = makeLabel('⭐', 0.18, { bg: null }, 0.3); s.position.set(FURNITURE[f.type].w / 2 - 0.15, 0.3, 0.47); group.add(s); }
         group.traverse(o => { o.userData.fid = f.id; });
-        this.furnRoot.add(group);
-        e = { group, key, data: f, label: null };
+        this.floorRoots[f.floor || 0].add(group);
+        e = { group, key, data: f, label: null, tags: new THREE.Group(), tagKey: '', doorOpen: 0 };
+        group.add(e.tags);
         this.furn.set(f.id, e);
-        e.pop = 1; // spawn pop animation
+        e.pop = 1;
       }
       e.data = f;
       const [cx, cz] = center(f.type, f.x, f.z, f.rot);
       e.group.position.set(cx, 0, cz);
       e.group.rotation.y = f.rot * Math.PI / 2;
-      // indicator label (broken / warm / expired)
       const def = FURNITURE[f.type];
       let text = '';
       const expired = f.slots && f.slots.some(s => s.expired && s.qty > 0);
       if (f.broken) text = `⚠️ BROKEN ${f.temp}°C${f.techEta != null ? ' 🧑‍🔧' : ` 🔧${f.repair || 0}/6`}`;
       else if (def.temp !== undefined && f.temp > def.temp + 1) text = `🌡️ ${f.temp}°C`;
-      else if (expired) text = '🤢 Expired!';
+      else if (expired) text = '🤢 Expired';
       if (text) {
-        if (!e.label) { e.label = makeSprite(text, 0.3, { bg: f.broken ? '#dc2626' : '#f59e0b', color: '#fff', size: 40 }); e.group.add(e.label); }
-        setSpriteText(e.label, text, 0.3, { bg: f.broken ? '#dc2626' : '#f59e0b', color: '#fff', size: 40 });
-        e.label.position.set(0, (f.type === 'freezer' ? 1.5 : 2.6), 0); e.label.visible = true;
+        if (!e.label) { e.label = makeSprite(text, 0.26, { bg: f.broken ? '#dc2626' : '#f59e0b', color: '#fff', size: 36 }); e.group.add(e.label); }
+        setSpriteText(e.label, text, 0.26, { bg: f.broken ? '#dc2626' : '#f59e0b', color: '#fff', size: 36 });
+        e.label.position.set(0, f.type === 'freezer' ? 1.3 : 2.5, 0); e.label.visible = true;
       } else if (e.label) e.label.visible = false;
       if (e.group.userData.led) e.group.userData.led.material = mat(f.broken ? 0xef4444 : 0x22c55e, { emissive: f.broken ? 0xef4444 : 0x22c55e });
       e.broken = f.broken;
+      this.priceTags(e, f, w);
     }
-    for (const [id, e] of this.furn) if (!seen.has(id)) { this.furnRoot.remove(e.group); this.furn.delete(id); }
+    for (const [id, e] of this.furn) if (!seen.has(id)) { e.group.removeFromParent(); this.furn.delete(id); }
   }
 
-  // place every product unit as an instance
+  // small shelf-edge tags with the product name and price under each section
+  priceTags(e, f, w) {
+    if (!f.slots) return;
+    const key = f.slots.map(s => s.pid ? `${s.pid}:${w.prices[s.pid]}` : '-').join(',') + (w.saleActive ? 's' : '');
+    if (key === e.tagKey) return;
+    e.tagKey = key; e.tags.clear();
+    const layout = slotLayout(f.type);
+    f.slots.forEach((sl, i) => {
+      const L = layout[i]; if (!L || !sl.pid) return;
+      const p = PRODUCT_MAP[sl.pid]; if (!p) return;
+      const price = (w.prices[p.id] ?? p.price) * (w.saleActive ? 0.85 : 1);
+      const tag = makeLabel(`${p.name} $${price.toFixed(2)}`, 0.06, { bg: '#fefce8', color: '#1e293b', size: 30, pad: 8, radius: 4 }, 0.5);
+      const cx = L.x0 + (L.cols - 1) * L.dx / 2;
+      const ty = f.type === 'butcher' || f.type === 'deli' ? 0.5 : f.type === 'freezer' ? 0.72 : Math.max(0.05, L.y - 0.05);
+      const tz = f.type === 'butcher' || f.type === 'deli' ? 1.435 : f.type === 'freezer' ? 0.47 : f.type === 'produce' ? L.z0 + 0.12 : 0.43;
+      tag.position.set(cx, ty, tz);
+      e.tags.add(tag);
+    });
+  }
+
+  // one InstancedMesh per (floor, product) so every package can show its printed label
   rebuildUnits(w) {
-    const counts = {}, acc = {};
-    for (const s in this.units) counts[s] = 0;
-    for (const s in this.accents) acc[s] = 0;
+    const groups = new Map();
     for (const f of w.furniture) {
       if (!f.slots) continue;
       const layout = slotLayout(f.type);
       const [cx, cz] = center(f.type, f.x, f.z, f.rot);
       const ang = f.rot * Math.PI / 2, cos = Math.cos(ang), sin = Math.sin(ang);
-      tmpQ.setFromAxisAngle(UP, ang);
       f.slots.forEach((sl, si) => {
         const L = layout[si]; if (!L || !sl.pid || sl.qty <= 0) return;
         const p = PRODUCT_MAP[sl.pid]; if (!p) return;
-        const cap = FURNITURE[f.type].cap;
-        const per = L.cols * L.rows;
-        const n = Math.min(sl.qty, cap);
-        const shape = p.shape;
-        const im = this.units[shape];
-        // spread units across the slot proportional to capacity (shows emptiness as gaps on the right)
-        const scale = per / cap;
+        const cap = FURNITURE[f.type].cap, per = L.cols * L.rows, n = Math.min(sl.qty, cap), scale = per / cap;
+        const key = `${f.floor || 0}:${p.id}`;
+        if (!groups.has(key)) groups.set(key, { p, floor: f.floor || 0, items: [] });
+        const list = groups.get(key).items;
         for (let i = 0; i < n; i++) {
           const k = Math.min(per - 1, Math.floor(i * scale));
           const col = Math.floor(k / L.rows), row = k % L.rows;
-          let lx = L.x0 + col * L.dx, lz = L.z0 + row * L.dz, ly = L.y;
-          if (L.pile) ly += (i % 3 === 2 ? 0.06 : 0) ;
+          const lx = L.x0 + col * L.dx, lz = L.z0 + row * L.dz;
+          let ly = L.y + (L.pile && i % 3 === 2 ? 0.06 : 0);
           if (n > per && i >= per) ly += 0.12 * Math.floor(i / per);
           const jitter = ((i * 9301 + f.id * 49297) % 233280) / 233280;
-          const wx = cx + lx * cos + lz * sin, wz = cz - lx * sin + lz * cos;
-          tmpV.set(wx, ly, wz);
-          const q = tmpQ.clone();
-          if (L.pile || shape === 'sphere') q.multiply(new THREE.Quaternion().setFromAxisAngle(UP, jitter * 6));
-          tmpS.set(1, 1, 1);
-          tmpM.compose(tmpV, q, tmpS);
-          const idx = counts[shape]++;
-          if (idx >= MAX_UNITS) continue;
-          im.setMatrixAt(idx, tmpM);
-          tmpC.setHex(p.color).multiplyScalar(0.88 + jitter * 0.2);
-          if (sl.expired) tmpC.lerp(EXPIRED, 0.7);
-          im.setColorAt(idx, tmpC);
-          const am = this.accents[shape];
-          if (am) {
-            const ai = acc[shape]++;
-            am.setMatrixAt(ai, tmpM);
-            tmpC.setHex(shape === 'box' || shape === 'can' ? 0xffffff : shape === 'carton' ? p.color : 0xe5e7eb);
-            if (shape === 'carton') tmpC.multiplyScalar(0.8);
-            am.setColorAt(ai, tmpC);
-          }
+          list.push({ x: cx + lx * cos + lz * sin, y: ly, z: cz - lx * sin + lz * cos, ang: (L.pile || p.shape === 'sphere') ? ang + jitter * 6 : ang, j: jitter, expired: sl.expired });
         }
       });
     }
-    for (const s in this.units) { const m = this.units[s]; m.count = Math.min(counts[s], MAX_UNITS); m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-    for (const s in this.accents) { const m = this.accents[s]; m.count = acc[s]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    for (const [key, im] of this.units) if (!groups.has(key)) { im.removeFromParent(); im.dispose(); this.units.delete(key); }
+    for (const [key, gr] of groups) {
+      let im = this.units.get(key);
+      if (!im || im.userData.cap < gr.items.length) {
+        if (im) { im.removeFromParent(); im.dispose(); }
+        const cap = Math.max(32, 1 << Math.ceil(Math.log2(gr.items.length + 1)));
+        im = new THREE.InstancedMesh(UNIT_GEOS[gr.p.shape] || UNIT_GEOS.box, productMaterial(gr.p), cap);
+        im.userData.cap = cap; im.castShadow = true; im.frustumCulled = false;
+        this.floorRoots[gr.floor].add(im); this.units.set(key, im);
+      }
+      gr.items.forEach((it, i) => {
+        tmpQ.setFromAxisAngle(UP, it.ang); tmpV.set(it.x, it.y, it.z); tmpS.set(1, 1, 1);
+        tmpM.compose(tmpV, tmpQ, tmpS); im.setMatrixAt(i, tmpM);
+        tmpC.setRGB(1, 1, 1).multiplyScalar(0.9 + it.j * 0.15);
+        if (it.expired) tmpC.lerp(EXPIRED, 0.7);
+        im.setColorAt(i, tmpC);
+      });
+      im.count = gr.items.length; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    }
   }
 
-  rebuildBoxes(w) {
+  // product boxes and furniture boxes on the floor and in racks (individual meshes with printed labels)
+  syncBoxes(w) {
     const list = [];
-    for (const b of w.boxes) list.push({ id: b.id, x: b.x, y: b.y * 0.37, z: b.z, pid: b.pid, expired: b.expired, rot: (b.id * 0.7) % 0.5 - 0.25 });
-    // rack contents
+    for (const b of w.boxes) list.push({ id: b.id, key: 'b' + b.id, x: b.x, y: b.y * (b.ftype ? 0.5 : 0.37), z: b.z, floor: b.floor || 0, pid: b.pid, ftype: b.ftype, expired: b.expired, rot: (b.id * 0.7) % 0.5 - 0.25 });
     for (const f of w.furniture) {
       if (!f.boxes) continue;
       const [cx, cz] = center(f.type, f.x, f.z, f.rot);
       const ang = f.rot * Math.PI / 2, cos = Math.cos(ang), sin = Math.sin(ang);
+      const ys = [0.13, 0.68, 1.23, 1.78];
       f.boxes.forEach((b, i) => {
-        const level = Math.floor(i / 4), col = i % 4;
-        const ys = [0.13, 0.68, 1.23, 1.78];
-        const lx = -0.72 + (col % 4) * 0.48 * (FURNITURE.rack.w / 2) * 0.99, lz = 0.0;
-        list.push({ id: -1, x: cx + lx * cos + lz * sin, y: ys[Math.min(3, level)], z: cz - lx * sin + lz * cos, pid: b.pid, expired: b.expired, rot: ang, rack: f.id, scale: 0.9 });
+        const lx = -0.72 + (i % 4) * 0.48;
+        list.push({ id: -1, key: `r${f.id}:${i}:${b.pid}`, x: cx + lx * cos, y: ys[Math.min(3, Math.floor(i / 4))], z: cz - lx * sin, floor: f.floor || 0, pid: b.pid, expired: b.expired, rot: ang, rack: f.id, scale: 0.9 });
       });
     }
     this.boxList = list;
-    let n = 0;
+    const seen = new Set();
     for (const b of list) {
-      if (n >= 600) break;
-      tmpQ.setFromAxisAngle(UP, b.rot); tmpV.set(b.x, b.y, b.z); tmpS.setScalar(b.scale || 1);
-      tmpM.compose(tmpV, tmpQ, tmpS);
-      this.boxBody.setMatrixAt(n, tmpM); this.boxTape.setMatrixAt(n, tmpM); this.boxLabel.setMatrixAt(n, tmpM);
-      this.boxBody.setColorAt(n, tmpC.setHex(b.expired ? 0x7c8a5a : 0xc8a26b));
-      this.boxLabel.setColorAt(n, tmpC.setHex(PRODUCT_MAP[b.pid]?.color ?? 0xffffff));
-      n++;
+      seen.add(b.key);
+      let m = this.boxMeshes.get(b.key);
+      const look = (b.ftype || b.pid) + (b.expired ? 'x' : '');
+      if (!m || m.userData.look !== look || m.userData.floor !== b.floor) {
+        if (m) m.removeFromParent();
+        m = b.ftype ? makeFBox(b.ftype) : makeBox(b.pid);
+        if (b.expired) m.children[0].material = mat(0x7c8a5a);
+        m.userData.look = look; m.userData.floor = b.floor;
+        this.boxRoots[b.floor].add(m); this.boxMeshes.set(b.key, m);
+      }
+      m.position.set(b.x, b.y, b.z); m.rotation.y = b.rot; m.scale.setScalar(b.scale || 1);
     }
-    for (const m of [this.boxBody, this.boxTape, this.boxLabel]) { m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    for (const [k, m] of this.boxMeshes) if (!seen.has(k)) { m.removeFromParent(); this.boxMeshes.delete(k); }
   }
 
   syncDirt(w) {
@@ -278,43 +317,43 @@ export class World {
           const c2 = c.clone(); c2.scale.set(0.5, 0.45, 1); c2.position.set(0.28, 0.011, 0.12); m.add(c2);
         } else if (d.kind === 'pigeon') {
           const c = new THREE.Mesh(new THREE.CircleGeometry(0.14, 8), mat(0xf8fafc)); c.rotation.x = -Math.PI / 2; c.position.y = 0.012; m.add(c);
-          const c3 = new THREE.Mesh(new THREE.CircleGeometry(0.05, 6), mat(0x57534e)); c3.rotation.x = -Math.PI / 2; c3.position.set(0.03, 0.014, 0.02); m.add(c3);
         } else {
           const p = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), mat(0xffffff, { flat: true })); p.position.y = 0.07; p.castShadow = true; m.add(p);
           B(m, 0.18, 0.01, 0.1, [0xef4444, 0x3b82f6, 0xfacc15][d.id % 3], 0.15, 0.01, 0.08).rotation.y = 0.6;
         }
         m.rotation.y = d.r || 0;
-        this.dirtRoot.add(m); this.dirtMeshes.set(d.id, m);
+        this.floorRoots[d.floor || 0].add(m); this.dirtMeshes.set(d.id, m);
       }
       m.position.set(d.x, 0, d.z);
     }
-    for (const [id, m] of this.dirtMeshes) if (!seen.has(id)) { this.dirtRoot.remove(m); this.dirtMeshes.delete(id); }
+    for (const [id, m] of this.dirtMeshes) if (!seen.has(id)) { m.removeFromParent(); this.dirtMeshes.delete(id); }
   }
 
-  // items on checkout belts (from snapshot K entries)
+  // items on checkout belts (from snapshot K entries); unscanned ones are clickable
   setCheckouts(K) {
     if (!this.state) return;
     const key = K.map(k => `${k[0]}:${k[1]}:${k[2]}:${k[4].length}`).join(',');
     if (key === this.beltKey) return;
     this.beltKey = key;
-    this.beltRoot.clear();
+    this.beltRoot.clear(); this.beltItems = [];
     for (const [fid, cid, scanned, total, pids] of K) {
       if (!cid) continue;
       const e = this.furn.get(fid); if (!e) continue;
       const f = e.data; if (f.type !== 'checkout') continue;
       const [cx, cz] = center(f.type, f.x, f.z, f.rot);
       const ang = f.rot * Math.PI / 2, cos = Math.cos(ang), sin = Math.sin(ang);
+      const yb = (f.floor || 0) * FLOOR_H;
       pids.forEach((pid, i) => {
         const p = PRODUCT_MAP[pid]; if (!p) return;
         const done = i < scanned;
-        // unscanned items line up on the belt (left), scanned go to bagging (right)
         const lx = done ? 0.62 + (i % 3) * 0.12 - 0.12 : -0.8 + (i - scanned) * 0.2;
-        const lz = done ? -0.05 + Math.floor(i / 3) * 0.1 - 0.1 : 0.05;
+        const lz = done ? -0.05 + Math.floor(i / 3) % 2 * 0.1 - 0.1 : 0.05;
         if (!done && lx > 0.35) return;
-        const m = new THREE.Mesh(UNIT_GEOS[p.shape], mat(p.color));
-        m.position.set(cx + lx * cos + lz * sin, 0.92 + (done ? Math.floor(i / 6) * 0.1 : 0), cz - lx * sin + lz * cos);
+        const m = new THREE.Mesh(UNIT_GEOS[p.shape], productMaterial(p));
+        m.position.set(cx + lx * cos + lz * sin, yb + 0.92 + (done ? Math.floor(i / 6) * 0.1 : 0), cz - lx * sin + lz * cos);
         m.rotation.y = ang; m.castShadow = true;
-        this.beltRoot.add(m);
+        m.userData = { fid, belt: !done };
+        this.beltRoot.add(m); if (!done) this.beltItems.push(m);
       });
     }
   }
@@ -322,7 +361,6 @@ export class World {
   // ---------------------------------------------------------------------------- per-frame
   update(dt, chars, camera, focus) {
     this.time += dt;
-    // sliding doors open when anyone is near
     if (this.state) {
       const D = this.state.d, cx = this.state.doorX + 1;
       let near = false;
@@ -334,21 +372,30 @@ export class World {
       if (near && !this.doorWas) this.onDoor && this.onDoor();
       this.doorWas = near;
     }
-    // furniture animations
     for (const e of this.furn.values()) {
-      const g = e.group;
+      const g = e.group, f = e.data;
       if (e.pop > 0) { e.pop = Math.max(0, e.pop - dt * 4); const s = 1 + Math.sin(e.pop * Math.PI) * 0.12; g.scale.set(s, 1 - Math.sin(e.pop * Math.PI) * 0.1, s); }
       for (const a of g.userData.anim) {
-        if (a.kind === 'bob') a.obj.position.y = Math.sin(this.time * 1.5 + e.data.id) * 0.06;
-        if (a.kind === 'jet') { a.obj.scale.y = 1 + Math.sin(this.time * 8) * 0.15; }
+        if (a.kind === 'bob') a.obj.position.y = Math.sin(this.time * 1.5 + f.id) * 0.06;
+        if (a.kind === 'jet') a.obj.scale.y = 1 + Math.sin(this.time * 8) * 0.15;
         if (a.kind === 'water') a.obj.rotation.y += dt * 0.5;
         if (a.kind === 'blink') a.obj.material.opacity = 0.7 + Math.sin(this.time * 6) * 0.3;
         if (a.kind === 'spin') a.obj.rotation.y += dt * 0.6;
       }
-      if (e.broken && g.userData.led) g.userData.led.visible = Math.sin(this.time * 10) > 0;
-      if (e.label && e.label.visible) e.label.position.y = (e.data.type === 'freezer' ? 1.5 : 2.6) + Math.sin(this.time * 3) * 0.05;
+      // fridge doors: open when a player opened it, or while someone is taking items out
+      const ud = g.userData;
+      if (ud.doors || ud.lid) {
+        let want = f.open ? 1 : 0;
+        if (!want) want = this.someoneAt(f, chars) ? 1 : 0;
+        e.doorOpen += (want - e.doorOpen) * Math.min(1, dt * 7);
+        if (ud.doors) ud.doors.forEach(d => { d.rotation.y = -e.doorOpen * 1.5; });
+        if (ud.lid) ud.lid.position.x = e.doorOpen * FURNITURE[f.type].w * 0.45;
+      }
+      if (ud.tool) { const sp = this.deptPoint(f, 'stationSpot'); e.working = chars.some(c => (c.floor || 0) === (f.floor || 0) && Math.hypot(c.x - sp[0], c.z - sp[1]) < 0.75 && (c.stage === 'cutting' || c.cutting)); }
+      if (ud.tool && e.working) { if (f.type === 'deli') ud.tool.rotation.x += dt * 25; else ud.tool.rotation.z = Math.sin(this.time * 18) * 0.4; }
+      if (e.broken && ud.led) ud.led.visible = Math.sin(this.time * 10) > 0;
+      if (e.label && e.label.visible) e.label.position.y = (f.type === 'freezer' ? 1.3 : 2.5) + Math.sin(this.time * 3) * 0.05;
     }
-    // fade walls that block the view
     if (camera && this.state) {
       const W = this.state.w, D = this.state.d;
       for (const fw of this.fadeWalls) {
@@ -363,8 +410,22 @@ export class World {
       for (const m of this.frontMats) { m.opacity += (o - m.opacity) * Math.min(1, dt * 8); m.depthWrite = m.opacity > 0.9; }
     }
   }
-
-  // nearest-interaction helpers -----------------------------------------------------
+  someoneAt(f, chars) {
+    const fl = f.floor || 0;
+    if (FURNITURE[f.type].kind === 'counter') {
+      const sp = this.deptPoint(f, 'fridgeSpot');
+      return chars.some(c => (c.floor || 0) === fl && Math.hypot(c.x - sp[0], c.z - sp[1]) < 0.7 && (c.carryDept || c.stage === 'taking'));
+    }
+    return chars.some(c => !c.moving && (c.floor || 0) === fl && this.fixtureDistance(f, c.x, c.z) < 0.8 && (c.kind === 'customer' || c.state === 'stocking'));
+  }
+  deptPoint(f, name) {
+    const def = FURNITURE[f.type];
+    const map = { fridgeSpot: [0, 1], stationSpot: [2, 1], counterSpot: [1, 1], fridge: [0.5, 0], station: [2, 0], counter: [1, 2] };
+    const [i, j] = map[name];
+    const rt = (a, b) => { switch (f.rot) { case 1: return [b, def.w - 1 - a]; case 2: return [def.w - 1 - a, def.d - 1 - b]; case 3: return [def.d - 1 - b, a]; default: return [a, b]; } };
+    const [a, b] = rt(i, j);
+    return [f.x + a + 0.5, f.z + b + 0.5];
+  }
   fixtureDistance(f, x, z) {
     const [w, d] = dims(f.type, f.rot);
     const dx = Math.max(f.x - x, 0, x - (f.x + w)), dz = Math.max(f.z - z, 0, z - (f.z + d));

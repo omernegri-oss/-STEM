@@ -1,14 +1,15 @@
-// End-to-end browser playthrough: 2 players, build, order, haul boxes, stock, open, serve, end of day.
+// End-to-end browser playthrough with real input: 2 players, computer purchases, delivery, carrying & placing
+// furniture, stocking with labelled products, running the register by clicking products, punching.
 import { createRequire } from 'node:module';
-const { chromium } = createRequire(import.meta.url)('playwright');
 import os from 'node:os'; import fs from 'node:fs'; import path from 'node:path';
+import assert from 'node:assert/strict';
+const { chromium } = createRequire(import.meta.url)('playwright');
 process.env.SAVES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'st-saves-'));
-const { startServer } = await import('../server/index.js');
+const { startServer, rooms } = await import('../server/index.js');
 const OUT = process.env.SHOTS || './shots';
 const port = 3124;
 const srv = startServer(port);
-const browsers = [];
-const errors = [];
+const browsers = [], errors = [];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function newPage(name) {
   const browser = await chromium.launch(); browsers.push(browser);
@@ -20,119 +21,122 @@ async function newPage(name) {
   await sleep(700);
   return page;
 }
-const act = (page, a, data = {}) => page.evaluate(([a, d]) => window.__dbg.net.act(a, d), [a, data]);
+const G = (page, fn, arg) => page.evaluate(fn, arg);
 const tp = (page, x, z, rot = 0) => page.evaluate(([x, z, rot]) => { const m = window.__dbg.me; m.x = x; m.z = z; m.rot = rot; }, [x, z, rot]);
-const G = (page, fn) => page.evaluate(fn);
 const shot = (page, n) => page.screenshot({ path: `${OUT}/${n}.png` });
+async function waitFor(page, fn, ms = 10000, arg) { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await page.evaluate(fn, arg)) return true; await sleep(150); } throw new Error('timeout: ' + fn); }
+const screenOf = (page, [x, y, z]) => page.evaluate(([x, y, z]) => { const c = window.__dbg.S.camera; const v = c.position.clone().set(x, y, z).project(c); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, [x, y, z]);
 
 const p1 = await newPage('p1');
-await p1.fill('#m-name', 'Alice'); await p1.click('#m-create'); await sleep(600);
+await p1.fill('#m-name', 'Alice'); await p1.click('#m-create'); await sleep(500);
 const code = await p1.textContent('#l-code');
 const p2 = await newPage('p2');
-await p2.fill('#m-name', 'Bob'); await p2.fill('#m-code', code); await p2.click('#m-join'); await sleep(600);
-console.log('p2 state', await G(p2, () => JSON.stringify({code: window.__G.code, err: document.getElementById('toast-err').textContent, lobby: document.getElementById('lobby').className, menu: document.getElementById('menu').className})), code);
-await p2.click('#l-roles button[data-role="cashier"]'); await sleep(300);
-await shot(p1, '10-lobby');
-await p1.click('#l-start'); await sleep(1200);
-await p1.fill('#n-input', 'Fresh & Friends'); await sleep(300);
-await p1.click('#n-vote'); await sleep(300); console.log('votes1', await G(p1, () => JSON.stringify([window.__G.meta.nameVotes, window.__G.meta.nameDraft, window.__G.players.map(p=>p.id)])));
-await p2.click('#n-vote'); await sleep(1200); console.log('votes2', await G(p2, () => JSON.stringify([window.__G.meta.nameVotes, window.__G.meta.phase, document.getElementById('toast-err').textContent])));
+await p2.fill('#m-name', 'Bob'); await p2.fill('#m-code', code); await p2.click('#m-join'); await sleep(500);
+await p1.click('#l-start'); await sleep(900);
+await p1.fill('#n-input', 'Fresh & Friends ' + (Date.now() % 1000)); await sleep(300);
+await p1.click('#n-vote'); await p2.click('#n-vote');
+await waitFor(p1, () => window.__G.meta.phase === 'prep');
+const game = rooms.get(code).game;
 
-// Build mode via keyboard + UI click
-await p1.bringToFront(); await p1.keyboard.press('b'); await sleep(400);
-console.log('dbg', await G(p1, () => ({ phase: window.__G.meta.phase, build: window.__dbg.build.active, ae: document.activeElement.tagName + '#' + document.activeElement.id, hud: document.getElementById('hud').className })));
-await p1.click('#buildbar [data-act="pick"][data-v="shelf"]'); await sleep(300);
-await p1.mouse.move(500, 380); await sleep(400);
-await shot(p1, '11-build-ghost');
-// place via protocol for determinism
-for (const [type, x, z, rot] of [['shelf', 1, 1, 0], ['shelf', 4, 1, 0], ['fridge', 8, 0, 0], ['produce', 1, 4, 0], ['checkout', 8, 5, 0], ['rack', 10, 2, 3], ['plant', 0, 7, 0], ['bin', 11, 7, 0]]) {
-  await act(p1, 'place', { type, x, z, rot }); await sleep(120);
-}
-await sleep(500);
-await p1.keyboard.press('Escape'); await sleep(100); await p1.keyboard.press('Escape'); await sleep(300);
-console.log('build still active?', await G(p1, () => window.__dbg.build.active));
-console.log('furniture', await G(p1, () => window.__G.world.furniture.map(f => f.type).join(',')));
+// --- the computer: buy a shelf, order flour & sugar
+const comp = await G(p1, () => window.__G.world.furniture.find(f => f.type === 'computer'));
+await tp(p1, comp.x + 1.5, comp.z + 1, -Math.PI / 2);
+await waitFor(p1, () => window.__dbg.lastInter?.action?.a === '_computer');
+await p1.keyboard.press('e');
+await waitFor(p1, () => !document.getElementById('panel').classList.contains('hidden'));
+await shot(p1, '50-computer-orders');
+await p1.click('[data-goto="furniture"]'); await sleep(300);
+await shot(p1, '51-computer-furniture');
+await p1.click('[data-act="buyf"][data-type="shelf"]');
+await waitFor(p1, () => window.__G.meta.orders.length === 1);
+await p1.click('[data-goto="orders"]'); await sleep(300);
+await p1.click('[data-act="qty"][data-pid="flour"][data-d="1"]');
+await p1.click('[data-act="qty"][data-pid="sugar"][data-d="1"]');
+await p1.click('[data-act="order"]');
+await waitFor(p1, () => window.__G.meta.orders.length === 2);
+await p1.click('[data-goto="licenses"]'); await sleep(300); await shot(p1, '52-computer-licenses');
+await p1.keyboard.press('Escape');
+console.log('cash after shopping:', await G(p1, () => window.__G.meta.cash));
+game.s.speed = 3;
+await waitFor(p1, () => window.__G.world.boxes.length === 3, 30000);
+game.s.speed = 1;
+await tp(p1, 2, game.s.d + 2.6, Math.PI); await sleep(500); await shot(p1, '53-delivery-boxes');
 
-// Orders panel
-await p1.keyboard.press('o'); await sleep(400);
-await p1.click('[data-act="qty"][data-pid="cereal"][data-d="1"]');
-await p1.click('[data-act="qty"][data-pid="cereal"][data-d="1"]');
-await p1.click('[data-act="qty"][data-pid="pasta"][data-d="1"]');
-await p1.click('[data-act="qty"][data-pid="chips"][data-d="1"]');
-await p1.click('[data-act="qty"][data-pid="soda"][data-d="1"]');
-await sleep(200);
-await shot(p1, '12-orders');
-await p1.click('[data-act="order"]'); await sleep(300);
-await act(p1, 'order', { supplier: 'dairy', items: [{ pid: 'milk', boxes: 2 }, { pid: 'yogurt', boxes: 1 }, { pid: 'eggs', boxes: 1 }] });
-await p1.keyboard.press('Escape'); await sleep(200);
-await act(p1, 'speed', { v: 3 });
-await sleep(14000);
-await act(p1, 'speed', { v: 1 });
-const nBoxes = await G(p1, () => window.__G.world.boxes.length);
-console.log('boxes delivered', nBoxes);
-await tp(p1, 3, 10.6, Math.PI); await sleep(500);
-await shot(p1, '13-delivery');
-
-// Haul boxes with real key presses: pick up (E) at the box, then stock at the right fixture
-async function waitFor(page, fn, ms = 8000) {
-  const t0 = Date.now();
-  while (Date.now() - t0 < ms) { if (await G(page, fn)) return true; await sleep(150); }
-  return false;
-}
-async function haulAll(page) {
-  for (let guard = 0; guard < 14; guard++) {
-    const info = await G(page, () => { const W = window.__G.world; const tops = W.boxes.filter(b => b.y === Math.max(...W.boxes.filter(o => Math.abs(o.x - b.x) < 0.3 && Math.abs(o.z - b.z) < 0.3).map(o => o.y))); const b = tops[0]; return b ? { id: b.id, x: b.x, z: b.z, pid: b.pid } : null; });
-    if (!info) return;
-    await tp(page, info.x + 0.5, info.z, -Math.PI / 2);
-    await waitFor(page, () => window.__dbg.lastInter?.action?.a === 'pickup');
-    await page.keyboard.press('e');
-    if (!await waitFor(page, () => (window.__G.carry || []).length > 0)) { console.log('pickup failed', info); continue; }
-    const target = await G(page, () => { const W = window.__G.world; const pid = window.__G.carry[0]; const cat = { cereal: 'shelf', pasta: 'shelf', chips: 'shelf', soda: 'shelf', milk: 'fridge', yogurt: 'fridge', eggs: 'fridge' }[pid]; const f = W.furniture.find(f => f.type === cat && f.slots.some(s => s.qty === 0 || (s.pid === pid && s.qty < 10))); return f ? { x: f.x, z: f.z } : null; });
-    if (!target) { await page.keyboard.press('q'); await waitFor(page, () => !(window.__G.carry || []).length); continue; }
-    await tp(page, target.x + 1, target.z + 1.45, Math.PI);
-    await waitFor(page, () => window.__dbg.lastInter?.action?.a === 'stock');
-    await page.keyboard.down('e');
-    await waitFor(page, () => !(window.__G.carry || []).length || window.__dbg.lastInter?.action?.a !== 'stock', 15000);
-    await page.keyboard.up('e');
-    if ((await G(page, () => (window.__G.carry || []).length))) { await page.keyboard.press('q'); await waitFor(page, () => !(window.__G.carry || []).length); }
-  }
-}
-await p1.bringToFront(); await sleep(200);
-await haulAll(p1);
-await sleep(500);
-const fill = await G(p1, () => window.__G.world.furniture.filter(f => f.slots).map(f => f.type + ':' + f.slots.map(s => (s.pid || '-') + s.qty).join('/')).join('  '));
-console.log('stock', fill);
-await tp(p1, 6, 6.5, Math.PI); await sleep(600);
-await shot(p1, '14-stocked');
-
-// Bob runs the register
-const chk = await G(p2, () => { const f = window.__G.world.furniture.find(f => f.type === 'checkout'); return { x: f.x, z: f.z }; });
-await p2.bringToFront(); await tp(p2, chk.x + 0.5, chk.z - 0.5, 0);
-await waitFor(p2, () => window.__dbg.lastInter?.action?.a === 'station');
-await p2.keyboard.press('e'); await waitFor(p2, () => !!window.__G.station);
-console.log('bob station', await G(p2, () => window.__G.station));
-await p1.click('#h-open'); await sleep(300);
-await act(p1, 'speed', { v: 3 });
-let served = 0;
-for (let t = 0; t < 40; t++) {
-  await p2.keyboard.down('e'); await sleep(450); await p2.keyboard.up('e');
-  if (t === 14) { await shot(p2, '15-checkout'); await act(p1, 'speed', { v: 3 }); }
-  served = await G(p1, () => window.__G.meta.ledger.served);
-}
-console.log('served by Bob:', served, 'revenue', await G(p1, () => window.__G.meta.ledger.revenue));
-await p1.bringToFront(); await tp(p1, 6, 4, Math.PI); await sleep(300);
-await shot(p1, '16-busy-store');
-// panels
-for (const [k, n] of [['h', '17-staff'], ['f', '18-finance'], ['k', '19-progress'], ['p', '20-prices'], ['i', '21-inventory'], ['u', '22-upgrades']]) {
-  await p1.keyboard.press(k); await sleep(500); await shot(p1, n); await p1.keyboard.press('Escape'); await sleep(150);
-}
-// hire a cashier and finish day fast
-const cid = await G(p1, () => window.__G.meta.candidates.find(c => c.role === 'cashier')?.id);
-if (cid) await act(p1, 'hire', { id: cid });
-await p2.evaluate(() => { window.__dbg.me.x = 3; window.__dbg.me.z = 7; });
-for (let i = 0; i < 120; i++) { const ph = await G(p1, () => window.__G.snap.phase); if (ph === 'report') break; await sleep(1000); }
+// --- carry the furniture box inside and place it with the mouse
+const fb = await G(p1, () => window.__G.world.boxes.find(b => b.ftype));
+await tp(p1, fb.x - 0.5, fb.z, Math.PI / 2);
+await waitFor(p1, () => window.__dbg.lastInter?.action?.a === 'pickup');
+await p1.keyboard.press('e');
+await sleep(800); console.log('after pickup', await G(p1, () => JSON.stringify({ carry: window.__G.carry, inter: window.__dbg.lastInter, boxes: window.__G.world.boxes.map(b => [b.ftype || b.pid, b.x, b.z]), me: [window.__dbg.me.x, window.__dbg.me.z] })), await p1.textContent('#toast-err'));
+await waitFor(p1, () => (window.__G.carry || [])[0] === 'f:shelf');
+await tp(p1, 3, 4, Math.PI);
+await waitFor(p1, () => window.__dbg.lastInter?.action?.a === '_place');
+await p1.keyboard.press('e');
+await waitFor(p1, () => window.__dbg.build.active && window.__dbg.build.placing === 'shelf');
 await sleep(800);
-await shot(p1, '23-report');
-console.log('phase', await G(p1, () => window.__G.snap.phase), 'report', JSON.stringify(await G(p1, () => { const r = window.__G.meta.report; return r && { revenue: r.revenue, served: r.served, profit: r.profit, avgSat: r.avgSat }; })));
+const [sx, sy] = await screenOf(p1, [3, 0, 1.5]);
+await p1.mouse.move(sx, sy); await sleep(900);
+await shot(p1, '54-placing-shelf');
+await p1.mouse.click(sx, sy);
+await waitFor(p1, () => window.__G.world.furniture.some(f => f.type === 'shelf'));
+await waitFor(p1, () => !window.__dbg.build.active);
+const shelf = await G(p1, () => window.__G.world.furniture.find(f => f.type === 'shelf'));
+console.log('placed shelf at', shelf.x, shelf.z, 'rot', shelf.rot);
+
+// --- haul & stock flour and sugar
+for (let i = 0; i < 2; i++) {
+  const b = await G(p1, () => window.__G.world.boxes.find(b => b.pid));
+  await tp(p1, b.x + 0.6, b.z, -Math.PI / 2);
+  await waitFor(p1, () => window.__dbg.lastInter?.action?.a === 'pickup');
+  await p1.keyboard.press('e');
+  await waitFor(p1, () => (window.__G.carry || []).length === 1);
+  await tp(p1, shelf.x + 1, shelf.z + 1.45, Math.PI);
+  await waitFor(p1, () => window.__dbg.lastInter?.action?.a === 'stock');
+  await p1.keyboard.down('e');
+  await waitFor(p1, () => !(window.__G.carry || []).length, 20000);
+  await p1.keyboard.up('e');
+}
+await tp(p1, shelf.x + 1, shelf.z + 2.2, Math.PI);
+await p1.evaluate(() => { const r = window.__dbg.rig; r.dist = 4.5; r.pitch = 0.45; }); await sleep(900);
+await shot(p1, '55-labelled-products');
+await p1.evaluate(() => { const r = window.__dbg.rig; r.dist = 11; r.pitch = 0.95; });
+
+// --- Bob runs the register and passes products over the scanner by clicking them
+const chk = await G(p2, () => window.__G.world.furniture.find(f => f.type === 'checkout'));
+await p2.bringToFront();
+await tp(p2, chk.x + 0.5, chk.z - 0.5, 0);
+await waitFor(p2, () => window.__dbg.lastInter?.action?.a === 'station');
+await p2.keyboard.press('e');
+await waitFor(p2, () => !!window.__G.station);
+await p1.click('#h-open');
+game.s.speed = 2;
+let clicks = 0;
+for (let t = 0; t < 120 && game.s.ledger.served < 2; t++) {
+  const item = await G(p2, () => { const it = window.__dbg.world.beltItems[0]; return it ? [it.position.x, it.position.y, it.position.z] : null; });
+  if (item) { const [x, y] = await screenOf(p2, item); await p2.mouse.click(x, y); clicks++; if (clicks === 2) await shot(p2, '56-scanning'); await sleep(250); }
+  else if (await G(p2, () => window.__dbg.lastInter?.station?.pay)) await p2.keyboard.press('e');
+  else await sleep(400);
+}
+console.log('belt clicks', clicks, 'served', game.s.ledger.served, 'revenue', game.s.ledger.revenue);
+assert.ok(game.s.ledger.served >= 1, 'Bob checked out a customer by clicking products');
+
+// --- punching: Alice punches Bob
+await p1.bringToFront();
+const bob = await G(p2, () => [window.__dbg.me.x, window.__dbg.me.z]);
+await tp(p1, bob[0], bob[1] - 0.8, 0); await sleep(400);
+await p1.keyboard.press('f');
+await waitFor(p2, () => window.__dbg.me.stunned, 5000);
+console.log('Bob stunned ✓');
+await shot(p1, '57-punch');
+
+// --- check the computer messages tab and the chat
+await tp(p1, comp.x + 1.5, comp.z + 1, -Math.PI / 2);
+await waitFor(p1, () => window.__dbg.lastInter?.action?.a === '_computer');
+await p1.keyboard.press('e'); await sleep(300);
+await p1.click('[data-goto="messages"]'); await sleep(400);
+await shot(p1, '58-messages');
+const chat = await p1.textContent('#chat-log');
+console.log('chat log:', chat.slice(0, 160));
+assert.ok(/delivery/i.test(chat), 'deliveries are announced in the chat');
 console.log('errors:', errors.length ? errors.join('\n') : 'none');
 for (const b of browsers) await b.close(); srv.close(); process.exit(errors.length ? 1 : 0);

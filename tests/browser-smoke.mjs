@@ -1,0 +1,45 @@
+// Browser smoke test: loads the client in headless Chromium, creates a store, names it, builds, and screenshots.
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(import.meta.url)('playwright');
+import os from 'node:os'; import fs from 'node:fs'; import path from 'node:path';
+process.env.SAVES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'st-saves-'));
+const { startServer } = await import('../server/index.js');
+const OUT = process.env.SHOTS || './shots';
+const port = 3123;
+const srv = startServer(port);
+const browser = await chromium.launch();
+const errors = [];
+async function newPage(name) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  page.on('console', m => { if (m.type() === 'error') errors.push(`[${name}] ${m.text()}`); });
+  page.on('pageerror', e => errors.push(`[${name}] PAGEERROR ${e.message}\n${e.stack}`));
+  await page.goto(`http://localhost:${port}/?low`);
+  return page;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const p1 = await newPage('p1');
+await sleep(1500);
+await p1.screenshot({ path: `${OUT}/01-menu.png` });
+await p1.fill('#m-name', 'Alice');
+await p1.click('#m-create');
+await sleep(800);
+await p1.screenshot({ path: `${OUT}/02-lobby.png` });
+const code = await p1.textContent('#l-code');
+console.log('room code', code);
+const p2 = await newPage('p2');
+await sleep(800);
+await p2.fill('#m-name', 'Bob');
+await p2.fill('#m-code', code);
+await p2.click('#m-join');
+await sleep(800);
+await p1.click('#l-start');
+await sleep(1500);
+await p1.screenshot({ path: `${OUT}/03-naming.png` });
+await p1.fill('#n-input', 'The Happy Cart');
+await sleep(400);
+await p1.click('#n-vote');
+await p2.click('#n-vote');
+await sleep(1200);
+await p1.screenshot({ path: `${OUT}/04-empty-store.png` });
+console.log('errors:', errors.length ? errors.join('\n') : 'none');
+await browser.close(); srv.close(); process.exit(0);

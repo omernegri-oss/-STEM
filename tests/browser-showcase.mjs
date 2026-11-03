@@ -25,7 +25,7 @@ const act = (m) => { const ok = g.act(p, m); if (!ok) console.log('act failed', 
 act({ a: 'nameDraft', name: 'Mega Maya Market' }); act({ a: 'nameVote' });
 g.s.level = 10; g.s.xp = 30000; g.s.cash = 500000;
 act({ a: 'expand' }); act({ a: 'expand' });
-act({ a: 'floor', id: 'wood' }); act({ a: 'wall', id: 'mint' });
+act({ a: 'floor', id: 'wood' }); act({ a: 'wall', id: 'mint' }); act({ a: 'lighting', id: 'warm' });
 const W = g.s.w, D = g.s.d; console.log('size', W, D);
 const place = (type, x, z, rot = 0) => act({ a: 'place', type, x, z, rot });
 // back wall: fridges & freezers
@@ -69,6 +69,11 @@ await page.evaluate(() => { const d = window.__dbg; d.me.x = 5; d.me.z = 2.2; d.
 await shot('32-aisle-fridges');
 await page.evaluate(() => { const d = window.__dbg; d.me.x = 14; d.me.z = 11; d.rig.dist = 9; d.rig.pitch = 0.7; d.rig.yaw = -0.3; });
 await shot('33-checkouts');
+await page.keyboard.press('b'); await sleep(300); await page.click('#buildbar [data-act="tab"][data-v="style"]'); await sleep(300);
+await page.evaluate(() => { document.querySelector('#buildbar .bb-list').scrollTop = 9999; });
+await shot('35-build-style');
+await page.click('#buildbar [data-act="light"][data-v="disco"]'); await sleep(500);
+await page.keyboard.press('b'); await sleep(300);
 g.s.minute = 21 * 60 + 20;
 await page.evaluate(([W, D]) => { const d = window.__dbg; d.me.x = W / 2; d.me.z = D + 3; d.rig.dist = 20; d.rig.pitch = 0.6; d.rig.yaw = 0; }, [W, D]);
 await shot('34-night-front');

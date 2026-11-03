@@ -1,6 +1,6 @@
 // Authoritative game simulation for one supermarket (one multiplayer room).
 import {
-  PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, FIXTURE_UPGRADES, EXPANSIONS, FLOORS, WALLS,
+  PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, FIXTURE_UPGRADES, EXPANSIONS, FLOORS, WALLS, LIGHTS,
   TEAM_UPGRADES, TEAM_UPGRADE_MAP, ROLES, SHIFTS, LEVEL_XP, MAX_LEVEL, levelForXp, ACHIEVEMENTS, GOALS,
   FIRST_NAMES, LAST_NAMES, EVENT_TYPES, STARTING_CASH, REAL_SECONDS_PER_MINUTE, OPEN_HOUR, CLOSE_HOUR,
   LAST_ENTRY_HOUR, fmtMoney, CATEGORIES,
@@ -48,7 +48,7 @@ export class Game {
       cash: STARTING_CASH, day: 1, minute: 7 * 60, speed: 1, paused: false,
       xp: 0, level: 1, rep: 55,
       staff: [], candidates: [], orders: [],
-      upgrades: {}, ownedFloors: ['white'], ownedWalls: ['cream'],
+      upgrades: {}, ownedFloors: ['white'], ownedWalls: ['cream'], lighting: 'standard', ownedLights: ['standard'],
       ledger: newLedger(), history: [], report: null,
       stats: { revenue: 0, customers: 0, sold: {}, playerCheckouts: 0, butcher: 0, deli: 0, angry: 0, vip: 0 },
       achievements: {}, goalIndex: 0, goalFlags: {},
@@ -63,7 +63,7 @@ export class Game {
     this.s = save;
     const fr = this.fresh.bind(this);
     // forward-compatible defaults
-    const def = { ownedFloors: ['white'], ownedWalls: ['cream'], goalFlags: {}, eventLog: [], pigeons: [] };
+    const def = { ownedFloors: ['white'], ownedWalls: ['cream'], goalFlags: {}, eventLog: [], pigeons: [], lighting: 'standard', ownedLights: ['standard'] };
     for (const k in def) if (this.s[k] === undefined) this.s[k] = def[k];
     if (this.s.phase === 'open' || this.s.phase === 'closing') this.s.phase = 'prep';
     this.s.paused = false;
@@ -136,6 +136,7 @@ export class Game {
     a += Math.max(0, fl) * 1.5;
     const wl = WALLS.findIndex(x => x.id === this.s.wall);
     a += wl > 0 ? 2 : 0;
+    a += (LIGHTS.find(l => l.id === this.s.lighting) || LIGHTS[0]).appeal;
     a -= this.s.dirt.length;
     return Math.round(a);
   }
@@ -297,6 +298,15 @@ export class Game {
           this.spend(wl.cost, 'other'); s.ownedWalls.push(wl.id);
         }
         s.wall = wl.id; this.dirtyWorld(); this.dirtyMeta(); this.sound('upgrade'); return true;
+      }
+      case 'lighting': {
+        const li = LIGHTS.find(x => x.id === m.id); if (!li) return false;
+        if (!s.ownedLights.includes(li.id)) {
+          if (!this.unlocked(li.level)) return fail(`Unlocks at level ${li.level}.`);
+          if (s.cash < li.cost) return fail('Not enough cash!');
+          this.spend(li.cost, 'other'); s.ownedLights.push(li.id);
+        }
+        s.lighting = li.id; this.dirtyWorld(); this.dirtyMeta(); this.sound('upgrade'); return true;
       }
       case 'expand': {
         const next = EXPANSIONS[s.expansion + 1];
@@ -1159,7 +1169,7 @@ export class Game {
   worldView() {
     const s = this.s;
     return {
-      name: s.name, w: s.w, d: s.d, doorX: s.doorX, floor: s.floor, wall: s.wall, expansion: s.expansion,
+      name: s.name, w: s.w, d: s.d, doorX: s.doorX, floor: s.floor, wall: s.wall, lighting: s.lighting, expansion: s.expansion,
       furniture: s.furniture.map(f => ({ id: f.id, type: f.type, x: f.x, z: f.z, rot: f.rot, upg: f.upg, broken: f.broken, repair: f.repair || 0,
         techEta: f.techEta, temp: f.temp !== undefined ? Math.round(f.temp) : undefined, slots: f.slots, boxes: f.boxes, boughtDay: f.boughtDay, boughtPhase: f.boughtPhase })),
       boxes: s.boxes.map(b => ({ id: b.id, pid: b.pid, qty: b.qty, exp: b.exp, x: b.x, z: b.z, y: b.y, expired: b.expired })), dirt: s.dirt, prices: s.prices, saleActive: s.saleActive,
@@ -1174,7 +1184,7 @@ export class Game {
       staff: s.staff.map(st => ({ id: st.id, name: st.name, role: st.role, skill: st.skill, speed: st.speed, salary: st.salary,
         happiness: st.happiness, shift: st.shift, absent: st.absent, present: st.present, served: st.served, seed: st.seed, state: st.state, hiredDay: st.hiredDay })),
       candidates: s.candidates, orders: s.orders.map(o => ({ id: o.id, supplier: o.supplier, items: o.items, total: o.total, eta: o.eta, remaining: o.remaining, by: o.by })),
-      upgrades: s.upgrades, ownedFloors: s.ownedFloors, ownedWalls: s.ownedWalls, floor: s.floor, wall: s.wall,
+      upgrades: s.upgrades, ownedFloors: s.ownedFloors, ownedWalls: s.ownedWalls, ownedLights: s.ownedLights, lighting: s.lighting, floor: s.floor, wall: s.wall,
       ledger: s.ledger, history: s.history, report: s.report, stats: s.stats, achievements: s.achievements, goalIndex: s.goalIndex,
       demand: s.demand, events: s.events, pendingSale: s.pendingSale, saleActive: s.saleActive, eventLog: s.eventLog,
       negativeDays: s.negativeDays, speed: s.speed, paused: s.paused, carryCap: this.carryCap(),

@@ -147,7 +147,7 @@ export class Room {
     if (!this.started || !this.players.size) return;
     const now = Date.now();
     const g = this.game;
-    if (g.worldDirty && now - this.lastWorld > 120) {
+    if (g.worldDirty && now - this.lastWorld > 180) {
       g.worldDirty = false; this.lastWorld = now;
       this.broadcast({ t: 'w', world: g.worldView() });
     }

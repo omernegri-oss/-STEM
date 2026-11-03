@@ -1,6 +1,6 @@
 // Supermarket Tycoons – client entry point: menus, lobby, networking glue and the main loop.
 import * as THREE from 'three';
-import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, fmtMoney } from '/shared/data.js';
+import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, fmtMoney } from '/shared/data.js';
 import { Net } from './net.js';
 import { createScene } from './scene.js';
 import { World } from './world.js';
@@ -44,6 +44,7 @@ gfxBtn.onclick = () => { lowGfx = !lowGfx; try { localStorage.setItem('st_gfx', 
 syncGfx();
 const toggleHelp = (on) => $('help').classList.toggle('hidden', on === undefined ? undefined : !on);
 $('h-help').onclick = () => toggleHelp();
+$('h-exit').onclick = () => { if (confirm('Leave this store? Your team keeps playing and progress is saved.')) { net.send({ t: 'leave' }); G.code = ''; setTimeout(() => location.reload(), 150); } };
 $('help-close').onclick = () => toggleHelp(false);
 window.__dbg = { net, me, rig, ui, world, S };
 const build = new BuildMode({ scene: S.scene, camera: S.camera, world, net, G, ui, rig });
@@ -259,7 +260,8 @@ function frame(now) {
     rig.yaw += dt * 0.08; rig.pitch = 0.75; rig.dist = 17;
     rig.update(dt, { mouse: { dragging: false, wheel: 0 }, typing: () => true, down: () => false }, { x: 6, z: 5 });
   }
-  const lighting = S.updateLighting(G.snap ? G.snap.time : 11 * 60, G.snap ? G.snap.phase : 'open');
+  const ls = LIGHTS.find(l => l.id === G.world?.lighting) || LIGHTS[0];
+  const lighting = S.updateLighting(G.snap ? G.snap.time : 11 * 60, G.snap ? G.snap.phase : 'open', ls.id, ls.color);
   void lighting;
   actors.update(dt, inGame ? me : null);
   world.update(dt, actors.positions(), S.camera, inGame ? me : null);

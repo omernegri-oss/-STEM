@@ -123,7 +123,8 @@ export function createScene(canvas, { low = false } = {}) {
 
   const SKY = { day: new THREE.Color(0x8fd3ff), dusk: new THREE.Color(0xf6a26b), night: new THREE.Color(0x1e2a4a), dawn: new THREE.Color(0xffc9a3) };
   const tmp = new THREE.Color();
-  function updateLighting(minute, phase) {
+  const lightCol = new THREE.Color();
+  function updateLighting(minute, phase, style = 'standard', styleColor = '#fff1d0') {
     let h = minute / 60;
     if (phase === 'report' || phase === 'bankrupt') h = 23;
     // night factor 0 day -> 1 night
@@ -140,7 +141,14 @@ export function createScene(canvas, { low = false } = {}) {
     sun.color.setHSL(0.1, 0.6 + dusk * 0.4, 0.92 - dusk * 0.15);
     const ang = (Math.max(7, Math.min(21, h)) - 7) / 14 * Math.PI; // east->west
     sun.position.set(state.W / 2 - Math.cos(ang) * 30, 12 + Math.sin(ang) * 28, state.D / 2 + 22);
-    for (const l of interior) { l.intensity = night * 18 + dusk * 5; l.visible = l.intensity > 0.05; }
+    const storeOpen = phase === 'open' || phase === 'closing' || phase === 'prep';
+    const base = style === 'standard' ? 0 : style === 'gallery' ? 6 : 4;
+    interior.forEach((l, i) => {
+      if (style === 'disco') lightCol.setHSL(((performance.now() / 4000) + i * 0.25) % 1, 0.9, 0.6); else lightCol.set(styleColor);
+      l.color.copy(lightCol);
+      l.intensity = night * 18 + dusk * 5 + (storeOpen ? base : 0);
+      l.visible = l.intensity > 0.05;
+    });
     const lampOn = night > 0.3 || dusk > 0.6;
     for (const l of state.streetLamps) l.userData.bulb.material.emissiveIntensity = lampOn ? 1.5 : 0.1;
     for (const w of state.windows) w.emissiveIntensity = lampOn ? 0.7 : 0;

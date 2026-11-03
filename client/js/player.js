@@ -127,7 +127,7 @@ export function findInteraction(G, world, me, carry, station) {
     }
   }
   // 2) step behind a checkout / counter
-  if (!carry.length || true) {
+  if (!carry.length) {
     for (const f of W.furniture) {
       const def = FURNITURE[f.type];
       if (def.kind !== 'checkout' && def.kind !== 'counter') continue;

@@ -1,6 +1,6 @@
 // Build mode: shop for fixtures, placement preview with validity, move / rotate / upgrade / sell, styles, expansion.
 import * as THREE from 'three';
-import { FURNITURE, FIXTURE_UPGRADES, FLOORS, WALLS, EXPANSIONS, PRODUCT_MAP, fmtMoney } from '/shared/data.js';
+import { FURNITURE, FIXTURE_UPGRADES, FLOORS, WALLS, LIGHTS, EXPANSIONS, PRODUCT_MAP, fmtMoney } from '/shared/data.js';
 import { footprint, frontTiles, backTiles, needsBack, center, dims } from '/shared/grid.js';
 import { makeFurniture, ghostify } from './models.js';
 
@@ -158,6 +158,7 @@ export class BuildMode {
     else if (a === 'upgrade') this.upgrade();
     else if (a === 'floor') this.net.act('floor', { id: v });
     else if (a === 'wall') this.net.act('wall', { id: v });
+    else if (a === 'light') this.net.act('lighting', { id: v });
     else if (a === 'expand') this.net.act('expand');
     else if (a === 'clearLabel') this.net.act('clearLabel', { id: this.selected, slot: +v });
     else if (a === 'close') this.exit();
@@ -207,6 +208,12 @@ export class BuildMode {
       for (const w of WALLS) {
         const owned = (M.ownedWalls || []).includes(w.id), locked = lvl < w.level;
         h += `<button class="bi ${M.wall === w.id ? 'sel' : ''} ${locked ? 'locked' : ''}" data-act="wall" data-v="${w.id}"><span class="ic"><div class="swatch" style="background:${w.color};width:30px"></div></span><span class="tx"><b>${esc(w.name)}</b>${locked ? `🔒 Level ${w.level}` : owned ? 'Owned' : ''}</span><span class="pr">${owned ? '✓' : fmtMoney(w.cost)}</span></button>`;
+      }
+      h += `<div class="section-title" style="margin:4px">Lighting</div>`;
+      for (const l of LIGHTS) {
+        const owned = (M.ownedLights || []).includes(l.id), locked = lvl < l.level;
+        const sw = l.color === 'rainbow' ? 'linear-gradient(90deg,#f43f5e,#facc15,#22c55e,#3b82f6,#a855f7)' : l.color;
+        h += `<button class="bi ${M.lighting === l.id ? 'sel' : ''} ${locked ? 'locked' : ''}" data-act="light" data-v="${l.id}"><span class="ic"><div class="swatch" style="background:${sw};width:30px"></div></span><span class="tx"><b>${l.icon} ${esc(l.name)}</b>${locked ? `🔒 Level ${l.level}` : owned ? 'Owned' : ''}${l.appeal ? ` · ✨+${l.appeal}` : ''}</span><span class="pr">${owned ? '✓' : fmtMoney(l.cost)}</span></button>`;
       }
     } else if (this.tab === 'expand') {
       const cur = EXPANSIONS[M.expansion || 0], next = EXPANSIONS[(M.expansion || 0) + 1];

@@ -182,6 +182,14 @@ export const WALLS = [
   { id: 'navy',   name: 'Royal Navy',  color: '#1e3a8a', cost: 600, level: 6 },
 ];
 
+export const LIGHTS = [
+  { id: 'standard', name: 'Standard Lighting', color: '#fff1d0', cost: 0,    level: 1, appeal: 0, icon: '💡' },
+  { id: 'warm',     name: 'Cozy Warm',         color: '#ffcf8a', cost: 400,  level: 2, appeal: 2, icon: '🕯️' },
+  { id: 'cool',     name: 'Crisp Daylight',    color: '#d6ecff', cost: 400,  level: 2, appeal: 2, icon: '❄️' },
+  { id: 'gallery',  name: 'Gallery Spotlights',color: '#ffffff', cost: 1500, level: 5, appeal: 5, icon: '✨' },
+  { id: 'disco',    name: 'Party Disco',       color: 'rainbow', cost: 2500, level: 7, appeal: 6, icon: '🪩' },
+];
+
 // Team-wide upgrades bought from the "Upgrades" tab.
 export const TEAM_UPGRADES = [
   { id: 'handtruck',   name: 'Hand Trucks',        icon: '🛞', cost: 600,  level: 2, desc: 'Every player can carry 3 boxes at once.' },

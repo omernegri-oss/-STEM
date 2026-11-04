@@ -93,6 +93,10 @@ otherwise. Builds for Windows, macOS and Linux come from `npm run dist:win|dist:
 the browser and stores are saved in the browser. All paths are relative, so you can host `dist/` on any static web host
 or in a subfolder. `dist/artifact.html` is the same page without the document wrapper, for hosts that add their own.
 
+## Download
+
+The newest build is on the Releases page: Windows, Mac and Linux / Steam Deck.
+
 ## Tests
 
 ```bash

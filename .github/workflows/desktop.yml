@@ -1,6 +1,6 @@
 # Builds the Steam (desktop) version for Windows, macOS and Linux, and can upload it to Steam.
 # Run it from GitHub: Actions > "Desktop builds (Steam)" > Run workflow.
-# Downloads: each run's page lists Supermarket-windows / -mac / -linux under "Artifacts".
+# Downloads: the Releases page (latest build), or each run's page under "Artifacts".
 name: Desktop builds (Steam)
 
 on:
@@ -63,11 +63,40 @@ jobs:
         run: cd release/mac && zip -qry ../../Supermarket-mac.zip Supermarket.app
       - if: matrix.name == 'linux'
         run: tar -C release/linux-unpacked -czf Supermarket-linux.tar.gz .
+      - if: matrix.name == 'windows'
+        shell: bash
+        run: cd release/win-unpacked && 7z a -tzip -bso0 ../../Supermarket-windows.zip .
       - uses: actions/upload-artifact@v4
         with:
           name: Supermarket-${{ matrix.name }}
-          path: ${{ matrix.name == 'mac' && 'Supermarket-mac.zip' || matrix.name == 'linux' && 'Supermarket-linux.tar.gz' || matrix.out }}
+          path: ${{ matrix.name == 'mac' && 'Supermarket-mac.zip' || matrix.name == 'linux' && 'Supermarket-linux.tar.gz' || 'Supermarket-windows.zip' }}
           if-no-files-found: error
+
+  # Publishes the three downloads on the repository's Releases page. Fixed addresses for the newest version:
+  #   https://github.com/<owner>/<repo>/releases/latest/download/Supermarket-windows.zip   (and -mac.zip, -linux.tar.gz)
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: builds, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Supermarket build ${{ github.run_number }}
+          make_latest: true
+          body: |
+            Download the version for your computer:
+            - **Windows**: Supermarket-windows.zip. Extract it and run Supermarket.exe (Windows may warn about an unknown app: More info, Run anyway).
+            - **Mac**: Supermarket-mac.zip. Open it, right-click Supermarket.app and choose Open the first time (Intel app, runs on Apple Silicon with Rosetta).
+            - **Linux / Steam Deck**: Supermarket-linux.tar.gz. Extract it and run ./supermarket.
+            Play with friends through Steam invites (Steam must be running), or solo without Steam.
+          files: |
+            builds/Supermarket-windows.zip
+            builds/Supermarket-mac.zip
+            builds/Supermarket-linux.tar.gz
 
   steam:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_to_steam }}
@@ -79,7 +108,8 @@ jobs:
       - name: Unpack the macOS and Linux archives
         run: |
           cd builds
-          mkdir mac linux
+          mkdir mac linux windows
+          unzip -q Supermarket-windows/Supermarket-windows.zip -d windows
           unzip -q Supermarket-mac/Supermarket-mac.zip -d mac
           tar -xzf Supermarket-linux/Supermarket-linux.tar.gz -C linux
       - uses: game-ci/steam-deploy@v3
@@ -89,7 +119,7 @@ jobs:
           appId: ${{ secrets.STEAM_APP_ID }}
           buildDescription: ${{ github.sha }}
           rootPath: builds
-          depot1Path: Supermarket-windows
+          depot1Path: windows
           depot2Path: mac
           depot3Path: linux
           releaseBranch: ${{ inputs.steam_branch }}

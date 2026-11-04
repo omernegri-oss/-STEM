@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap } from '/shared/data.js';
 import { Grid, center, dims } from '/shared/grid.js';
-import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, productMaterial, makeBox, makeFBox, beltTexture } from './models.js';
+import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
 import { tileTexture } from './scene.js';
 
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(1, 1, 1), tmpC = new THREE.Color();
@@ -205,7 +205,7 @@ export class World {
       let e = this.furn.get(f.id);
       const key = `${f.type}|${f.upg}|${f.floor || 0}`;
       if (!e || e.key !== key) {
-        if (e) e.group.removeFromParent();
+        if (e) { e.group.removeFromParent(); disposeOwned(e.group); }
         const group = makeFurniture(f.type, f);
         if (f.upg) { const s = makeLabel('⭐', 0.18, { bg: null }, 0.3); s.position.set(FURNITURE[f.type].w / 2 - 0.15, 0.3, 0.47); group.add(s); }
         group.traverse(o => { o.userData.fid = f.id; });
@@ -234,7 +234,7 @@ export class World {
       e.broken = f.broken;
       this.priceTags(e, f, w);
     }
-    for (const [id, e] of this.furn) if (!seen.has(id)) { e.group.removeFromParent(); this.furn.delete(id); }
+    for (const [id, e] of this.furn) if (!seen.has(id)) { e.group.removeFromParent(); disposeOwned(e.group); this.furn.delete(id); }
   }
 
   // small shelf-edge tags with the product name and price under each section
@@ -242,7 +242,7 @@ export class World {
     if (!f.slots) return;
     const key = f.slots.map(s => s.pid ? `${s.pid}:${w.prices[s.pid]}` : '-').join(',') + (w.saleActive ? 's' : '');
     if (key === e.tagKey) return;
-    e.tagKey = key; e.tags.clear();
+    e.tagKey = key; disposeOwned(e.tags); e.tags.clear();
     const layout = slotLayout(f.type);
     f.slots.forEach((sl, i) => {
       const L = layout[i]; if (!L || !sl.pid) return;
@@ -329,7 +329,7 @@ export class World {
       let m = this.boxMeshes.get(b.key);
       const look = (b.ftype || b.pid) + (b.expired ? 'x' : '');
       if (!m || m.userData.look !== look || m.userData.floor !== b.floor) {
-        if (m) m.removeFromParent();
+        if (m) { m.removeFromParent(); disposeOwned(m); }
         m = b.ftype ? makeFBox(b.ftype) : makeBox(b.pid);
         if (b.expired) m.children[0].material = mat(0x7c8a5a);
         m.userData.look = look; m.userData.floor = b.floor;
@@ -337,7 +337,7 @@ export class World {
       }
       m.position.set(b.x, b.y, b.z); m.rotation.y = b.rot; m.scale.setScalar(b.scale || 1);
     }
-    for (const [k, m] of this.boxMeshes) if (!seen.has(k)) { m.removeFromParent(); this.boxMeshes.delete(k); }
+    for (const [k, m] of this.boxMeshes) if (!seen.has(k)) { m.removeFromParent(); disposeOwned(m); this.boxMeshes.delete(k); }
   }
 
   syncDirt(w) {

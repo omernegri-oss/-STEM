@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { PRODUCT_MAP, ROLES, PLAYER_ROLES } from '/shared/data.js';
 import { heightAt } from '/shared/grid.js';
-import { makeCharacter, animateCharacter, lookFromSeed, makeSprite, setSpriteText, makeBasket, makeCart, makeBox, makeFBox, makeHandTruck, makePigeon, UNIT_GEOS, mat, B, C, productMaterial, S as Sph } from './models.js';
+import { disposeOwned, makeCharacter, animateCharacter, lookFromSeed, makeSprite, setSpriteText, makeBasket, makeCart, makeBox, makeFBox, makeHandTruck, makePigeon, UNIT_GEOS, mat, B, C, productMaterial, S as Sph } from './models.js';
 
 // visual for one carried item code: 'milk' | 'f:shelf' | 'raw:ribeye' | 'pack:ribeye'
 export function carryModel(code) {
@@ -39,8 +39,8 @@ export class Actors {
     this.info = new Map(list.map(p => [p.id, p]));
     for (const [id, e] of this.players) {
       const inf = this.info.get(id);
-      if (!inf) { this.root.remove(e.obj); this.players.delete(id); continue; }
-      if (e.color !== inf.color) { this.root.remove(e.obj); this.players.delete(id); }
+      if (!inf) { this.root.remove(e.obj); disposeOwned(e.obj); this.players.delete(id); continue; }
+      if (e.color !== inf.color) { this.root.remove(e.obj); disposeOwned(e.obj); this.players.delete(id); }
       else this.updateTag(e, inf);
     }
   }
@@ -58,7 +58,7 @@ export class Actors {
     const tag = makeSprite(inf.name, 0.3, { bg: inf.color, color: '#fff', size: 40 }); tag.position.y = 1.9; obj.add(tag);
     const emote = makeSprite(' ', 0.5, { bg: null }); emote.position.y = 2.5; emote.visible = false; obj.add(emote);
     // ring marker under players
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7 }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7 })); ring.userData.owned = ring.userData.ownGeo = true;
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; obj.add(ring);
     const carry = new THREE.Group(); obj.add(carry);
     const stars = makeStars(); stars.position.y = 1.72; obj.add(stars);
@@ -114,7 +114,7 @@ export class Actors {
       this.setPlayerCarry(e, carry);
       if (emote) { setSpriteText(e.emote, emote, 0.6, { bg: null, size: 64 }); e.emote.visible = true; } else e.emote.visible = false;
     }
-    for (const [id, e] of this.players) if (!seenP.has(id)) { this.root.remove(e.obj); this.players.delete(id); }
+    for (const [id, e] of this.players) if (!seenP.has(id)) { this.root.remove(e.obj); disposeOwned(e.obj); this.players.delete(id); }
     // customers
     const seenC = new Set();
     for (const [id, x, z, rot, moving, thought, basket, seed, flags, floor] of s.C) {
@@ -143,7 +143,7 @@ export class Actors {
         });
       }
     }
-    for (const [id, e] of this.customers) if (!seenC.has(id)) { this.root.remove(e.obj); this.customers.delete(id); }
+    for (const [id, e] of this.customers) if (!seenC.has(id)) { this.root.remove(e.obj); disposeOwned(e.obj); this.customers.delete(id); }
     // staff
     const seenS = new Set();
     for (const [id, x, z, rot, moving, role, carryPid, seed, thought, state, floor, stun] of s.S) {
@@ -159,7 +159,7 @@ export class Actors {
       }
       if (thought) { setSpriteText(e.bubble, thought, 0.36, { bg: '#ffffff', border: '#cbd5e1' }); e.bubble.visible = true; } else e.bubble.visible = false;
     }
-    for (const [id, e] of this.staff) if (!seenS.has(id)) { this.root.remove(e.obj); this.staff.delete(id); }
+    for (const [id, e] of this.staff) if (!seenS.has(id)) { this.root.remove(e.obj); disposeOwned(e.obj); this.staff.delete(id); }
     // pigeons
     const seenG = new Set();
     for (const [id, x, z] of s.G || []) {

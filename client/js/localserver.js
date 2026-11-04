@@ -27,6 +27,8 @@ export class LocalNet {
     }, 1000 / TICK_RATE);
     setInterval(() => { if (this.room && this.room.started && this.room.game.s.phase === 'prep') this.room.save(); }, 30000);
     addEventListener('beforeunload', () => this.room && this.room.save());
+    addEventListener('pagehide', () => this.room && this.room.save());
+    document.addEventListener('visibilitychange', () => { if (document.hidden && this.room && this.room.started) this.room.save(); });
     return Promise.resolve();
   }
   on(t, fn) { (this.handlers[t] ||= []).push(fn); }

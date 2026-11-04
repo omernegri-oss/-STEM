@@ -10,7 +10,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 export function createScene(canvas, { low = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -63,7 +63,7 @@ export function createScene(canvas, { low = false } = {}) {
   };
   if (!low) { try { makeComposer(); } catch (e) { console.warn('post-processing unavailable', e); composer = null; } }
   if (!low) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  sun.shadow.mapSize.set(low ? 1024 : 4096, low ? 1024 : 4096);
+  sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
   function render() { if (composer) composer.render(); else renderer.render(scene, camera); }
   window.addEventListener('resize', resize); resize();
 
@@ -186,7 +186,7 @@ export function createScene(canvas, { low = false } = {}) {
 
   function setQuality(lowQ) {
     renderer.shadowMap.enabled = !lowQ;
-    renderer.setPixelRatio(lowQ ? 1 : Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(lowQ ? 1 : Math.min(window.devicePixelRatio, 1.5));
     scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
     if (lowQ) composer = null; else if (!composer) { try { makeComposer(); } catch { composer = null; } }
     resize();

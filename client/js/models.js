@@ -27,6 +27,8 @@ function cylGeo(rt, rb, h, seg = 12) {
   if (!g) { g = new THREE.CylinderGeometry(rt, rb, h, seg); geoCache.set(k, g); }
   return g;
 }
+// any other shared geometry, built once per key
+export function cachedGeo(key, make) { let g = geoCache.get(key); if (!g) { g = make(); geoCache.set(key, g); } return g; }
 function sphGeo(r, w = 12, h = 10) {
   const k = `s${r},${w},${h}`; let g = geoCache.get(k);
   if (!g) { g = new THREE.SphereGeometry(r, w, h); geoCache.set(k, g); }
@@ -51,11 +53,20 @@ export function S(parent, r, color, x = 0, y = 0, z = 0, opts = {}) {
 export const UNIT_GEOS = PRODUCT_GEOS;
 export function slotLayout(type) { return slotRegions(type); }
 
+// free the per-object GPU resources of a removed object (only things marked as owned; caches stay)
+export function disposeOwned(obj) {
+  obj.traverse(o => {
+    if (!o.userData.owned) return;
+    if (o.material) o.material.dispose();
+    if (o.userData.ownGeo && o.geometry) o.geometry.dispose();
+  });
+}
+
 // ------------------------------------------------------------------ text sprites
 const spriteTexCache = new Map();
 export function textTexture(text, { size = 48, color = '#1e293b', bg = 'rgba(255,255,255,0.95)', pad = 14, radius = 18, bold = true, border = null, font = 'Nunito' } = {}) {
   const key = [text, size, color, bg, border].join('|');
-  if (spriteTexCache.has(key)) return spriteTexCache.get(key);
+  if (spriteTexCache.has(key)) { const hit = spriteTexCache.get(key); spriteTexCache.delete(key); spriteTexCache.set(key, hit); return hit; }
   const c = document.createElement('canvas'); const g = c.getContext('2d');
   const f = `${bold ? '800' : '600'} ${size}px ${font}, "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
   g.font = f; const w = Math.ceil(g.measureText(text).width) + pad * 2; const h = size + pad * 1.3;
@@ -65,21 +76,24 @@ export function textTexture(text, { size = 48, color = '#1e293b', bg = 'rgba(255
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   const res = { tex: t, aspect: w / h };
   spriteTexCache.set(key, res);
+  // keep the cache bounded (floating "+$4.35" texts are almost all unique): free the least recently used.
+  // A sprite still showing an evicted texture just re-uploads it on its next frame.
+  if (spriteTexCache.size > 400) { const [k0, old] = spriteTexCache.entries().next().value; spriteTexCache.delete(k0); old.tex.dispose(); }
   return res;
 }
 function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 export function makeSprite(text, height = 0.4, opts = {}) {
   const { tex, aspect } = textTexture(text, opts);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: opts.depthTest ?? true, transparent: true }));
-  s.scale.set(height * aspect, height, 1); s.renderOrder = 10;
+  s.scale.set(height * aspect, height, 1); s.renderOrder = 10; s.userData.owned = true;
   return s;
 }
 export function makeLabel(text, height = 0.2, opts = {}, maxW = 10) {
   const { tex, aspect } = textTexture(text, opts);
   let w = height * aspect, h = height;
   if (w > maxW) { h *= maxW / w; w = maxW; }
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
-  m.renderOrder = 2;
+  const m = new THREE.Mesh(cachedGeo('plane1', () => new THREE.PlaneGeometry(1, 1)), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+  m.scale.set(w, h, 1); m.userData.owned = true; m.renderOrder = 2;
   return m;
 }
 export function setSpriteText(s, text, height = 0.4, opts = {}) {
@@ -533,11 +547,35 @@ function torsoGeometry() {
 function part(parent, geo, material, x, y, z) { const m = new THREE.Mesh(geo, material); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; }
 
 // A realistically proportioned person (~1.75 m) with hips, knees, shoulders and elbows that animate.
+// a geometry copy moved/rotated/scaled into place, for merging
+function placed(geo, [x, y, z], [sx, sy, sz] = [1, 1, 1], rx = 0) {
+  const o = new THREE.Object3D(); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.rotation.x = rx; o.updateMatrix();
+  const g = geo.clone().applyMatrix4(o.matrix);
+  for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+  return g;
+}
+let faceCache = null;
+function faceGeos() {
+  if (faceCache) return faceCache;
+  const pair = (fn) => [fn(-1), fn(1)];
+  faceCache = {
+    skin: mergeGeometries([
+      placed(sphGeo(0.5, 18, 14), [0, 0, 0], [0.2, 0.235, 0.215]),
+      placed(sphGeo(0.5, 12, 8), [0, -0.065, 0.03], [0.17, 0.13, 0.16]), // round cheeks & jaw
+      ...pair(sd => placed(sphGeo(0.025, 8, 6), [sd * 0.095, 0, -0.005], [0.6, 1.1, 1])), // ears
+      placed(new THREE.ConeGeometry(0.016, 0.045, 8), [0, -0.005, 0.105], [1, 1, 1], Math.PI / 2 - 0.25), // nose
+    ]),
+    whites: mergeGeometries(pair(sd => placed(sphGeo(0.016, 10, 8), [sd * 0.038, 0.02, 0.088]))),
+    pupils: mergeGeometries(pair(sd => placed(sphGeo(0.009, 8, 6), [sd * 0.038, 0.02, 0.101]))),
+    brows: mergeGeometries(pair(sd => placed(new THREE.BoxGeometry(0.035, 0.008, 0.01), [sd * 0.04, 0.047, 0.095]))),
+  };
+  return faceCache;
+}
 export function makeCharacter(look) {
   const g = new THREE.Group();
   const root = new THREE.Group(); g.add(root);
   root.scale.setScalar(look.scale || 1);
-  const W = look.width || 1;
+  const W = Math.round((look.width || 1) * 20) / 20;
   const skin = mat(look.skin, { rough: 0.6 }), shirt = mat(look.shirt, { rough: 0.85 }), pants = mat(look.pants, { rough: 0.9 }), shoe = mat(look.shoes ?? 0x111827, { rough: 0.5 });
   const sleeve = look.jacket ? mat(look.jacket, { rough: 0.8 }) : shirt;
   const P = {};
@@ -552,13 +590,13 @@ export function makeCharacter(look) {
   }
   const torso = new THREE.Group(); hips.add(torso); P.torso = torso;
   part(torso, sphGeo(0.5, 14, 8), pants, 0, 0.02, 0).scale.set(0.34 * W, 0.22, 0.25);
-  if (look.skirt) { const sk = part(torso, new THREE.CylinderGeometry(0.15 * W, 0.24 * W, 0.42, 16, 1, true), pants, 0, -0.17, 0); sk.material = mat(look.pants, { rough: 0.9, side: THREE.DoubleSide }); }
+  if (look.skirt) { const sk = part(torso, cachedGeo('skirt' + W, () => new THREE.CylinderGeometry(0.15 * W, 0.24 * W, 0.42, 16, 1, true)), pants, 0, -0.17, 0); sk.material = mat(look.pants, { rough: 0.9, side: THREE.DoubleSide }); }
   const body = part(torso, torsoGeometry(), look.jacket ? sleeve : shirt, 0, 0.0, 0); body.scale.set(W, 1, 0.9 + (W - 1) * 0.6);
   const belly = part(torso, sphGeo(0.5, 16, 12), look.jacket ? sleeve : shirt, 0, 0.2, 0.05); belly.scale.set(0.3 * W, 0.34, 0.2 + (look.belly || 0) * 0.12 + (W - 1) * 0.15);
   if (look.jacket) { B(torso, 0.06, 0.4, 0.01, look.shirt, 0, 0.27, 0.15 + (look.belly || 0) * 0.05, { shadow: false }); }
   if (look.apron) { const ap = B(torso, 0.32 * W, 0.6, 0.02, look.apron, 0, 0.12, 0.17 + (look.belly || 0) * 0.06, { shadow: false }); void ap; }
   if (look.badge) B(torso, 0.06, 0.035, 0.01, look.badge, 0.08, 0.4, 0.15, { emissive: look.badge, ei: 0.2, shadow: false });
-  part(torso, new THREE.CylinderGeometry(0.05, 0.058, 0.08, 10), skin, 0, 0.56, 0);
+  part(torso, cylGeo(0.05, 0.058, 0.08, 10), skin, 0, 0.56, 0);
   // arms
   for (const side of [-1, 1]) {
     const sh = new THREE.Group(); sh.position.set(side * 0.215 * W, 0.46, 0); torso.add(sh);
@@ -571,21 +609,19 @@ export function makeCharacter(look) {
   }
   // head
   const head = new THREE.Group(); head.position.y = 0.72; torso.add(head); P.head = head;
-  part(head, sphGeo(0.5, 18, 14), skin, 0, 0, 0).scale.set(0.2, 0.235, 0.215);
-  part(head, sphGeo(0.5, 12, 8), skin, 0, -0.065, 0.03).scale.set(0.17, 0.13, 0.16); // round cheeks & jaw
-  for (const sd of [-1, 1]) {
-    part(head, sphGeo(0.025, 8, 6), skin, sd * 0.095, 0.0, -0.005).scale.set(0.6, 1.1, 1);
-    part(head, sphGeo(0.016, 10, 8), mat(0xffffff, { rough: 0.2 }), sd * 0.038, 0.02, 0.088);
-    part(head, sphGeo(0.009, 8, 6), mat(0x3b2a1a, { rough: 0.1 }), sd * 0.038, 0.02, 0.101);
-    B(head, 0.035, 0.008, 0.01, look.hair, sd * 0.04, 0.047, 0.095, { shadow: false });
-  }
-  part(head, new THREE.ConeGeometry(0.016, 0.045, 8), skin, 0, -0.005, 0.105).rotation.x = Math.PI / 2 - 0.25;
+  // the face is the same shape for everyone: a few merged, shared meshes (skin, eye whites, pupils, brows)
+  const F = faceGeos();
+  part(head, F.skin, skin, 0, 0, 0);
+  part(head, F.whites, mat(0xffffff, { rough: 0.2 }), 0, 0, 0).castShadow = false;
+  part(head, F.pupils, mat(0x3b2a1a, { rough: 0.1 }), 0, 0, 0).castShadow = false;
+  part(head, F.brows, mat(look.hair, {}), 0, 0, 0).castShadow = false;
   const mouth = B(head, 0.04, 0.008, 0.008, look.female ? 0xbe123c : 0x9f4f4f, 0, -0.05, 0.096, { shadow: false }); P.mouth = mouth;
-  if (look.glasses) { for (const sd of [-1, 1]) { const rim = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.003, 6, 14), mat(0x111111)); rim.position.set(sd * 0.038, 0.02, 0.105); head.add(rim); } B(head, 0.03, 0.003, 0.003, 0x111111, 0, 0.022, 0.106, { shadow: false }); }
+  if (look.glasses) { for (const sd of [-1, 1]) { const rim = new THREE.Mesh(cachedGeo('rim', () => new THREE.TorusGeometry(0.02, 0.003, 6, 14)), mat(0x111111)); rim.position.set(sd * 0.038, 0.02, 0.105); head.add(rim); } B(head, 0.03, 0.003, 0.003, 0x111111, 0, 0.022, 0.106, { shadow: false }); }
   if (look.beard) { const bd = part(head, sphGeo(0.5, 12, 8, 0), mat(look.hair, { rough: 0.95 }), 0, -0.075, 0.045); bd.scale.set(0.15, 0.1, 0.13); }
   const hm = mat(look.hair, { rough: 0.9 });
   if (look.hairStyle !== 2) {
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 10, 0, Math.PI * 2, 0, Math.PI * (look.hairStyle === 5 ? 0.38 : 0.55)), hm);
+    const hk = look.hairStyle === 5 ? 0.38 : 0.55;
+    const hair = new THREE.Mesh(cachedGeo('hair' + hk, () => new THREE.SphereGeometry(0.5, 16, 10, 0, Math.PI * 2, 0, Math.PI * hk)), hm);
     hair.scale.set(0.205, 0.25, 0.225); hair.rotation.x = -0.35; hair.position.set(0, 0.025, -0.01); hair.castShadow = true; head.add(hair);
     if (look.hairStyle === 1) part(head, boxGeo(0.2, 0.26, 0.08), hm, 0, -0.1, -0.08);
     if (look.hairStyle === 3) part(head, sphGeo(0.05, 10, 8), hm, 0, 0.11, -0.09);
@@ -594,7 +630,7 @@ export function makeCharacter(look) {
   if (look.hat) { C(head, 0.112, 0.112, 0.07, look.hat, 0, 0.1, 0, { seg: 18 }); B(head, 0.12, 0.012, 0.09, look.hat, 0, 0.07, 0.12); }
   if (look.cap) { const c = C(head, 0.112, 0.112, 0.075, look.cap, 0, 0.1, -0.005, { seg: 18 }); void c; B(head, 0.13, 0.012, 0.11, look.cap, 0, 0.07, 0.13); }
   if (look.chef) { C(head, 0.1, 0.115, 0.14, 0xffffff, 0, 0.17, 0, { seg: 16 }); S(head, 0.12, 0xffffff, 0, 0.26, 0, { w: 12, h: 8 }); }
-  if (look.hairnet) { const n = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), mat(0xffffff, { opacity: 0.55 })); n.scale.set(0.215, 0.26, 0.235); n.position.y = 0.02; head.add(n); }
+  if (look.hairnet) { const n = new THREE.Mesh(cachedGeo('hairnet', () => new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5)), mat(0xffffff, { opacity: 0.55 })); n.scale.set(0.215, 0.26, 0.235); n.position.y = 0.02; head.add(n); }
   const hold = new THREE.Group(); hold.position.set(0, 0.98, 0.42); root.add(hold); P.hold = hold;
   const sideHold = new THREE.Group(); sideHold.position.set(0.3 * W, 0.4, 0.04); root.add(sideHold); P.side = sideHold;
   g.userData.parts = P;
@@ -640,13 +676,14 @@ export function makeFBox(type) {
   return g;
 }
 
+const boxLabelMats = new Map();
 export function makeBox(pid, color) {
   const g = new THREE.Group();
   B(g, 0.5, 0.36, 0.42, 0xc8a26b, 0, 0.18, 0);
   B(g, 0.08, 0.005, 0.43, 0xe7d3a8, 0, 0.362, 0, { shadow: false });
   const p = PRODUCT_MAP[pid];
-  const lm = p ? new THREE.MeshStandardMaterial({ map: productTexture(p), roughness: 0.6 }) : mat(color);
-  for (const [z, ry] of [[0.212, 0], [-0.212, Math.PI]]) { const l = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), lm); l.position.set(0, 0.19, z); l.rotation.y = ry; g.add(l); }
+  const lm = p ? (boxLabelMats.get(pid) || boxLabelMats.set(pid, new THREE.MeshStandardMaterial({ map: productTexture(p), roughness: 0.6 })).get(pid)) : mat(color);
+  for (const [z, ry] of [[0.212, 0], [-0.212, Math.PI]]) { const l = new THREE.Mesh(cachedGeo('boxlabel', () => new THREE.PlaneGeometry(0.26, 0.26)), lm); l.position.set(0, 0.19, z); l.rotation.y = ry; g.add(l); }
   return g;
 }
 let latticeTex = null;
@@ -659,24 +696,25 @@ function latticeMap() {
   }
   return latticeTex;
 }
+const latticeMats = new Map();
 export function makeBasket(color = 0xdc2626) {
   // plastic shopping basket with slotted sides and two handles
   const g = new THREE.Group();
-  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.5, alphaMap: latticeMap(), alphaTest: 0.5, side: THREE.DoubleSide });
+  const m = latticeMats.get(color) || latticeMats.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.5, alphaMap: latticeMap(), alphaTest: 0.5, side: THREE.DoubleSide })).get(color);
   const W = 0.4, H = 0.2, D = 0.28;
   B(g, W * 0.9, 0.01, D * 0.9, color, 0, 0.005, 0, { material: mat(color, { rough: 0.5 }) });
-  for (const [w, d, x, z] of [[W, 0.005, 0, D / 2], [W, 0.005, 0, -D / 2], [0.005, D, W / 2, 0], [0.005, D, -W / 2, 0]]) { const p = new THREE.Mesh(new THREE.BoxGeometry(w, H, d), m); p.position.set(x, H / 2, z); g.add(p); }
+  for (const [w, d, x, z] of [[W, 0.005, 0, D / 2], [W, 0.005, 0, -D / 2], [0.005, D, W / 2, 0], [0.005, D, -W / 2, 0]]) { const p = new THREE.Mesh(boxGeo(w, H, d), m); p.position.set(x, H / 2, z); g.add(p); }
   B(g, W + 0.01, 0.02, D + 0.01, color, 0, H, 0, { material: mat(color, { rough: 0.5 }), shadow: false });
-  for (const sd of [-1, 1]) { const h = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.008, 6, 14, Math.PI), mat(0x111827)); h.position.set(0, H, sd * 0.05); g.add(h); }
+  for (const sd of [-1, 1]) { const h = new THREE.Mesh(cachedGeo('handle', () => new THREE.TorusGeometry(0.13, 0.008, 6, 14, Math.PI)), mat(0x111827)); h.position.set(0, H, sd * 0.05); g.add(h); }
   return g;
 }
 export function makeCart() {
   // wire shopping trolley: mesh basket, tubular frame, red handle, casters, child seat
   const g = new THREE.Group();
-  const wire = new THREE.MeshStandardMaterial({ color: 0xc0c7d0, metalness: 0.85, roughness: 0.3, alphaMap: latticeMap(), alphaTest: 0.5, side: THREE.DoubleSide });
+  const wire = latticeMats.get('wire') || latticeMats.set('wire', new THREE.MeshStandardMaterial({ color: 0xc0c7d0, metalness: 0.85, roughness: 0.3, alphaMap: latticeMap(), alphaTest: 0.5, side: THREE.DoubleSide })).get('wire');
   const tube = mat(0xb6bec8, { metal: 0.9, rough: 0.25 });
   const W = 0.52, L = 0.8, H = 0.42, y0 = 0.5;
-  for (const [w, h, d, x, y, z] of [[W, H, 0.005, 0, y0 + H / 2, L / 2], [W * 0.85, H, 0.005, 0, y0 + H / 2, -L / 2], [0.005, H, L, W / 2, y0 + H / 2, 0], [0.005, H, L, -W / 2, y0 + H / 2, 0], [W, 0.005, L, 0, y0, 0]]) { const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wire); p.position.set(x, y, z); g.add(p); }
+  for (const [w, h, d, x, y, z] of [[W, H, 0.005, 0, y0 + H / 2, L / 2], [W * 0.85, H, 0.005, 0, y0 + H / 2, -L / 2], [0.005, H, L, W / 2, y0 + H / 2, 0], [0.005, H, L, -W / 2, y0 + H / 2, 0], [W, 0.005, L, 0, y0, 0]]) { const p = new THREE.Mesh(boxGeo(w, h, d), wire); p.position.set(x, y, z); g.add(p); }
   for (const x of [-W / 2, W / 2]) { const r = C(g, 0.01, 0.01, L, 0, x, y0 + H, 0, { material: tube }); r.rotation.x = Math.PI / 2; const b = C(g, 0.012, 0.012, L, 0, x * 0.8, 0.12, -0.02, { material: tube }); b.rotation.x = Math.PI / 2; C(g, 0.012, 0.012, y0, 0, x, y0 / 2 + 0.06, -L / 2, { material: tube }); }
   const handle = C(g, 0.018, 0.018, W + 0.04, 0xdc2626, 0, y0 + H + 0.12, -L / 2 - 0.08, { material: mat(0xdc2626, { rough: 0.4 }) }); handle.rotation.z = Math.PI / 2;
   for (const x of [-W / 2, W / 2]) { const a = C(g, 0.01, 0.01, 0.2, 0, x, y0 + H + 0.05, -L / 2 - 0.04, { material: tube }); a.rotation.x = -0.6; }

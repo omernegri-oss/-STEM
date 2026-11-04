@@ -1,6 +1,6 @@
 // Transient visual effects: floating money text, sparkles, confetti, pings, delivery trucks.
 import * as THREE from 'three';
-import { makeSprite, makeTruck, mat, UNIT_GEOS } from './models.js';
+import { makeSprite, makeTruck, mat, UNIT_GEOS, disposeOwned } from './models.js';
 import { SUPPLIER_MAP } from '/shared/data.js';
 
 const SUP_COLORS = { pantry: 0xf59e0b, dairy: 0x38bdf8, green: 0x16a34a, polar: 0x6366f1, prime: 0xdc2626, bella: 0x15803d, express: 0xec4899, mega: 0x475569 };
@@ -40,7 +40,7 @@ export class FX {
   ping(x, z, color, name) {
     const g = new THREE.Group();
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, side: THREE.DoubleSide }));
-    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; g.add(ring);
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; ring.userData.owned = ring.userData.ownGeo = true; g.add(ring);
     const pin = makeSprite('📍 ' + name, 0.35, { bg: color, color: '#fff', size: 40 }); pin.position.y = 1.4; pin.material.depthTest = false; g.add(pin);
     g.position.set(x, 0, z); this.scene.add(g);
     this.items.push({ obj: g, ring, t: 0, life: 4, kind: 'ping' });
@@ -67,7 +67,7 @@ export class FX {
         it.obj.position.lerpVectors(it.from, it.to, k2); it.obj.position.y += Math.sin(k2 * Math.PI) * 0.6; it.obj.rotation.y = k2 * 6;
       } else if (it.kind === 'ping') { const s = 1 + (it.t * 2 % 1) * 1.5; it.ring.scale.set(s, s, s); it.ring.material.opacity = 1 - (it.t * 2 % 1); }
     }
-    this.items = this.items.filter(it => { if (it.t >= it.life) { this.scene.remove(it.obj); return false; } return true; });
+    this.items = this.items.filter(it => { if (it.t >= it.life) { this.scene.remove(it.obj); disposeOwned(it.obj); return false; } return true; });
     for (const tr of this.trucks) {
       tr.t += dt;
       // drive in (2.5s), wait (2s), drive out (3s)
@@ -78,6 +78,6 @@ export class FX {
       tr.obj.position.x = x;
       tr.obj.position.y = tr.t > 2.5 && tr.t < 4.5 ? 0 : Math.abs(Math.sin(tr.t * 20)) * 0.02;
     }
-    this.trucks = this.trucks.filter(tr => { if (tr.t > 8) { this.scene.remove(tr.obj); return false; } return true; });
+    this.trucks = this.trucks.filter(tr => { if (tr.t > 8) { this.scene.remove(tr.obj); disposeOwned(tr.obj); return false; } return true; });
   }
 }

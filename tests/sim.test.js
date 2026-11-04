@@ -98,8 +98,11 @@ act({ a: 'door', id: fridge.id }); assert.equal(fridge.open, false);
 p.carry = [{ ftype: 'butcher' }]; at(8, 3);
 assert.ok(act({ a: 'place', x: 7, z: 1, rot: 0 }) || act({ a: 'place', x: 2, z: 4, rot: 0 }), 'place butcher ' + lastErr());
 const butcher = g.s.furniture.find(f => f.type === 'butcher');
-butcher.slots[0] = { pid: 'ribeye', qty: 6, exp: 99, expired: false };
-act({ a: 'open' });
+g.s.minute = 9 * 60; const saveEvent = g.triggerEvent; g.triggerEvent = () => {}; // no random fridge breakdowns mid-test
+butcher.slots[0] = { pid: 'ribeye', qty: 6, exp: g.s.day + 5, expired: false };
+// only the test customers in the store, so random shoppers can't use up the meat or take the counter
+const saveSpawn = g.updateSpawning; g.updateSpawning = () => {};
+act({ a: 'open' }); g.customers.length = 0;
 const bc = spawnCustomer(g); bc.list = []; bc.counterReq = { pid: 'ribeye', qty: 2, cat: 'meat' };
 const sp = butcher._spots;
 for (let i = 0; i < 20 * 40 && !g.customerAtCounter(butcher); i++) g.tick(0.05);
@@ -117,15 +120,20 @@ p.x = 1; p.z = 8;
 g.s.candidates.push({ id: g.id(), name: 'Bob Butcher', role: 'butcher', skill: 4, speed: 1.2, salary: 90, seed: 2 });
 assert.ok(act({ a: 'hire', id: g.s.candidates.at(-1).id }) || (atComputer(), act({ a: 'hire', id: g.s.candidates.at(-1).id })));
 p.x = 1; p.z = 8;
+g.customers.length = 0; g.s.minute = 10 * 60; butcher.broken = false; butcher.warm = 0; butcher.open = false; // mid-morning, so closing time can't cut the test short
+butcher.slots[0] = { pid: 'ribeye', qty: 6, exp: g.s.day + 5, expired: false };
 const bc2 = spawnCustomer(g); bc2.list = []; bc2.counterReq = { pid: 'ribeye', qty: 1, cat: 'meat' };
 const stages = new Set();
-for (let i = 0; i < 20 * 90 && g.s.stats.butcher < 2; i++) { g.tick(0.05); const st = g.s.staff[0]; if (st.task) stages.add(st.task.stage); }
+for (let i = 0; i < 20 * 180 && g.s.stats.butcher < 2; i++) { g.tick(0.05); const st = g.s.staff[0]; if (st.task) stages.add(st.task.stage); }
 console.log('butcher stages', [...stages].join(' → '));
+if (g.s.stats.butcher < 2) console.log('debug', JSON.stringify({ staff: g.s.staff.map(st => ({ role: st.role, present: st.present, x: st.x, z: st.z, task: st.task })), c: g.customers.map(c => ({ state: c.state, x: c.x, z: c.z, req: c.counterReq })), slot: butcher.slots[0], minute: g.s.minute, phase: g.s.phase }));
 assert.equal(g.s.stats.butcher, 2, 'butcher employee served the customer');
 assert.ok(stages.has('cutting') && stages.has('taking'));
 
 // --- punching
-const victim = spawnCustomer(g); victim.state = 'shop'; victim.x = 6; victim.z = 6; victim.floor = 0; victim.basket = [{ pid: 'flour', price: 2, src: shelf.id }];
+g.customers.length = 0; for (const st of g.s.staff) { st.x = 1; st.z = 1; } // nobody else within reach
+const victim = spawnCustomer(g);
+g.updateSpawning = saveSpawn; g.triggerEvent = saveEvent; victim.state = 'shop'; victim.x = 6; victim.z = 6; victim.floor = 0; victim.basket = [{ pid: 'flour', price: 2, src: shelf.id }];
 at(6, 5, 0); // facing +z towards the customer
 assert.ok(act({ a: 'punch' }));
 assert.equal(victim.state, 'leaving', 'punched customer leaves'); assert.equal(victim.basket.length, 0, 'and buys nothing');

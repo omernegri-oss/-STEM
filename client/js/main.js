@@ -26,7 +26,10 @@ if (!prefs.name) prefs.name = ['Alex', 'Sam', 'Robin', 'Jules', 'Kai', 'Noa', 'C
 // ----------------------------------------------------------------------------------- 3D setup
 const canvas = $('game'); canvas.tabIndex = 0;
 let lowGfx = /[?&]low/.test(location.search);
-try { if (localStorage.getItem('st_gfx') === 'low') lowGfx = true; } catch {}
+let gfxChoice = null; try { gfxChoice = localStorage.getItem('st_gfx'); } catch {}
+if (gfxChoice === 'low') lowGfx = true;
+// phones, tablets and low-memory computers start in low graphics unless the player picked high themselves
+if (!gfxChoice && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory && navigator.deviceMemory <= 4))) lowGfx = true;
 const S = createScene(canvas, { low: lowGfx });
 const world = new World(S.scene);
 const actors = new Actors(S.scene);
@@ -66,8 +69,33 @@ world.set({ name: 'Supermarket', w: 12, d: 9, doorX: 5, floor: 'checker', wall: 
 
 const ui = new UI({ G, net, onPanel: (p) => togglePanel(p) });
 const gfxBtn = $('h-gfx');
+// if the graphics card runs out of memory the browser drops the 3D context: save, then reload in low graphics
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  try { localStorage.setItem('st_gfx', 'low'); } catch {}
+  try { net.room && net.room.save(); } catch {}
+  const box = document.createElement('div'); box.id = 'gfx-lost';
+  box.textContent = 'The graphics card ran out of memory. Your store is saved. Reloading in low graphics…';
+  Object.assign(box.style, { position: 'fixed', inset: '0', display: 'grid', placeItems: 'center', background: 'rgba(15,23,42,.85)', color: '#fff', font: '600 18px Nunito, system-ui, sans-serif', zIndex: 999, textAlign: 'center', padding: '24px' });
+  document.body.appendChild(box);
+  setTimeout(() => location.reload(), 1800);
+});
+// auto-switch to low graphics if high graphics runs too slowly on this device
+let perfT = 0, perfN = 0, slowWindows = 0;
+function watchPerf(dt) {
+  if (lowGfx || gfxChoice === 'high') return;
+  perfT += dt; perfN++;
+  if (perfT < 4) return;
+  const fps = perfN / perfT; perfT = 0; perfN = 0;
+  slowWindows = fps < 24 ? slowWindows + 1 : 0;
+  if (slowWindows >= 2) {
+    lowGfx = true; S.setQuality(true); syncGfx();
+    try { localStorage.setItem('st_gfx', 'low'); } catch {}
+    ui.system('🔅 Switched to low graphics so the game runs smoothly (🔆 button to switch back).');
+  }
+}
 const syncGfx = () => { gfxBtn.textContent = lowGfx ? '🔅' : '🔆'; gfxBtn.title = `Graphics: ${lowGfx ? 'Low' : 'High'} (click to toggle)`; };
-gfxBtn.onclick = () => { lowGfx = !lowGfx; try { localStorage.setItem('st_gfx', lowGfx ? 'low' : 'high'); } catch {} S.setQuality(lowGfx); syncGfx(); };
+gfxBtn.onclick = () => { lowGfx = !lowGfx; gfxChoice = lowGfx ? 'low' : 'high'; try { localStorage.setItem('st_gfx', lowGfx ? 'low' : 'high'); } catch {} S.setQuality(lowGfx); syncGfx(); };
 syncGfx();
 const toggleHelp = (on) => $('help').classList.toggle('hidden', on === undefined ? undefined : !on);
 $('h-help').onclick = () => toggleHelp();
@@ -157,7 +185,7 @@ net.on('w', (m) => {
   if (!G.started) { G.started = true; enterGame(); }
 });
 net.on('m', (m) => {
-  const prev = G.meta; G.meta = m.meta; ui.markDirty();
+  const prev = G.meta; G.meta = m.meta; ui.markDirty(); maybeFirstHelp();
   if (build.active && (!prev || prev.cash !== m.meta.cash || prev.level !== m.meta.level)) build.render();
   ui.updateHud();
 });
@@ -209,6 +237,13 @@ function enterGame() {
   showScreen('hud');
   ui.updateHud(); ui.renderSide();
   canvas.focus();
+  helpPending = true; maybeFirstHelp();
+}
+// first-time help opens once the store has a name (never on top of the naming screen)
+let helpPending = false;
+function maybeFirstHelp() {
+  if (!helpPending || !G.meta || G.meta.phase === 'naming') return;
+  helpPending = false;
   try { if (!localStorage.getItem('st_seen_help')) { toggleHelp(true); localStorage.setItem('st_seen_help', '1'); } } catch {}
 }
 
@@ -244,8 +279,10 @@ let last = performance.now(), sendT = 0, holdT = 0, tasksT = 0, lastInter = null
 let currentInter = null;
 function frame(now) {
   window.__frames = (window.__frames || 0) + 1;
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const rawDt = (now - last) / 1000;
+  const dt = Math.min(0.05, rawDt); last = now;
   const inGame = G.started && G.world && !$('hud').classList.contains('hidden');
+  if (inGame && !document.hidden && rawDt < 1) watchPerf(rawDt);
   if (inGame) {
     if (!build.active) {
       const blockMove = G.meta?.phase === 'naming';

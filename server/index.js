@@ -61,53 +61,62 @@ function lobbyList() {
   };
 }
 
-export function startServer(port = PORT) {
-  const server = http.createServer(serveStatic);
-  const wss = new WebSocketServer({ server });
-  wss.on('connection', (ws) => {
-    let room = null, player = null;
-    ws.on('message', (data) => {
-      let msg; try { msg = JSON.parse(data); } catch { return; }
-      if (!msg || typeof msg.t !== 'string') return;
-      if (!room) {
-        if (msg.t === 'list') { ws.send(JSON.stringify(lobbyList())); return; }
-        if (msg.t === 'create') {
-          let code = newCode(), save = null;
-          if (msg.load) {
-            const s = persistence.load(msg.load);
-            if (!s) { ws.send(JSON.stringify({ t: 'err', text: 'Save not found.' })); return; }
-            if (rooms.has(msg.load)) { ws.send(JSON.stringify({ t: 'err', text: 'That store is already open — join it instead.' })); return; }
-            code = msg.load; save = s;
-          }
-          room = new Room(code, { save, isPublic: msg.isPublic !== false, persistence });
-          rooms.set(code, room);
-          player = room.addPlayer(ws, msg.name, msg.color);
-          return;
+// One player connection. `ws` is anything socket-like: a real WebSocket, or a virtual socket for a player who
+// reaches this server over Steam networking ({ readyState, send(str), on('message' | 'close' | 'error', fn) }).
+export function attachSocket(ws) {
+  let room = null, player = null;
+  ws.on('message', (data) => {
+    let msg; try { msg = JSON.parse(data); } catch { return; }
+    if (!msg || typeof msg.t !== 'string') return;
+    if (!room) {
+      if (msg.t === 'list') { ws.send(JSON.stringify(lobbyList())); return; }
+      if (msg.t === 'create') {
+        let code = newCode(), save = null;
+        if (msg.load) {
+          const s = persistence.load(msg.load);
+          if (!s) { ws.send(JSON.stringify({ t: 'err', text: 'Save not found.' })); return; }
+          if (rooms.has(msg.load)) { ws.send(JSON.stringify({ t: 'err', text: 'That store is already open — join it instead.' })); return; }
+          code = msg.load; save = s;
         }
-        if (msg.t === 'join') {
-          const code = String(msg.code || '').toUpperCase().trim();
-          const r = rooms.get(code);
-          if (!r) {
-            // a saved but inactive store can be re-opened by code
-            if (persistence.exists(code)) {
-              room = new Room(code, { save: persistence.load(code), isPublic: true, persistence });
-              rooms.set(code, room);
-              player = room.addPlayer(ws, msg.name, msg.color);
-              return;
-            }
-            ws.send(JSON.stringify({ t: 'err', text: 'No store with that code.' })); return;
-          }
-          if (r.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({ t: 'err', text: 'That store is full (4 players).' })); return; }
-          room = r; player = r.addPlayer(ws, msg.name, msg.color);
-          return;
-        }
+        room = new Room(code, { save, isPublic: msg.isPublic !== false, persistence });
+        rooms.set(code, room);
+        player = room.addPlayer(ws, msg.name, msg.color);
         return;
       }
-      if (msg.t === 'leave') { room.removePlayer(player); room = null; player = null; return; }
-      try { room.handle(player, msg); } catch (e) { console.error(`[room ${room.code}] error handling ${msg.t}/${msg.a || ''}`, e); }
-    });
-    ws.on('close', () => { if (room && player) room.removePlayer(player); });
-    ws.on('error', () => {});
+      if (msg.t === 'join') {
+        const code = String(msg.code || '').toUpperCase().trim();
+        const r = rooms.get(code);
+        if (!r) {
+          // a saved but inactive store can be re-opened by code
+          if (persistence.exists(code)) {
+            room = new Room(code, { save: persistence.load(code), isPublic: true, persistence });
+            rooms.set(code, room);
+            player = room.addPlayer(ws, msg.name, msg.color);
+            return;
+          }
+          ws.send(JSON.stringify({ t: 'err', text: 'No store with that code.' })); return;
+        }
+        if (r.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({ t: 'err', text: 'That store is full (4 players).' })); return; }
+        room = r; player = r.addPlayer(ws, msg.name, msg.color);
+        return;
+      }
+      return;
+    }
+    if (msg.t === 'leave') { room.removePlayer(player); room = null; player = null; return; }
+    try { room.handle(player, msg); } catch (e) { console.error(`[room ${room.code}] error handling ${msg.t}/${msg.a || ''}`, e); }
+  });
+  ws.on('close', () => { if (room && player) room.removePlayer(player); });
+  ws.on('error', () => {});
+}
+
+// opts.host: interface to listen on (the desktop app uses 127.0.0.1); opts.routes: { '/path': (ws) => {} } sends
+// WebSocket connections on that path somewhere else (the desktop app relays '/steam-relay' to a Steam host).
+export function startServer(port = PORT, opts = {}) {
+  const server = http.createServer(serveStatic);
+  const wss = new WebSocketServer({ server });
+  wss.on('connection', (ws, req) => {
+    const route = opts.routes && opts.routes[(req.url || '/').split('?')[0]];
+    if (route) route(ws); else attachSocket(ws);
   });
 
   // Fixed-rate simulation loop
@@ -130,8 +139,13 @@ export function startServer(port = PORT) {
   // periodic autosave
   const autosave = setInterval(() => { for (const r of rooms.values()) if (r.started && r.game.s.phase === 'prep') r.save(); }, 30000);
 
-  server.listen(port, () => console.log(`🛒 Supermarket running at http://localhost:${port}`));
-  return { server, wss, close: () => { clearInterval(loop); clearInterval(autosave); wss.close(); server.close(); } };
+  const ready = new Promise((resolve) => server.listen(port, opts.host, () => {
+    const actual = server.address().port;
+    if (!opts.quiet) console.log(`🛒 Supermarket running at http://localhost:${actual}`);
+    resolve(actual);
+  }));
+  const saveAll = () => { for (const r of rooms.values()) if (r.started) { try { r.save(); } catch {} } };
+  return { server, wss, ready, saveAll, close: () => { clearInterval(loop); clearInterval(autosave); wss.close(); server.close(); } };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) startServer();

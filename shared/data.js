@@ -258,7 +258,7 @@ export const ACHIEVEMENTS = [
   { id: 'customers2k',  name: 'Retail Empire',     icon: '🌆', desc: 'Serve 2,000 customers.' },
   { id: 'rev1k',        name: 'Four Digits',       icon: '💵', desc: 'Earn $1,000 total revenue.' },
   { id: 'rev25k',       name: 'Big Business',      icon: '💰', desc: 'Earn $25,000 total revenue.' },
-  { id: 'rev100k',      name: 'Retail Empire',     icon: '👑', desc: 'Earn $100,000 total revenue.' },
+  { id: 'rev100k',      name: 'Top of the Market', icon: '👑', desc: 'Earn $100,000 total revenue.' },
   { id: 'day_profit',   name: 'In the Black',      icon: '📈', desc: 'Finish a day with profit.' },
   { id: 'big_day',      name: 'Blockbuster Day',   icon: '🚀', desc: 'Earn $3,000 revenue in a single day.' },
   { id: 'first_hire',   name: 'Team Player',       icon: '🤝', desc: 'Hire your first employee.' },
@@ -302,7 +302,7 @@ export const GOALS = [
   { id: 'rep4',        text: 'Reach a 4★ reputation', reward: 1200 },
   { id: 'day3k',       text: 'Earn $3,000 in a single day', reward: 1500 },
   { id: 'level8',      text: 'Reach store level 8', reward: 2500 },
-  { id: 'rev100k',     text: 'Reach $100,000 total revenue — build a retail empire!', reward: 5000 },
+  { id: 'rev100k',     text: 'Reach $100,000 total revenue — top of the market!', reward: 5000 },
 ];
 
 export const FIRST_NAMES = ['Ava', 'Ben', 'Chloe', 'Dan', 'Ella', 'Finn', 'Gina', 'Hugo', 'Ivy', 'Jack', 'Kira', 'Leo', 'Maya', 'Noah', 'Olive', 'Pablo', 'Quinn', 'Rosa', 'Sam', 'Tara', 'Umar', 'Vera', 'Wes', 'Xena', 'Yusuf', 'Zoe', 'Amir', 'Bella', 'Carlos', 'Dina', 'Eli', 'Farah', 'Gus', 'Hana', 'Igor', 'Jade', 'Kofi', 'Lena', 'Milo', 'Nina', 'Omar', 'Priya', 'Rami', 'Sofia', 'Theo', 'Uma', 'Viktor', 'Yara'];

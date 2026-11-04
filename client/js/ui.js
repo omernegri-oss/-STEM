@@ -120,6 +120,20 @@ export class UI {
     setTimeout(() => el.classList.add('fade'), 12000);
   }
   toast(text) { this.system(text); }
+  // in-page yes/no question (browser confirm() dialogs are blocked in some places the game runs)
+  ask(text, yes = 'Yes', no = 'Cancel') {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div'); wrap.className = 'ask-wrap';
+      wrap.innerHTML = `<div class="ask" role="dialog" aria-modal="true"><p></p><div class="row"><button class="btn" data-no></button><button class="btn primary" data-yes></button></div></div>`;
+      wrap.querySelector('p').textContent = text; wrap.querySelector('[data-yes]').textContent = yes; wrap.querySelector('[data-no]').textContent = no;
+      const done = (v) => { wrap.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } if (e.key === 'Enter') { e.stopPropagation(); done(true); } };
+      wrap.onclick = (e) => { if (e.target.closest('[data-yes]')) done(true); else if (e.target.closest('[data-no]') || e.target === wrap) done(false); };
+      document.addEventListener('keydown', onKey, true);
+      if (document.pointerLockElement) document.exitPointerLock();
+      document.body.appendChild(wrap); wrap.querySelector('[data-yes]').focus();
+    });
+  }
   error(text) {
     const el = document.createElement('div'); el.className = 'e'; el.textContent = text;
     const box = $('toast-err'); box.prepend(el); while (box.children.length > 2) box.lastChild.remove();
@@ -438,7 +452,7 @@ export class UI {
       }
       case 'priceall': net.act('priceAll', { mult: +b.dataset.v }); break;
       case 'hire': net.act('hire', { id: +b.dataset.id }); break;
-      case 'fire': if (confirm('Let this employee go?')) net.act('fire', { id: +b.dataset.id }); break;
+      case 'fire': { const id = +b.dataset.id; this.ask('Let this employee go?', 'Let go').then(ok => { if (ok) net.act('fire', { id }); }); break; }
       case 'raise': net.act('raise', { id: +b.dataset.id }); break;
       case 'upgrade': net.act('buyUpgrade', { id: b.dataset.id }); break;
     }

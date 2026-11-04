@@ -1,0 +1,41 @@
+# Desktop builds for Steam: plain folders (no installer). Steam installs and updates the files itself.
+appId: com.supermarket.game
+productName: Supermarket
+copyright: Copyright © 2026 Supermarket
+directories:
+  output: release
+  buildResources: build
+files:
+  - package.json
+  - desktop/**
+  - server/**
+  - shared/**
+  - client/**
+  - "!**/*.map"
+  - node_modules/ws/**
+  - node_modules/steamworks.js/**
+  - node_modules/three/package.json
+  - node_modules/three/build/three.module.js
+  - node_modules/three/examples/jsm/utils/**
+  - node_modules/three/examples/jsm/environments/**
+  - node_modules/three/examples/jsm/postprocessing/**
+  - node_modules/three/examples/jsm/shaders/**
+  - node_modules/three/examples/jsm/math/**
+# the Steam library and its native module must sit next to the app, not inside app.asar
+asarUnpack:
+  - node_modules/steamworks.js/**
+npmRebuild: false
+win:
+  target: [dir]
+  icon: build/icon.png
+  signAndEditExecutable: false
+mac:
+  target: [dir]
+  icon: build/icon.png
+  category: public.app-category.simulation-games
+  identity: null
+linux:
+  target: [dir]
+  icon: build/icon.png
+  category: Game
+  executableName: supermarket

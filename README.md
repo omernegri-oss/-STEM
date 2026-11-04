@@ -43,7 +43,7 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
   - buy a **license** for each new product ($50–$200 each);
   - buy furniture and plants;
   - set prices (each product has a minimum and maximum price);
-  - hire staff, buy upgrades and expansions;
+  - hire staff (from store level 3; each hire costs a one-time fee of one day's wage), buy upgrades and expansions;
   - pay your **bills**;
   - read **messages**.
 - Deliveries arrive as boxes at the loading area. Furniture comes in a box too: carry it inside, press `E`

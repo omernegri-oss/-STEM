@@ -86,7 +86,7 @@ await page.click('[data-goto="prices"]'); await sleep(300);
 await page.fill('input[data-price="flour"]', '99'); await page.keyboard.press('Tab');
 await waitFor(() => window.__G.world.prices.flour === 4.58);
 console.log('price max limit ✓');
-g.s.candidates.push({ id: g.id(), name: 'Testy McTest', role: 'deli', skill: 5, speed: 1.2, salary: 99, seed: 3 }); g.dirtyMeta();
+g.s.candidates.push({ id: g.id(), name: 'Testy McTest', role: 'butcher', skill: 5, speed: 1.2, salary: 99, seed: 3 }); g.dirtyMeta();
 await page.click('[data-goto="staff"]'); await sleep(500);
 await page.click(`[data-act="hire"][data-id="${g.s.candidates.at(-1).id}"]`);
 await waitFor(() => window.__G.meta.staff.length === 1);

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { Game } from '../server/game.js';
 import { spawnCustomer } from '../server/customers.js';
-import { PRODUCT_MAP, MAX_CUSTOMERS, licenseCost, priceLimits, EXPANSIONS } from '../shared/data.js';
+import { PRODUCT_MAP, MAX_CUSTOMERS, licenseCost, priceLimits, EXPANSIONS, ROLES } from '../shared/data.js';
 
 const fx = [];
 const g = new Game('TEST1', null, { fx: m => fx.push(m), isNameTaken: () => false, save: () => {} });
@@ -117,6 +117,22 @@ assert.equal(g.s.stats.butcher, 1); assert.ok(bc.basket.filter(b => b.pid === 'r
 
 // --- butcher employee does the same routine
 p.x = 1; p.z = 8;
+// staff unlock with store levels and cost a one-time recruitment fee (one day's wage)
+atComputer();
+const lvlBefore = g.s.level;
+g.s.level = 2; g.refreshCandidates();
+assert.ok(g.s.candidates.length > 0 && g.s.candidates.every(c => ROLES[c.role].level === 3), 'level 1-2: applicants preview the level-3 roles');
+assert.equal(act({ a: 'hire', id: g.s.candidates[0].id }), false, 'no hiring before level 3'); assert.match(lastErr(), /not unlocked/);
+g.s.level = 3; g.refreshCandidates();
+const cand = g.s.candidates[0], cashKeep = g.s.cash;
+g.s.cash = cand.salary - 1;
+assert.equal(act({ a: 'hire', id: cand.id }), false, 'fee needs cash'); assert.match(lastErr(), /recruitment fee/);
+g.s.cash = 5000;
+assert.ok(act({ a: 'hire', id: cand.id }), 'hire at level 3 ' + lastErr());
+assert.equal(g.s.cash, 5000 - cand.salary, 'recruitment fee = one day of wages');
+assert.ok(ROLES.cashier.level === 3 && ROLES.butcher.level === 6 && ROLES.deli.level === 7 && ROLES.cashier.baseSalary >= 85);
+g.s.staff = g.s.staff.filter(st => st.id !== cand.id); g.s.cash = cashKeep + 5000; g.s.level = Math.max(lvlBefore, 6);
+console.log('staff levels & recruitment fee ✓');
 g.s.candidates.push({ id: g.id(), name: 'Bob Butcher', role: 'butcher', skill: 4, speed: 1.2, salary: 90, seed: 2 });
 assert.ok(act({ a: 'hire', id: g.s.candidates.at(-1).id }) || (atComputer(), act({ a: 'hire', id: g.s.candidates.at(-1).id })));
 p.x = 1; p.z = 8;

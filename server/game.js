@@ -4,7 +4,7 @@ import {
   TEAM_UPGRADES, TEAM_UPGRADE_MAP, ROLES, SHIFTS, MAX_LEVEL, levelForXp, ACHIEVEMENTS,
   FIRST_NAMES, LAST_NAMES, EVENT_TYPES, STARTING_CASH, REAL_SECONDS_PER_MINUTE, OPEN_HOUR, CLOSE_HOUR,
   LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
-  licenseCost, priceLimits, stairInfo, slotCap,
+  licenseCost, priceLimits, stairInfo, slotCap, HIRE_FEE_DAYS,
 } from '../shared/data.js';
 import { Grid, footprint, serviceTiles, FACING, center, route, deptSpots, dims } from '../shared/grid.js';
 import { updateCustomers, spawnCustomer, returnBasket, customerLeave } from './customers.js';
@@ -318,6 +318,9 @@ export class Game {
         const c = s.candidates.find(c => c.id === m.id); if (!c) return false;
         if (!this.unlocked(ROLES[c.role].level)) return fail('Role not unlocked yet.');
         if (s.staff.length >= 4 + s.expansion * 3) return fail('Expand the store to hire more staff.');
+        const fee = Math.round(c.salary * HIRE_FEE_DAYS);
+        if (s.cash < fee) return fail(`Hiring ${c.name.split(' ')[0]} costs a ${fmtMoney(fee)} recruitment fee.`);
+        this.spend(fee, 'salaries');
         s.candidates = s.candidates.filter(x => x !== c);
         const st = { ...c, shift: m.shift && SHIFTS[m.shift] ? m.shift : 'full', happiness: 75, hiredDay: s.day, absent: false, served: 0 };
         this.resetStaffRuntime(st);
@@ -842,7 +845,9 @@ export class Game {
 
   refreshCandidates(levelUp = false) {
     const s = this.s;
-    const roles = Object.entries(ROLES).filter(([, r]) => s.level >= r.level).map(([k]) => k);
+    let roles = Object.entries(ROLES).filter(([, r]) => s.level >= r.level).map(([k]) => k);
+    // before any role is unlocked, show applicants for the first roles to come (they can't be hired yet)
+    if (!roles.length) { const first = Math.min(...Object.values(ROLES).map(r => r.level)); roles = Object.entries(ROLES).filter(([, r]) => r.level === first).map(([k]) => k); }
     const n = levelUp ? 2 : rndi(4, 6);
     if (!levelUp) s.candidates = [];
     const maxSkill = clamp(Math.floor(2 + s.level / 2), 2, 5);

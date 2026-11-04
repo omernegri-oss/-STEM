@@ -217,12 +217,14 @@ export const TEAM_UPGRADES = [
 ];
 export const TEAM_UPGRADE_MAP = Object.fromEntries(TEAM_UPGRADES.map(u => [u.id, u]));
 
+export const HIRE_FEE_DAYS = 1; // recruitment fee, in days of the new employee's wage
 export const ROLES = {
-  cashier: { name: 'Cashier',       icon: '💵', baseSalary: 70, level: 1, color: 0x2563eb, desc: 'Operates a checkout counter.' },
-  stocker: { name: 'Shelf Stocker', icon: '📦', baseSalary: 65, level: 1, color: 0x16a34a, desc: 'Moves boxes onto shelves and keeps them full.' },
-  cleaner: { name: 'Cleaner',       icon: '🧹', baseSalary: 55, level: 2, color: 0x0891b2, desc: 'Cleans spills and litter.' },
-  butcher: { name: 'Butcher',       icon: '🔪', baseSalary: 95, level: 4, color: 0x991b1b, desc: 'Serves customers at the butcher counter.' },
-  deli:    { name: 'Deli Clerk',    icon: '🧀', baseSalary: 85, level: 5, color: 0xca8a04, desc: 'Serves customers at the deli counter.' },
+  // staff only become available as the store grows; hiring costs one day's wage up front (HIRE_FEE_DAYS)
+  cashier: { name: 'Cashier',       icon: '💵', baseSalary: 88,  level: 3, color: 0x2563eb, desc: 'Operates a checkout counter.' },
+  stocker: { name: 'Shelf Stocker', icon: '📦', baseSalary: 81,  level: 3, color: 0x16a34a, desc: 'Moves boxes onto shelves and keeps them full.' },
+  cleaner: { name: 'Cleaner',       icon: '🧹', baseSalary: 69,  level: 4, color: 0x0891b2, desc: 'Cleans spills and litter.' },
+  butcher: { name: 'Butcher',       icon: '🔪', baseSalary: 119, level: 6, color: 0x991b1b, desc: 'Serves customers at the butcher counter.' },
+  deli:    { name: 'Deli Clerk',    icon: '🧀', baseSalary: 106, level: 7, color: 0xca8a04, desc: 'Serves customers at the deli counter.' },
 };
 
 export const SHIFTS = {

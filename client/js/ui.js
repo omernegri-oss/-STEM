@@ -1,7 +1,7 @@
 // HUD, the store computer, info panels and overlays.
 import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, CATEGORIES, ROLES, SHIFTS, TEAM_UPGRADES, ACHIEVEMENTS,
-  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap,
+  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap, HIRE_FEE_DAYS,
 } from '/shared/data.js';
 import { play, audio, setSfx, setMusic } from './audio.js';
 
@@ -308,12 +308,13 @@ export class UI {
         <select data-shift="${s.id}">${Object.entries(SHIFTS).map(([k, v]) => `<option value="${k}" ${s.shift === k ? 'selected' : ''}>${v.name} ${v.start}:00–${v.end}:00 (${Math.round(v.pay * 100)}% pay)</option>`).join('')}</select>
         <div class="row"><button class="btn small good" data-act="raise" data-id="${s.id}">Raise</button><button class="btn small bad" data-act="fire" data-id="${s.id}">Fire</button></div></div>`;
     }
-    h += `</div><div class="section-title">Job applicants</div><div class="cards">`;
+    const unlocks = Object.values(ROLES).sort((a, b) => a.level - b.level).map(r => `${r.name} level ${r.level}`).join(' · ');
+    h += `</div><div class="section-title">Job applicants</div><p class="note">Staff become available as the store grows: ${unlocks}. Hiring costs a one-time recruitment fee of one day's wage.</p><div class="cards">`;
     for (const c of M.candidates) {
-      const r = ROLES[c.role], lock = M.level < r.level;
+      const r = ROLES[c.role], lock = M.level < r.level, fee = Math.round(c.salary * HIRE_FEE_DAYS);
       h += `<div class="card ${lock ? 'locked' : ''}"><div class="row"><span class="ci">${svg(ROLE_ICON[c.role] || 'users', 26)}</span><span class="price">${fmtMoney(c.salary)}<span class="note">/day</span></span></div>
         <h4>${esc(c.name)}</h4><p>${r.name} — ${esc(r.desc)}<br><span class="stars">${skillStars(c.skill)}</span> · Speed ${c.speed.toFixed(2)}</p>
-        <button class="btn small primary" data-act="hire" data-id="${c.id}" ${lock || M.staff.length >= max ? 'disabled' : ''}>${lock ? `Level ${r.level}` : 'Hire'}</button></div>`;
+        <button class="btn small primary" data-act="hire" data-id="${c.id}" ${lock || M.staff.length >= max || M.cash < fee ? 'disabled' : ''}>${lock ? `Unlocks at level ${r.level}` : `Hire · ${fmtMoney(fee)} fee`}</button></div>`;
     }
     return ['Staff', h + '</div>'];
   }

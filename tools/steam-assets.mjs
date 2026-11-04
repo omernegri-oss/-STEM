@@ -58,15 +58,15 @@ if (!CAPSULES_ONLY) {
   const view = (o) => page.evaluate((o) => { const d = window.__dbg; d.rig.fps = !!o.fps; Object.assign(d.me, { x: o.x, z: o.z, floor: o.f || 0 }); if (o.fps) { d.rig.yaw = o.yaw; d.rig.look = o.look || 0; } else Object.assign(d.rig, { dist: o.dist, pitch: o.pitch, yaw: o.yaw }); }, o);
   const shot = async (file, o, { ui = true, clip } = {}) => { await view(o); await hud(ui); await sleep(2500); await page.screenshot({ path: path.join(OUT, file), clip }); console.log('  ' + file); };
 
+  // no floating money, confetti or pings in the store pictures
+  await page.evaluate(() => { const f = window.__dbg.fx; f.float = () => {}; f.burst = () => {}; f.ping = () => {}; for (const it of f.items) it.obj.visible = false; });
   console.log('screenshots:');
   await shot('screenshot-1-store.png', { x: 12, z: 7, dist: 21, pitch: 0.95, yaw: 0.25 });
   await shot('screenshot-2-butcher-deli.png', { x: 15.5, z: 4.4, dist: 7.5, pitch: 0.5, yaw: 0.15 });
-  await shot('screenshot-3-aisle.png', { fps: true, x: 3, z: 6.2, yaw: Math.PI / 2 + 0.25, look: -0.12 });
+  await shot('screenshot-3-fridges.png', { fps: true, x: 5, z: 2.6, yaw: 0.25, look: -0.05 });
   await shot('screenshot-4-checkout.png', { fps: true, x: 15.5, z: 9.2, yaw: 0, look: -0.42 });
   await shot('screenshot-5-upstairs.png', { x: 9, z: 5, f: 1, dist: 17, pitch: 0.9, yaw: 0.2 });
   // clean backgrounds for the capsules (no interface)
-  // pause so no floating money or confetti ends up in the clean pictures
-  g.act(p, { a: 'speed', v: 0 }); g.s.paused = true; await sleep(3000);
   await shot('../assets/source/background.png', { x: 12, z: 6.5, dist: 16, pitch: 0.62, yaw: 0.35 }, { ui: false });
   await page.setViewportSize({ width: 1920, height: 620 });
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));

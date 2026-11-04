@@ -138,7 +138,7 @@ if (steamJoin) setTimeout(async () => {
   loading(false); initAudio();
   net.send({ t: 'join', code: steamJoin.code, name: prefs.name, color: prefs.color });
 }, 0);
-window.__dbg = { net, me, rig, ui, world, S };
+window.__dbg = { net, me, rig, ui, world, S, fx };
 const build = new BuildMode({ scene: S.scene, camera: S.camera, world, net, G, ui, rig });
 window.__dbg.build = build;
 

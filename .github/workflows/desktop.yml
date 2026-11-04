@@ -44,6 +44,7 @@ jobs:
       - run: npm ci
       # on Windows the exe gets its icon; elsewhere the default config is used
       - if: matrix.name == 'windows'
+        shell: bash  # PowerShell would split the -c.win... argument
         run: npm run ${{ matrix.script }} -- -c.win.signAndEditExecutable=true
       - if: matrix.name != 'windows'
         run: npm run ${{ matrix.script }}

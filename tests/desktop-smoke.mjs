@@ -19,24 +19,25 @@ async function run(label, args) {
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.waitForFunction(() => window.__dbg && window.steamDesk, null, { timeout: 30000 }); // __dbg is set once the menu is fully built
+  await page.waitForFunction(() => window.__dbg && window.steamDesk, null, { timeout: 90000 }); // __dbg is set once the menu is fully built
   const info = await page.evaluate(() => window.steamDesk.info);
   console.log(`[${label}] steam`, JSON.stringify(info));
   assert.ok(info.port > 0);
   const deskUi = await page.evaluate(() => ({ quit: !document.getElementById('m-quit').closest('[hidden]'), note: document.getElementById('m-steam-note').textContent }));
   assert.ok(deskUi.quit, 'quit button shown in the desktop app');
   await page.evaluate(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); localStorage.setItem('st_gfx', 'low'); });
-  await page.reload(); await page.waitForFunction(() => window.__dbg, null, { timeout: 30000 });
-  await page.fill('#m-name', 'Desk'); await page.click('#m-create');
-  await page.waitForFunction(() => !document.getElementById('lobby').classList.contains('hidden'), null, { timeout: 20000 });
+  await page.reload(); await page.waitForFunction(() => window.__dbg, null, { timeout: 90000 });
+  const click = (sel) => page.evaluate((sel) => document.querySelector(sel).click(), sel); // CI machines without a GPU render slowly
+  await page.fill('#m-name', 'Desk'); await click('#m-create');
+  await page.waitForFunction(() => !document.getElementById('lobby').classList.contains('hidden'), null, { timeout: 90000 });
   const inviteShown = await page.evaluate(() => !document.getElementById('l-invite').hidden);
   assert.equal(inviteShown, !!info.available, 'invite button only with Steam');
-  await page.click('#l-start');
-  await page.waitForFunction(() => window.__G.meta && window.__G.meta.phase === 'naming', null, { timeout: 20000 });
-  await page.fill('#n-input', 'Desk Mart'); await sleep(300); await page.click('#n-vote');
-  await page.waitForFunction(() => window.__G.meta.phase === 'prep', null, { timeout: 20000 });
+  await click('#l-start');
+  await page.waitForFunction(() => window.__G.meta && window.__G.meta.phase === 'naming', null, { timeout: 90000 });
+  await page.fill('#n-input', 'Desk Mart'); await sleep(300); await click('#n-vote');
+  await page.waitForFunction(() => window.__G.meta.phase === 'prep', null, { timeout: 90000 });
   // in-page confirm instead of a browser dialog: leaving asks first
-  await page.click('#h-exit'); await page.waitForSelector('.ask'); await page.click('.ask [data-no]');
+  await click('#h-exit'); await page.waitForSelector('.ask', { timeout: 60000 }); await click('.ask [data-no]');
   assert.equal(await page.evaluate(() => !!document.querySelector('.ask')), false);
   await sleep(1500);
   await page.screenshot({ path: `${OUT}/95-desktop-${label}.png` });

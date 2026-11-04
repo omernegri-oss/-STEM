@@ -80,7 +80,8 @@ something changes, plus 10 Hz snapshots of moving actors, which they interpolate
 ## Web version (no server)
 
 `npm run build:static` creates `dist/`, a static single-player build. The same game server code runs inside
-the browser and stores are saved in the browser. You can host `dist/` on any static web host.
+the browser and stores are saved in the browser. All paths are relative, so you can host `dist/` on any static web host
+or in a subfolder. `dist/artifact.html` is the same page without the document wrapper, for hosts that add their own.
 
 ## Tests
 

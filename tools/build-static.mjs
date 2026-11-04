@@ -18,7 +18,17 @@ for (const d of ['utils', 'environments', 'postprocessing', 'shaders', 'math']) 
 let html = fs.readFileSync(path.join(OUT, 'index.html'), 'utf8');
 const mp = process.argv[2] || '';
 html = html.replace('<script type="importmap">', `<script>window.ST_STATIC = true;${mp ? ` window.ST_MP_URL = ${JSON.stringify(mp)};` : ''}</script>\n  <script type="importmap">`);
+// relative paths so the build works from any folder or host (also as a claude.ai artifact)
+html = html.replace(/(href|src)="\/(css|js)\//g, '$1="./$2/').replace('"/vendor/three.module.js"', '"./vendor/three.module.js"').replace('"/addons/"', '"./addons/"');
+for (const f of fs.readdirSync(path.join(OUT, 'js'))) {
+  const p = path.join(OUT, 'js', f);
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/from '\/(shared|server)\//g, "from '../$1/"));
+}
 fs.writeFileSync(path.join(OUT, 'index.html'), html);
+// artifact.html: the same page without the document wrapper (the artifact host adds its own)
+const head = html.match(/<head>([\s\S]*?)<\/head>/)[1].replace(/<meta [^>]*>\s*/g, '');
+const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/)[1];
+fs.writeFileSync(path.join(OUT, 'artifact.html'), head.trim() + '\n<style>html,body{height:100%;margin:0;padding:0;background:#10161d}:root{padding:0}</style>\n' + body.trim() + '\n');
 fs.writeFileSync(path.join(OUT, 'vercel.json'), JSON.stringify({ cleanUrls: false, headers: [{ source: '/(.*)', headers: [{ key: 'Cache-Control', value: 'public, max-age=300' }] }] }, null, 2));
 const files = []; (function walk(d) { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); f.isDirectory() ? walk(p) : files.push(path.relative(OUT, p)); } })(OUT);
 console.log(`dist/ built: ${files.length} files, three@${THREE_V} bundled${mp ? ', multiplayer link ' + mp : ''}`);

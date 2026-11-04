@@ -62,7 +62,7 @@ export function furnitureIcon(type) {
   const byType = { computer: 'monitor', plant: 'plant', plant_tall: 'plant', flowerpot: 'plant', cactus: 'plant', flowers: 'plant', bin: 'trash', lamp: 'lamp', sign: 'tag', balloons: 'tag',
     bench: 'seat', fountain: 'seat', vending: 'cup', statue: 'cup', neon: 'monitor', butcher: 'knife', deli: 'cheese', rack: 'pallet', checkout: 'register', selfcheckout: 'register' };
   if (byType[type]) return byType[type];
-  if (def.kind === 'shelf' || def.kind === 'display') return def.cat === 'produce' ? 'leaf' : def.cat === 'frozen' ? 'snow' : def.cat === 'fridge' ? 'fridge' : 'shelf';
+  if (def.kind === 'storage') return def.cat === 'produce' ? 'leaf' : def.cat === 'frozen' ? 'snow' : def.cat === 'fridge' ? 'fridge' : 'shelf';
   return { checkout: 'register', rack: 'pallet', dept: 'knife', decor: 'plant' }[def.kind] || 'box';
 }
 export const ROLE_ICON = { cashier: 'register', stocker: 'box', cleaner: 'broom', butcher: 'knife', deli: 'cheese', manager: 'users' };
@@ -78,6 +78,10 @@ export function productImg(pid, size = 28) {
 }
 
 // emoji never go on screen: strip them (and joiners/variation selectors) from any text we show
-const EMOJI = /(?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{2139}](?:\u{FE0F})?(?:\u{200D}[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}](?:\u{FE0F})?)*)\s?/gu;
+const EMOJI = /(\s?)((?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{2139}](?:\u{FE0F})?(?:\u{200D}[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}](?:\u{FE0F})?)*))(\s?)/gu;
 const KEEP = new Set(['★', '☆', '✓', '✕', '✖', '⏻', '⛶']);
-export function noEmoji(s) { return String(s ?? '').replace(EMOJI, (m) => KEEP.has(m.trim()) ? m : '').replace(/\u{FE0F}/gu, '').replace(/^\s+/, ''); }
+// drop the emoji and the gap it leaves (keep one space only when it sat between two words)
+export function noEmoji(s) {
+  return String(s ?? '').replace(EMOJI, (m, lead, e, trail) => KEEP.has(e.replace(/\u{FE0F}/gu, '')) ? m : (lead && trail ? ' ' : ''))
+    .replace(/\u{FE0F}/gu, '').replace(/^\s+/, '');
+}

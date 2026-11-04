@@ -94,13 +94,13 @@ console.log('hire ✓');
 g.triggerEvent('sale');
 await page.click('[data-goto="messages"]'); await sleep(500);
 await page.screenshot({ path: `${OUT}/73-messages-sale.png` });
-await page.click('[data-act="sale"][data-v="1"]');
+await page.evaluate(() => document.querySelector('[data-act="sale"][data-v="1"]').click()); // the panel refreshes while the game runs
 await waitFor(() => window.__G.meta.saleActive === true);
 console.log('flash sale via messages ✓');
 
 // --- level up appears in chat
 g.addXp(8000);
-await waitFor(() => document.getElementById('chat-log').textContent.includes('Level'));
+await waitFor(() => /store level \d+/i.test(document.getElementById('chat-log').textContent));
 console.log('level-up chat ✓');
 
 // --- report, then pay the bill on the computer

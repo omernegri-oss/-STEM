@@ -178,7 +178,7 @@ export class UI {
   markDirty() { this.panelDirty = true; }
   maybeRender() {
     if (!this.panel || !this.panelDirty) return;
-    if (performance.now() - this.lastRender < 400 || performance.now() - (this.lastClick || 0) < 1500) return;
+    if (performance.now() - this.lastRender < 1000 || performance.now() - (this.lastClick || 0) < 1500) return;
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest('#p-body') && ae.tagName === 'INPUT') return;
     this.renderPanel();
@@ -193,7 +193,7 @@ export class UI {
     if (this.isComputerTab(this.panel)) {
       this.tab.computer = this.panel;
       const unread = this.unread(), unpaid = (this.G.meta.bills || []).filter(b => !b.paid).length;
-      title = `SuperOS — ${title}`;
+      title = `StoreOS — ${title}`;
       html = `<div class="tabs comp-tabs">${Object.entries(COMPUTER_TABS).map(([k, v]) => `<button data-goto="${k}" class="${k === this.panel ? 'sel' : ''}">${v}${k === 'messages' && unread ? ` <span class="chip bad">${unread}</span>` : ''}${k === 'bills' && unpaid ? ` <span class="chip bad">${unpaid}</span>` : ''}</button>`).join('')}</div>` + html;
       if (this.panel === 'messages') this.markSeen();
     }

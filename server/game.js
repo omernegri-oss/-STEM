@@ -4,7 +4,7 @@ import {
   TEAM_UPGRADES, TEAM_UPGRADE_MAP, ROLES, SHIFTS, MAX_LEVEL, levelForXp, ACHIEVEMENTS,
   FIRST_NAMES, LAST_NAMES, EVENT_TYPES, STARTING_CASH, REAL_SECONDS_PER_MINUTE, OPEN_HOUR, CLOSE_HOUR,
   LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
-  licenseCost, priceLimits, stairInfo,
+  licenseCost, priceLimits, stairInfo, slotCap,
 } from '../shared/data.js';
 import { Grid, footprint, serviceTiles, FACING, center, route, deptSpots, dims } from '../shared/grid.js';
 import { updateCustomers, spawnCustomer, returnBasket, customerLeave } from './customers.js';
@@ -74,6 +74,7 @@ export class Game {
     if (this.s.phase === 'open' || this.s.phase === 'closing') this.s.phase = 'prep';
     this.s.paused = false;
     for (const st of this.s.staff) this.resetStaffRuntime(st);
+    for (const f of this.s.furniture) { const def = FURNITURE[f.type]; if (f.slots) while (f.slots.length < def.slots) f.slots.push({ pid: null, qty: 0, exp: 0, expired: false }); }
     for (const b of this.s.boxes) { delete b._claim; if (b.floor === undefined) b.floor = 0; }
     for (const f of this.s.furniture) if (f.floor === undefined) f.floor = 0;
     if (!this.s.challenge) this.s.challenge = this.makeChallenge();
@@ -730,7 +731,8 @@ export class Game {
       const need = CATEGORIES[p.cat];
       return { error: `${p.name} belongs in the ${need.name} section (${FURNITURE[need.fixtures[0]].name}).` };
     }
-    let slot = f.slots.find(sl => sl.pid === box.pid && sl.qty > 0 && sl.qty < def.cap && !sl.expired);
+    const cap = slotCap(f.type, box.pid);
+    let slot = f.slots.find(sl => sl.pid === box.pid && sl.qty > 0 && sl.qty < cap && !sl.expired);
     if (!slot) slot = f.slots.find(sl => sl.pid === box.pid && sl.qty === 0);
     if (!slot) slot = f.slots.find(sl => sl.pid === null && sl.qty === 0);
     if (!slot) slot = f.slots.find(sl => sl.qty === 0);
@@ -738,7 +740,7 @@ export class Game {
       if (f.slots.some(sl => sl.pid === box.pid && sl.expired)) return { error: 'Clear the expired items first (E with empty hands).' };
       return { error: 'No free space here for this product.' };
     }
-    const n = Math.min(maxUnits, box.qty, def.cap - slot.qty);
+    const n = Math.min(maxUnits, box.qty, cap - slot.qty);
     if (n <= 0) return { error: 'This spot is full.' };
     slot.exp = slot.qty > 0 ? Math.min(slot.exp, box.exp) : box.exp;
     slot.pid = box.pid; slot.qty += n; slot.expired = false;

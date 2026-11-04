@@ -121,17 +121,17 @@ export const SUPPLIER_MAP = Object.fromEntries(SUPPLIERS.map(s => [s.id, s]));
 // w,d: footprint tiles before rotation. slots: product slots (each holds one product type). cap: units per slot.
 // power: electricity $/day. maint: maintenance $/day. appeal: store attractiveness. level: unlock level.
 export const FURNITURE = {
-  shelf:          { name: 'Grocery Shelf',      cat: 'grocery', kind: 'storage', w: 2, d: 1, slots: 4, cap: 12, cost: 250, power: 0, maint: 1, appeal: 0, level: 1, icon: '🗄️', desc: '4 tiers for dry goods.' },
-  shelf_large:    { name: 'Tall Grocery Shelf', cat: 'grocery', kind: 'storage', w: 3, d: 1, slots: 5, cap: 18, cost: 480, power: 0, maint: 2, appeal: 0, level: 5, icon: '🏬', desc: '5 long tiers. Holds a lot.' },
-  endcap:         { name: 'Promo Endcap',       cat: 'grocery', kind: 'storage', w: 1, d: 1, slots: 3, cap: 8,  cost: 180, power: 0, maint: 1, appeal: 1, level: 3, icon: '🏷️', desc: 'Small display. Customers love impulse buys here.', impulse: 0.35 },
-  fridge:         { name: 'Dairy Fridge',       cat: 'fridge',  kind: 'storage', w: 2, d: 1, slots: 4, cap: 10, cost: 700, power: 9, maint: 2, appeal: 0, level: 1, icon: '🧊', desc: 'Glass-door fridge for chilled goods.', temp: 3, maxTemp: 8 },
-  fridge_large:   { name: 'Walk-by Fridge Wall',cat: 'fridge',  kind: 'storage', w: 3, d: 1, slots: 5, cap: 14, cost: 1300,power: 14, maint: 3, appeal: 1, level: 6, icon: '❄️', desc: 'Huge open-front chiller.', temp: 3, maxTemp: 8 },
-  freezer:        { name: 'Chest Freezer',      cat: 'frozen',  kind: 'storage', w: 2, d: 1, slots: 2, cap: 15, cost: 800, power: 12, maint: 2, appeal: 0, level: 3, icon: '🧊', desc: 'Glass-top chest freezer.', temp: -18, maxTemp: -6 },
-  freezer_upright:{ name: 'Upright Freezer',    cat: 'frozen',  kind: 'storage', w: 2, d: 1, slots: 4, cap: 10, cost: 1100,power: 15, maint: 3, appeal: 0, level: 6, icon: '🥶', desc: 'Tall frozen display with doors.', temp: -18, maxTemp: -6 },
-  produce:        { name: 'Produce Stand',      cat: 'produce', kind: 'storage', w: 2, d: 1, slots: 4, cap: 12, cost: 320, power: 0, maint: 1, appeal: 2, level: 2, icon: '🧺', desc: 'Wooden crates of fresh produce.' },
+  shelf:          { name: 'Grocery Shelf',      cat: 'grocery', kind: 'storage', w: 2, d: 1, slots: 8, cap: 60, cost: 250, power: 0, maint: 1, appeal: 0, level: 1, icon: '🗄️', desc: 'Metal gondola: 4 tiers, 2 product sections each.' },
+  shelf_large:    { name: 'Tall Grocery Shelf', cat: 'grocery', kind: 'storage', w: 3, d: 1, slots: 15, cap: 60, cost: 480, power: 0, maint: 2, appeal: 0, level: 5, icon: '🏬', desc: '5 tiers × 3 sections. Holds a lot.' },
+  endcap:         { name: 'Promo Endcap',       cat: 'grocery', kind: 'storage', w: 1, d: 1, slots: 4, cap: 40, cost: 180, power: 0, maint: 1, appeal: 1, level: 3, icon: '🏷️', desc: 'Small display. Customers love impulse buys here.', impulse: 0.35 },
+  fridge:         { name: 'Dairy Fridge',       cat: 'fridge',  kind: 'storage', w: 2, d: 1, slots: 10, cap: 50, cost: 700, power: 9, maint: 2, appeal: 0, level: 1, icon: '🧊', desc: 'Glass-door fridge for chilled goods.', temp: 3, maxTemp: 8 },
+  fridge_large:   { name: 'Walk-by Fridge Wall',cat: 'fridge',  kind: 'storage', w: 3, d: 1, slots: 15, cap: 50, cost: 1300,power: 14, maint: 3, appeal: 1, level: 6, icon: '❄️', desc: 'Huge open-front chiller.', temp: 3, maxTemp: 8 },
+  freezer:        { name: 'Chest Freezer',      cat: 'frozen',  kind: 'storage', w: 2, d: 1, slots: 4, cap: 60, cost: 800, power: 12, maint: 2, appeal: 0, level: 3, icon: '🧊', desc: 'Glass-top chest freezer.', temp: -18, maxTemp: -6 },
+  freezer_upright:{ name: 'Upright Freezer',    cat: 'frozen',  kind: 'storage', w: 2, d: 1, slots: 10, cap: 50, cost: 1100,power: 15, maint: 3, appeal: 0, level: 6, icon: '🥶', desc: 'Tall frozen display with doors.', temp: -18, maxTemp: -6 },
+  produce:        { name: 'Produce Stand',      cat: 'produce', kind: 'storage', w: 2, d: 1, slots: 4, cap: 40, cost: 320, power: 0, maint: 1, appeal: 2, level: 2, icon: '🧺', desc: 'Wooden crates of fresh produce.' },
   // Departments are 3x3: back row = big walk-in fridge + prep station, middle row = staff aisle (walkable), front row = display counter.
-  butcher:        { name: 'Butcher Department', cat: 'meat',    kind: 'counter', w: 3, d: 3, tiles: [[0,0],[1,0],[2,0],[0,2],[1,2],[2,2]], staffRow: 1, slots: 4, cap: 8, cost: 1800,power: 10, maint: 3, appeal: 2, level: 4, icon: '🔪', desc: 'Display counter, big meat fridge and a cutting station behind it.', temp: 2, maxTemp: 7, presses: 5 },
-  deli:           { name: 'Deli Department',    cat: 'deli',    kind: 'counter', w: 3, d: 3, tiles: [[0,0],[1,0],[2,0],[0,2],[1,2],[2,2]], staffRow: 1, slots: 4, cap: 8, cost: 1600,power: 8, maint: 3, appeal: 2, level: 5, icon: '🧀', desc: 'Display counter, cheese fridge and a cheese slicer behind it.', temp: 4, maxTemp: 8, presses: 4 },
+  butcher:        { name: 'Butcher Department', cat: 'meat',    kind: 'counter', w: 3, d: 3, tiles: [[0,0],[1,0],[2,0],[0,2],[1,2],[2,2]], staffRow: 1, slots: 4, cap: 16, cost: 1800,power: 10, maint: 3, appeal: 2, level: 4, icon: '🔪', desc: 'Display counter, big meat fridge and a cutting station behind it.', temp: 2, maxTemp: 7, presses: 5 },
+  deli:           { name: 'Deli Department',    cat: 'deli',    kind: 'counter', w: 3, d: 3, tiles: [[0,0],[1,0],[2,0],[0,2],[1,2],[2,2]], staffRow: 1, slots: 4, cap: 16, cost: 1600,power: 8, maint: 3, appeal: 2, level: 5, icon: '🧀', desc: 'Display counter, cheese fridge and a cheese slicer behind it.', temp: 4, maxTemp: 8, presses: 4 },
   computer:       { name: 'Store Computer',     kind: 'computer', w: 2, d: 1, cost: 600, power: 1, maint: 0, appeal: 0, level: 1, icon: '🖥️', desc: 'Order stock, buy fixtures & licenses, hire staff, pay bills, read messages.' },
   checkout:       { name: 'Checkout Counter',   kind: 'checkout', w: 2, d: 1, cost: 500,  power: 2, maint: 2, appeal: 0, level: 1, icon: '🛒', desc: 'Belt + register. A player or cashier must operate it.' },
   selfcheckout:   { name: 'Self-Checkout Kiosk',kind: 'selfcheckout', w: 1, d: 1, cost: 1400, power: 3, maint: 4, appeal: 1, level: 6, icon: '🖥️', desc: 'Customers scan their own items (slowly).' },
@@ -322,6 +322,48 @@ export const EVENT_TYPES = {
   influencer: { name: 'Viral Video',           icon: '📱', desc: 'Your store went viral! Reputation boost and extra visitors.' },
   pigeon:     { name: 'A Pigeon Got In',       icon: '🐦', desc: 'A pigeon is making a mess. Clean up the droppings!' },
 };
+
+// ------------------------------------------------------------------ realistic shelving
+// Real-world package sizes (metres): width, height, depth. `stack` = how many layers fit on top of each other.
+export const SHAPE_DIMS = {
+  box: { w: 0.19, h: 0.28, d: 0.07, stack: 1 }, flatbox: { w: 0.2, h: 0.13, d: 0.12, stack: 2 }, bag: { w: 0.17, h: 0.25, d: 0.08, stack: 1 },
+  can: { w: 0.075, h: 0.12, d: 0.075, stack: 2 }, bottle: { w: 0.08, h: 0.29, d: 0.08, stack: 1 }, jar: { w: 0.09, h: 0.14, d: 0.09, stack: 2 },
+  carton: { w: 0.09, h: 0.24, d: 0.09, stack: 1 }, tub: { w: 0.1, h: 0.08, d: 0.1, stack: 3 }, sphere: { w: 0.085, h: 0.085, d: 0.085, stack: 2 },
+  long: { w: 0.19, h: 0.045, d: 0.06, stack: 3 }, slab: { w: 0.2, h: 0.04, d: 0.15, stack: 1 }, wedge: { w: 0.14, h: 0.08, d: 0.12, stack: 1 },
+};
+// Product sections of each fixture in local coordinates (centred, customer side = +z):
+// x0..x1 across, y = floor of the section, zf = front edge, depth, h = clear height.
+export function slotRegions(type) {
+  const tiers = (ys, xs, zf, depth, h) => ys.flatMap(y => xs.map(([x0, x1]) => ({ x0, x1, y, zf, depth, h })));
+  switch (type) {
+    case 'shelf': return tiers([0.16, 0.54, 0.92, 1.3], [[-0.95, -0.03], [0.03, 0.95]], 0.26, 0.5, 0.34);
+    case 'shelf_large': return tiers([0.16, 0.51, 0.86, 1.21, 1.56], [[-1.46, -0.54], [-0.46, 0.46], [0.54, 1.46]], 0.26, 0.5, 0.31);
+    case 'endcap': return tiers([0.16, 0.49, 0.82, 1.15], [[-0.43, 0.43]], 0.24, 0.45, 0.29);
+    case 'fridge': case 'freezer_upright': return tiers([0.18, 0.52, 0.86, 1.2, 1.54], [[-0.9, -0.03], [0.03, 0.9]], 0.3, 0.5, 0.3);
+    case 'fridge_large': return tiers([0.2, 0.54, 0.88, 1.22, 1.56], [[-1.45, -0.52], [-0.45, 0.45], [0.52, 1.45]], 0.32, 0.52, 0.3);
+    case 'freezer': return [[-0.92, -0.03, 0.4], [0.03, 0.92, 0.4], [-0.92, -0.03, -0.02], [0.03, 0.92, -0.02]].map(([x0, x1, zf]) => ({ x0, x1, y: 0.32, zf, depth: 0.37, h: 0.4 }));
+    case 'produce': return [[-0.95, -0.05, 0.42, 0.4], [0.05, 0.95, 0.42, 0.4], [-0.95, -0.05, 0.72, 0.02], [0.05, 0.95, 0.72, 0.02]].map(([x0, x1, y, zf]) => ({ x0, x1, y, zf, depth: 0.32, h: 0.2, pile: true }));
+    case 'butcher': case 'deli': return [[-1.45, -0.75], [-0.72, -0.02], [0.02, 0.72], [0.75, 1.45]].map(([x0, x1]) => ({ x0, x1, y: 0.62, zf: 1.27, depth: 0.5, h: 0.1 }));
+  }
+  return [];
+}
+// How many units of a product fit in one section of a fixture: depends on the package size.
+const capCache = new Map();
+export function slotCap(type, pid) {
+  const k = type + ':' + pid;
+  if (capCache.has(k)) return capCache.get(k);
+  const def = FURNITURE[type], p = PRODUCT_MAP[pid], r = slotRegions(type)[0];
+  let cap = def.cap || 12;
+  if (p && r) {
+    const d = SHAPE_DIMS[p.shape] || SHAPE_DIMS.box;
+    const cols = Math.max(1, Math.floor((r.x1 - r.x0) / (d.w + 0.012)));
+    const rows = Math.max(1, Math.floor(r.depth / (d.d + 0.01)));
+    const layers = Math.max(1, Math.min(d.stack, Math.floor(r.h / (d.h + 0.005))));
+    cap = Math.max(4, Math.min(def.cap || 60, cols * rows * layers));
+  }
+  capCache.set(k, cap);
+  return cap;
+}
 
 export function productsForCat(cat) { return PRODUCTS.filter(p => p.cat === cat); }
 export function fmtMoney(v) {

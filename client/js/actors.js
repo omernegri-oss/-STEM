@@ -5,7 +5,7 @@ import { heightAt } from '/shared/grid.js';
 import { makeCharacter, animateCharacter, lookFromSeed, makeSprite, setSpriteText, makeBasket, makeCart, makeBox, makeFBox, makeHandTruck, makePigeon, UNIT_GEOS, mat, B, C, productMaterial, S as Sph } from './models.js';
 
 // visual for one carried item code: 'milk' | 'f:shelf' | 'raw:ribeye' | 'pack:ribeye'
-function carryModel(code) {
+export function carryModel(code) {
   if (code.startsWith('f:')) return makeFBox(code.slice(2));
   if (code.startsWith('raw:') || code.startsWith('pack:')) {
     const [kind, pid] = code.split(':'); const p = PRODUCT_MAP[pid]; const g = new THREE.Group();
@@ -55,13 +55,13 @@ export class Actors {
     const col = new THREE.Color(inf.color).getHex();
     const look = { ...lookFromSeed(id * 7777 + 13), shirt: col, pants: 0x1e293b, cap: col, hat: null, scale: 1, glasses: false, badge: 0xfacc15 };
     const obj = makeCharacter(look);
-    const tag = makeSprite(inf.name, 0.3, { bg: inf.color, color: '#fff', size: 40 }); tag.position.y = 2.05; obj.add(tag);
+    const tag = makeSprite(inf.name, 0.3, { bg: inf.color, color: '#fff', size: 40 }); tag.position.y = 1.9; obj.add(tag);
     const emote = makeSprite(' ', 0.5, { bg: null }); emote.position.y = 2.5; emote.visible = false; obj.add(emote);
     // ring marker under players
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; obj.add(ring);
     const carry = new THREE.Group(); obj.add(carry);
-    const stars = makeStars(); stars.position.y = 1.85; obj.add(stars);
+    const stars = makeStars(); stars.position.y = 1.72; obj.add(stars);
     this.root.add(obj);
     const e = { obj, tag, emote, carry, stars, carryKey: '', x: 0, z: 0, rot: 0, tx: 0, tz: 0, trot: 0, moving: false, color: inf.color, first: true, floor: 0, kind: 'player', swingT: 0 };
     this.updateTag(e, inf);
@@ -71,8 +71,8 @@ export class Actors {
   makeCustomer(seed) {
     const look = lookFromSeed(seed);
     const obj = makeCharacter(look);
-    const bubble = makeSprite(' ', 0.42, { bg: '#ffffff', border: '#cbd5e1' }); bubble.position.y = 2.05 * look.scale + 0.1; bubble.visible = false; obj.add(bubble);
-    const stars = makeStars(); stars.position.y = 1.85 * look.scale; obj.add(stars);
+    const bubble = makeSprite(' ', 0.42, { bg: '#ffffff', border: '#cbd5e1' }); bubble.position.y = 1.85 * look.scale + 0.1; bubble.visible = false; obj.add(bubble);
+    const stars = makeStars(); stars.position.y = 1.72 * look.scale; obj.add(stars);
     const basket = makeBasket([0xef4444, 0x2563eb, 0x16a34a][seed % 3]);
     obj.userData.parts.side.add(basket);
     const items = new THREE.Group(); basket.add(items);
@@ -84,10 +84,10 @@ export class Actors {
     const u = ROLE_UNIFORM[role] || {};
     const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: u.apron, chef: u.chef, hairnet: u.hairnet, cap: u.cap, hat: null, badge: 0xfacc15, scale: 1 };
     const obj = makeCharacter(look);
-    const tag = makeSprite(ROLES[role].icon, 0.3, { bg: null }); tag.position.y = 2.15; obj.add(tag);
-    const bubble = makeSprite(' ', 0.36, { bg: '#ffffff', border: '#cbd5e1' }); bubble.position.y = 2.5; bubble.visible = false; obj.add(bubble);
+    const tag = makeSprite(ROLES[role].icon, 0.3, { bg: null }); tag.position.y = 1.95; obj.add(tag);
+    const bubble = makeSprite(' ', 0.36, { bg: '#ffffff', border: '#cbd5e1' }); bubble.position.y = 2.25; bubble.visible = false; obj.add(bubble);
     const carry = new THREE.Group(); obj.userData.parts.hold.add(carry);
-    const stars = makeStars(); stars.position.y = 1.85; obj.add(stars);
+    const stars = makeStars(); stars.position.y = 1.72; obj.add(stars);
     let mop = null;
     if (role === 'cleaner') {
       mop = new THREE.Group(); C(mop, 0.015, 0.015, 1.3, 0x92400e, 0, 0.65, 0); B(mop, 0.3, 0.06, 0.12, 0x7dd3fc, 0, 0.03, 0);
@@ -178,7 +178,7 @@ export class Actors {
     e.carry.clear();
     if (!carry.length) return;
     if (carry.length === 1) {
-      const b = carryModel(carry[0]); b.position.set(0, carry[0].startsWith('f:') ? 0.6 : carry[0].includes(':') ? 0.95 : 0.78, carry[0].startsWith('f:') ? 0.5 : 0.38); e.carry.add(b);
+      const b = carryModel(carry[0]); b.position.set(0, carry[0].startsWith('f:') ? 0.5 : carry[0].includes(':') ? 0.85 : 0.68, carry[0].startsWith('f:') ? 0.55 : 0.44); e.carry.add(b);
     } else {
       const ht = makeHandTruck(); ht.position.set(0, 0, 0.75); e.carry.add(ht);
       carry.forEach((pid, i) => { const b = carryModel(pid); b.position.set(0, 0.06 + i * 0.37, 0.88); b.scale.setScalar(0.95); e.carry.add(b); });
@@ -189,7 +189,7 @@ export class Actors {
   place(e, scale = 1) {
     const y = heightAt(this.W || 12, this.floors || 1, e.floor || 0, e.x, e.z);
     e.obj.position.set(e.x, y, e.z); e.obj.rotation.y = e.rot;
-    e.obj.visible = !(y > 1.9 && (this.viewFloor || 0) < 1);
+    e.obj.visible = !(y > 1.9 && (this.viewFloor || 0) < 1) && !(e.local && this.hideLocal);
     if (e.stars) { e.stars.visible = !!e.stun; if (e.stun) e.stars.rotation.y += 0.15; }
   }
   swing(id) { const e = this.players.get(id); if (e) e.swingT = 0.3; }
@@ -210,7 +210,7 @@ export class Actors {
       e.x += (e.tx - e.x) * k; e.z += (e.tz - e.z) * k; e.rot = lerpAngle(e.rot, e.trot, k);
       this.place(e);
       animateCharacter(e.obj, dt, e.moving, e.cart ? 'cart' : 'basket', 0.85);
-      if (e.bubble.visible) e.bubble.position.y = 2.0 * e.scale + 0.15 + Math.sin(performance.now() / 300 + e.x) * 0.04;
+      if (e.bubble.visible) e.bubble.position.y = 1.8 * e.scale + 0.15 + Math.sin(performance.now() / 300 + e.x) * 0.04;
     }
     for (const e of this.staff.values()) {
       e.x += (e.tx - e.x) * k; e.z += (e.tz - e.z) * k; e.rot = lerpAngle(e.rot, e.trot, k);

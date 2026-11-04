@@ -1,0 +1,24 @@
+// Builds dist/: a static, single-player web version of the game (the game server runs in the browser).
+// Usage: node tools/build-static.mjs [multiplayerUrl]
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const OUT = path.join(ROOT, 'dist');
+const THREE_V = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules/three/package.json'), 'utf8')).version;
+fs.rmSync(OUT, { recursive: true, force: true });
+const copy = (from, to) => { fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(from, to); };
+const copyDir = (from, to) => { for (const f of fs.readdirSync(from, { withFileTypes: true })) { const a = path.join(from, f.name), b = path.join(to, f.name); f.isDirectory() ? copyDir(a, b) : copy(a, b); } };
+copyDir(path.join(ROOT, 'client'), OUT);
+copyDir(path.join(ROOT, 'shared'), path.join(OUT, 'shared'));
+for (const f of ['room.js', 'game.js', 'customers.js', 'staff.js']) copy(path.join(ROOT, 'server', f), path.join(OUT, 'server', f));
+// bundle three.js and the add-ons the game uses, so the site is fully self-contained
+copy(path.join(ROOT, 'node_modules/three/build/three.module.min.js'), path.join(OUT, 'vendor/three.module.js'));
+for (const d of ['utils', 'environments', 'postprocessing', 'shaders', 'math']) copyDir(path.join(ROOT, 'node_modules/three/examples/jsm', d), path.join(OUT, 'addons', d));
+let html = fs.readFileSync(path.join(OUT, 'index.html'), 'utf8');
+const mp = process.argv[2] || '';
+html = html.replace('<script type="importmap">', `<script>window.ST_STATIC = true;${mp ? ` window.ST_MP_URL = ${JSON.stringify(mp)};` : ''}</script>\n  <script type="importmap">`);
+fs.writeFileSync(path.join(OUT, 'index.html'), html);
+fs.writeFileSync(path.join(OUT, 'vercel.json'), JSON.stringify({ cleanUrls: false, headers: [{ source: '/(.*)', headers: [{ key: 'Cache-Control', value: 'public, max-age=300' }] }] }, null, 2));
+const files = []; (function walk(d) { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); f.isDirectory() ? walk(p) : files.push(path.relative(OUT, p)); } })(OUT);
+console.log(`dist/ built: ${files.length} files, three@${THREE_V} bundled${mp ? ', multiplayer link ' + mp : ''}`);

@@ -16,7 +16,7 @@ async function newPage(name) {
   const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
   page.on('console', m => { if (m.type() === 'error') errors.push(`[${name}] ${m.text()}`); });
   page.on('pageerror', e => errors.push(`[${name}] PAGEERROR ${e.message}\n${e.stack}`));
-  await page.addInitScript(() => localStorage.setItem('st_seen_help', '1'));
+  await page.addInitScript(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); });
   await page.goto(`http://localhost:${port}/?low`);
   await sleep(700);
   return page;
@@ -50,15 +50,17 @@ await shot(p1, '51-computer-furniture');
 await p1.click('[data-act="buyf"][data-type="shelf"]');
 await waitFor(p1, () => window.__G.meta.orders.length === 1);
 await p1.click('[data-goto="orders"]'); await sleep(300);
+await p1.evaluate(() => { const n = window.__dbg.net; const o = n.act.bind(n); window.__acts = []; n.act = (x, d) => { window.__acts.push([x, JSON.stringify(d)]); o(x, d); }; });
 await p1.click('[data-act="qty"][data-pid="flour"][data-d="1"]');
 await p1.click('[data-act="qty"][data-pid="sugar"][data-d="1"]');
 await p1.click('[data-act="order"]');
-await waitFor(p1, () => window.__G.meta.orders.length === 2);
+await sleep(1500); console.log('order dbg', await G(p1, () => JSON.stringify({ orders: window.__G.meta.orders.length, cart: window.__dbg.ui.cart, err: document.getElementById('toast-err').textContent, panel: window.__dbg.ui.panel, btn: document.querySelector('[data-act="order"]')?.disabled, acts: window.__acts, tab: window.__dbg.ui.tab, qtyBtns: document.querySelectorAll('[data-act="qty"]').length })));
+await waitFor(p1, () => window.__G.meta.orders.some(o => o.supplier === 'pantry'));
 await p1.click('[data-goto="licenses"]'); await sleep(300); await shot(p1, '52-computer-licenses');
 await p1.keyboard.press('Escape');
 console.log('cash after shopping:', await G(p1, () => window.__G.meta.cash));
 game.s.speed = 3;
-await waitFor(p1, () => window.__G.world.boxes.length === 3, 30000);
+await waitFor(p1, () => window.__G.world.boxes.length === 3 && !window.__G.meta.orders.length, 40000);
 game.s.speed = 1;
 await tp(p1, 2, game.s.d + 2.6, Math.PI); await sleep(500); await shot(p1, '53-delivery-boxes');
 

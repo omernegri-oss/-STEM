@@ -1,12 +1,13 @@
 // Local player movement (client-predicted), third-person camera, input, and context-sensitive interaction.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo } from '/shared/data.js';
+import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo, slotCap } from '/shared/data.js';
 import { resolveCollision, dims, center, heightAt, deptSpots } from '/shared/grid.js';
 
 export class Input {
   constructor(canvas) {
     this.keys = new Set(); this.pressed = new Set();
-    this.mouse = { x: 0, y: 0, nx: 0, ny: 0, down: false, button: -1, dragging: false, dx: 0, dy: 0, wheel: 0, clicked: null };
+    this.mouse = { x: 0, y: 0, nx: 0, ny: 0, down: false, button: -1, dragging: false, dx: 0, dy: 0, lx: 0, ly: 0, wheel: 0, clicked: null, locked: false };
+    document.addEventListener('pointerlockchange', () => { this.mouse.locked = document.pointerLockElement === canvas; });
     this.canvas = canvas;
     const typing = () => { const a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'); };
     this.typing = typing;
@@ -20,6 +21,7 @@ export class Input {
     addEventListener('keyup', (e) => { this.keys.delete(e.key.toLowerCase()); });
     addEventListener('blur', () => this.keys.clear());
     canvas.addEventListener('mousedown', (e) => {
+      if (this.mouse.locked) { this.mouse.clicked = { button: e.button, x: innerWidth / 2, y: innerHeight / 2 }; return; }
       this.mouse.down = true; this.mouse.button = e.button; this.mouse.sx = e.clientX; this.mouse.sy = e.clientY; this.mouse.dragging = false;
       canvas.focus();
     });
@@ -28,6 +30,7 @@ export class Input {
       this.mouse.down = false; this.mouse.dragging = false;
     });
     addEventListener('mousemove', (e) => {
+      if (this.mouse.locked) { this.mouse.lx += e.movementX; this.mouse.ly += e.movementY; this.mouse.nx = 0; this.mouse.ny = 0; return; }
       this.mouse.x = e.clientX; this.mouse.y = e.clientY;
       this.mouse.nx = (e.clientX / innerWidth) * 2 - 1; this.mouse.ny = -(e.clientY / innerHeight) * 2 + 1;
       if (this.mouse.down) {
@@ -40,7 +43,7 @@ export class Input {
   }
   down(k) { return this.keys.has(k); }
   hit(k) { return this.pressed.has(k); }
-  endFrame() { this.pressed.clear(); this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0; this.mouse.clicked = null; }
+  endFrame() { this.pressed.clear(); this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.lx = 0; this.mouse.ly = 0; this.mouse.wheel = 0; this.mouse.clicked = null; }
 }
 
 export class LocalPlayer {
@@ -90,9 +93,24 @@ export class LocalPlayer {
 }
 
 export class CameraRig {
-  constructor(camera) { this.camera = camera; this.yaw = 0; this.pitch = 0.95; this.dist = 11; this.target = new THREE.Vector3(6, 0, 6); this.cur = new THREE.Vector3(6, 0, 6); this.build = false; }
+  constructor(camera) { this.camera = camera; this.yaw = 0; this.pitch = 0.95; this.dist = 11; this.target = new THREE.Vector3(6, 0, 6); this.cur = new THREE.Vector3(6, 0, 6); this.build = false; this.fps = true; this.look = 0; this.bob = 0; }
   update(dt, input, focus) {
     const m = input.mouse;
+    if (this.fps && !this.build && focus.fpsReady) {
+      // first person: look with the (pointer-locked) mouse, eye height 1.62 m, gentle head bob
+      const dx = m.locked ? m.lx : (m.dragging ? m.dx : 0), dy = m.locked ? m.ly : (m.dragging ? m.dy : 0);
+      this.yaw -= dx * 0.0024; this.look = Math.max(-1.35, Math.min(1.3, this.look - dy * 0.0022));
+      if (!input.typing()) { if (input.down('z')) this.yaw += dt * 1.8; if (input.down('c')) this.yaw -= dt * 1.8; }
+      this.bob += focus.moving ? dt * 9 : 0;
+      const eye = (focus.y || 0) + 1.5 + (focus.moving ? Math.sin(this.bob) * 0.025 : 0);
+      this.camera.fov = 72; this.camera.updateProjectionMatrix();
+      this.camera.position.set(focus.x, eye, focus.z);
+      const cp = Math.cos(this.look);
+      this.camera.lookAt(focus.x - Math.sin(this.yaw) * cp, eye + Math.sin(this.look), focus.z - Math.cos(this.yaw) * cp);
+      this.cur.set(focus.x, eye, focus.z);
+      return;
+    }
+    if (this.camera.fov !== 48) { this.camera.fov = 48; this.camera.updateProjectionMatrix(); }
     if (m.dragging && (m.button === 2 || m.button === 1 || (m.button === 0 && !this.build))) {
       this.yaw -= m.dx * 0.006; this.pitch = Math.min(1.35, Math.max(0.35, this.pitch + m.dy * 0.004));
     }
@@ -101,7 +119,7 @@ export class CameraRig {
       if (input.down('c')) this.yaw -= dt * 1.8;
     }
     if (m.wheel) this.dist = Math.min(this.build ? 40 : 22, Math.max(4.5, this.dist * (1 + m.wheel * 0.1)));
-    this.target.set(focus.x, (focus.y || 0) + 0.8, focus.z);
+    this.target.set(focus.x, (focus.y || 0) + 1.1, focus.z);
     this.cur.lerp(this.target, 1 - Math.exp(-dt * 10));
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     this.camera.position.set(this.cur.x + Math.sin(this.yaw) * cp * this.dist, this.cur.y + sp * this.dist, this.cur.z + Math.cos(this.yaw) * cp * this.dist);
@@ -111,7 +129,7 @@ export class CameraRig {
 
 // Decide what pressing E would do right now. Returns { label, action, repeat, warn, station }.
 const DOORS = new Set(['fridge', 'freezer_upright', 'freezer']);
-export function findInteraction(G, world, me, carry, station) {
+export function findInteraction(G, world, me, carry, station, fps = false) {
   const W = G.world; if (!W) return null;
   const fl = me.floor || 0;
   const fx = Math.sin(me.rot), fz = Math.cos(me.rot);
@@ -176,7 +194,7 @@ export function findInteraction(G, world, me, carry, station) {
   }
   const reach = (f) => world.fixtureDistance(f, me.x, me.z);
   const facing = (f) => { const [cx, cz] = center(f.type, f.x, f.z, f.rot); const dx = cx - me.x, dz = cz - me.z; const d = Math.hypot(dx, dz) || 1; return (dx * fx + dz * fz) / d; };
-  const near = furn.filter(f => reach(f) < 0.95 && facing(f) > -0.1).sort((a, b) => reach(a) - reach(b) - (facing(a) - facing(b)) * 0.3);
+  const near = furn.filter(f => fps ? reach(f) < 1.35 && facing(f) > 0.5 : reach(f) < 0.95 && facing(f) > -0.1).sort((a, b) => fps ? facing(b) - facing(a) + (reach(a) - reach(b)) * 0.5 : reach(a) - reach(b) - (facing(a) - facing(b)) * 0.3);
   // 4) the computer
   const comp = near.find(f => f.type === 'computer');
   if (comp && !isFBox) return { label: '🖥️ Use the computer', action: { a: '_computer' } };
@@ -189,7 +207,7 @@ export function findInteraction(G, world, me, carry, station) {
       if (f.slots && def.kind !== 'counter') {
         if (def.cat === p.cat) {
           if (DOORS.has(f.type) && !f.open) return { label: `🚪 Open the ${def.name}`, action: { a: 'door', id: f.id } };
-          const free = f.slots.some(s => (s.pid === prodPid && s.qty < def.cap && !s.expired) || s.qty === 0);
+          const free = f.slots.some(s => (s.pid === prodPid && s.qty < slotCap(f.type, prodPid) && !s.expired) || s.qty === 0);
           if (!free) return { label: `${def.name} is full${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: null, warn: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };
           return { label: `📥 Stock ${p.name}${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: { a: 'stock', id: f.id, n: 3 }, repeat: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };
         }
@@ -200,13 +218,13 @@ export function findInteraction(G, world, me, carry, station) {
       if (f.type === 'bin') return { label: '🗑️ Throw box away', action: { a: 'trash', id: f.id } };
     }
     if (carry.length < (G.meta?.carryCap || 1)) {
-      const b = nearestBox(world, me);
+      const b = nearestBox(world, me, fps);
       if (b && b.pid) return { label: `📦 Pick up another box (${PRODUCT_MAP[b.pid].name})`, action: { a: 'pickup', id: b.id } };
     }
     return null;
   }
   // empty hands
-  const b = nearestBox(world, me);
+  const b = nearestBox(world, me, fps);
   if (b) {
     if (b.ftype) return { label: `📦 Pick up ${FURNITURE[b.ftype].name} box`, action: { a: 'pickup', id: b.id } };
     const p = PRODUCT_MAP[b.pid]; const bb = W.boxes.find(x => x.id === b.id);
@@ -239,10 +257,12 @@ function backTileOf(f) {
 }
 export { backTileOf };
 
-function nearestBox(world, me) {
-  let best = null, bd = 1.25;
+function nearestBox(world, me, fps = false) {
+  let best = null, bd = fps ? 1.7 : 1.25;
+  const fx = Math.sin(me.rot), fz = Math.cos(me.rot);
   for (const b of world.boxList) {
     if (b.id < 0 || (b.floor || 0) !== (me.floor || 0)) continue;
+    if (fps) { const dx = b.x - me.x, dz = b.z - me.z, dd = Math.hypot(dx, dz) || 1; if ((dx * fx + dz * fz) / dd < 0.55) continue; }
     const d = Math.hypot(b.x - me.x, b.z - me.z) - b.y * 0.01;
     if (d < bd || (best && Math.abs(d - bd) < 0.05 && b.y > best.y)) { if (d < bd) bd = d; best = b; }
   }

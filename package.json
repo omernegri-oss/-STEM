@@ -9,7 +9,9 @@
     "dev": "node --watch server/index.js",
     "test": "node tests/sim.test.js && node tests/multiplayer.test.js",
     "test:browser": "node tests/browser-e2e.mjs",
-    "showcase": "node tests/browser-showcase.mjs"
+    "showcase": "node tests/browser-showcase.mjs",
+    "build:static": "node tools/build-static.mjs",
+    "test:all": "npm test && node tests/browser-e2e.mjs && node tests/browser-ui.mjs && node tools/build-static.mjs && node tests/browser-static.mjs"
   },
   "engines": {
     "node": ">=18"

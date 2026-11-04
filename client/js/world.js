@@ -1,14 +1,25 @@
 // Renders the shared world state: the store building (1 or 2 floors), furniture, labelled products, boxes, dirt.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo } from '/shared/data.js';
+import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap } from '/shared/data.js';
 import { Grid, center, dims } from '/shared/grid.js';
-import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, productMaterial, makeBox, makeFBox } from './models.js';
+import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, productMaterial, makeBox, makeFBox, beltTexture } from './models.js';
 import { tileTexture } from './scene.js';
 
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(1, 1, 1), tmpC = new THREE.Color();
 const EXPIRED = new THREE.Color(0x6b5b3e);
 const UP = new THREE.Vector3(0, 1, 0);
 const DOOR_TYPES = new Set(['fridge', 'freezer_upright', 'freezer', 'butcher', 'deli']);
+let vinylTex = null;
+function vinylTexture() {
+  if (vinylTex) return vinylTex.clone();
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#e9eaec' : '#f1f2f3'; g.fillRect(i * 128, j * 128, 128, 128); }
+  for (let k = 0; k < 2600; k++) { const v = Math.round(150 + Math.random() * 80); g.fillStyle = 'rgba(' + v + ',' + v + ',' + (v + 5) + ',' + (0.25 + Math.random() * 0.4) + ')'; g.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 1.5, 1 + Math.random() * 1.5); }
+  g.strokeStyle = 'rgba(150,155,160,0.55)'; g.lineWidth = 1.5;
+  for (let i = 0; i <= 2; i++) { g.beginPath(); g.moveTo(i * 128, 0); g.lineTo(i * 128, 256); g.stroke(); g.beginPath(); g.moveTo(0, i * 128); g.lineTo(256, i * 128); g.stroke(); }
+  vinylTex = new THREE.CanvasTexture(c); vinylTex.wrapS = vinylTex.wrapT = THREE.RepeatWrapping; vinylTex.colorSpace = THREE.SRGBColorSpace; vinylTex.anisotropy = 8;
+  return vinylTex.clone();
+}
 
 export class World {
   constructor(scene) {
@@ -64,8 +75,8 @@ export class World {
     const W = w.w, D = w.d, floors = w.floors || 1;
     const fl = FLOORS.find(f => f.id === w.floor) || FLOORS[0];
     const wl = WALLS.find(x => x.id === w.wall) || WALLS[0];
-    const floorTex = () => { const t = tileTexture(fl.a, fl.b, 64, 2, { checker: true }); t.repeat.set(W / 2, D / 2); return t; };
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTex(), roughness: 0.6 }));
+    const floorTex = () => { const t = vinylTexture(); t.repeat.set(W / 1.2, D / 1.2); return t; };
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTex(), roughness: 0.32, metalness: 0.02 }));
     floor.rotation.x = -Math.PI / 2; floor.position.set(W / 2, 0.002, D / 2); floor.receiveShadow = true; this.shell.add(floor);
     const sill = new THREE.Mesh(new THREE.PlaneGeometry(W, 1), mat(0xd6d3d1)); sill.rotation.x = -Math.PI / 2; sill.position.set(W / 2, 0.003, D + 0.5); this.shell.add(sill);
     const H = 3.4, wc = new THREE.Color(wl.color).getHex();
@@ -124,8 +135,29 @@ export class World {
     for (const [z, r] of [[0.1, 0], [-0.1, Math.PI]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, pw / pt.aspect), pm); m.position.set(0, 2.75, z); m.rotation.y = r; py.add(m); }
     const op = makeLabel('OPEN 8:00 – 22:00', 0.12, { bg: '#1e293b', color: '#fde047', size: 32 }, 1.2); op.position.set(0, 2.25, 0.1); py.add(op);
 
+    this.ceiling = new THREE.Group(); this.shell.add(this.ceiling);
+    this.buildCeiling(this.ceiling, W, D, floors > 1 ? FLOOR_H - 0.2 : 3.35);
+    this.ceiling2 = null;
+    if (floors > 1) { this.ceiling2 = new THREE.Group(); this.upperShell.add(this.ceiling2); this.buildCeiling(this.ceiling2, W, D, FLOOR_H + 3.35); }
     if (floors > 1) this.buildUpperFloor(w, floorTex, mkWall, glassRow, glassM, frameM, fasciaM);
+    this.setCeilingVisible(this.ceilingOn || false);
   }
+
+  buildCeiling(group, W, D, y) {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    g.fillStyle = '#f3f4f6'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#d1d5db'; g.fillRect(0, 0, 128, 3); g.fillRect(0, 0, 3, 128);
+    for (let i = 0; i < 260; i++) { g.fillStyle = 'rgba(120,120,120,' + (Math.random() * 0.15) + ')'; g.fillRect(Math.random() * 128, Math.random() * 128, 1.5, 1.5); }
+    const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(W / 1.2, D / 1.2); tex.colorSpace = THREE.SRGBColorSpace;
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, D + 1), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, side: THREE.DoubleSide }));
+    ceil.rotation.x = Math.PI / 2; ceil.position.set(W / 2, y, (D + 1) / 2); group.add(ceil);
+    const panelM = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfffbf2, emissiveIntensity: 2.2 });
+    const frameM = mat(0xd1d5db, { metal: 0.5 });
+    for (let x = 2; x < W - 1; x += 3) for (let z = 1.6; z < D - 0.5; z += 2.4) {
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.03, 0.45), frameM); fr.position.set(x, y - 0.015, z); group.add(fr);
+      const pn = new THREE.Mesh(new THREE.PlaneGeometry(1.18, 0.38), panelM); pn.rotation.x = Math.PI / 2; pn.position.set(x, y - 0.032, z); group.add(pn);
+    }
+  }
+  setCeilingVisible(v) { this.ceilingOn = v; if (this.ceiling) this.ceiling.visible = v; if (this.ceiling2) this.ceiling2.visible = v; }
 
   buildUpperFloor(w, floorTex, mkWall, glassRow, glassM, frameM, fasciaM) {
     const W = w.w, D = w.d, s = stairInfo(W), U = this.upperShell;
@@ -216,16 +248,14 @@ export class World {
       const L = layout[i]; if (!L || !sl.pid) return;
       const p = PRODUCT_MAP[sl.pid]; if (!p) return;
       const price = (w.prices[p.id] ?? p.price) * (w.saleActive ? 0.85 : 1);
-      const tag = makeLabel(`${p.name} $${price.toFixed(2)}`, 0.06, { bg: '#fefce8', color: '#1e293b', size: 30, pad: 8, radius: 4 }, 0.5);
-      const cx = L.x0 + (L.cols - 1) * L.dx / 2;
-      const ty = f.type === 'butcher' || f.type === 'deli' ? 0.5 : f.type === 'freezer' ? 0.72 : Math.max(0.05, L.y - 0.05);
-      const tz = f.type === 'butcher' || f.type === 'deli' ? 1.435 : f.type === 'freezer' ? 0.47 : f.type === 'produce' ? L.z0 + 0.12 : 0.43;
-      tag.position.set(cx, ty, tz);
+      const tag = makeLabel(p.name + '  $' + price.toFixed(2), 0.042, { bg: w.saleActive ? '#fde047' : '#ffffff', color: '#111827', size: 30, pad: 8, radius: 2 }, 0.42);
+      tag.position.set(L.x0 + 0.24, Math.max(0.03, L.y - 0.022), L.zf + 0.022);
       e.tags.add(tag);
     });
   }
 
-  // one InstancedMesh per (floor, product) so every package can show its printed label
+  // one InstancedMesh per (floor, product) so every package shows its printed label.
+  // Sections are filled front row first (like a faced shelf), then further back, then stacked.
   rebuildUnits(w) {
     const groups = new Map();
     for (const f of w.furniture) {
@@ -236,18 +266,24 @@ export class World {
       f.slots.forEach((sl, si) => {
         const L = layout[si]; if (!L || !sl.pid || sl.qty <= 0) return;
         const p = PRODUCT_MAP[sl.pid]; if (!p) return;
-        const cap = FURNITURE[f.type].cap, per = L.cols * L.rows, n = Math.min(sl.qty, cap), scale = per / cap;
-        const key = `${f.floor || 0}:${p.id}`;
+        const d = SHAPE_DIMS[p.shape] || SHAPE_DIMS.box;
+        const width = L.x1 - L.x0;
+        const cols = Math.max(1, Math.floor(width / (d.w + 0.012)));
+        const rows = Math.max(1, Math.floor(L.depth / (d.d + 0.01)));
+        const layers = Math.max(1, Math.min(d.stack, Math.floor(L.h / (d.h + 0.005))));
+        const dx = width / cols, dz = L.depth / rows;
+        const n = Math.min(sl.qty, slotCap(f.type, p.id), cols * rows * layers);
+        const key = (f.floor || 0) + ':' + p.id;
         if (!groups.has(key)) groups.set(key, { p, floor: f.floor || 0, items: [] });
         const list = groups.get(key).items;
         for (let i = 0; i < n; i++) {
-          const k = Math.min(per - 1, Math.floor(i * scale));
-          const col = Math.floor(k / L.rows), row = k % L.rows;
-          const lx = L.x0 + col * L.dx, lz = L.z0 + row * L.dz;
-          let ly = L.y + (L.pile && i % 3 === 2 ? 0.06 : 0);
-          if (n > per && i >= per) ly += 0.12 * Math.floor(i / per);
-          const jitter = ((i * 9301 + f.id * 49297) % 233280) / 233280;
-          list.push({ x: cx + lx * cos + lz * sin, y: ly, z: cz - lx * sin + lz * cos, ang: (L.pile || p.shape === 'sphere') ? ang + jitter * 6 : ang, j: jitter, expired: sl.expired });
+          const row = Math.floor(i / (cols * layers)), rem = i % (cols * layers), layer = Math.floor(rem / cols), col = rem % cols;
+          const j = ((i * 9301 + f.id * 49297) % 233280) / 233280;
+          const lx = L.x0 + dx * (col + 0.5) + (L.pile ? (j - 0.5) * 0.03 : 0);
+          const lz = L.zf - dz * (row + 0.5) - 0.005;
+          const ly = L.y + layer * (d.h + 0.003) + (L.pile && layer ? -0.02 : 0);
+          const spin = L.pile || p.shape === 'sphere' || p.shape === 'can' ? j * 6 : (j - 0.5) * 0.08;
+          list.push({ x: cx + lx * cos + lz * sin, y: ly, z: cz - lx * sin + lz * cos, ang: ang + spin, j, expired: sl.expired });
         }
       });
     }
@@ -258,13 +294,13 @@ export class World {
         if (im) { im.removeFromParent(); im.dispose(); }
         const cap = Math.max(32, 1 << Math.ceil(Math.log2(gr.items.length + 1)));
         im = new THREE.InstancedMesh(UNIT_GEOS[gr.p.shape] || UNIT_GEOS.box, productMaterial(gr.p), cap);
-        im.userData.cap = cap; im.castShadow = true; im.frustumCulled = false;
+        im.userData.cap = cap; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
         this.floorRoots[gr.floor].add(im); this.units.set(key, im);
       }
       gr.items.forEach((it, i) => {
         tmpQ.setFromAxisAngle(UP, it.ang); tmpV.set(it.x, it.y, it.z); tmpS.set(1, 1, 1);
         tmpM.compose(tmpV, tmpQ, tmpS); im.setMatrixAt(i, tmpM);
-        tmpC.setRGB(1, 1, 1).multiplyScalar(0.9 + it.j * 0.15);
+        tmpC.setRGB(1, 1, 1).multiplyScalar(0.94 + it.j * 0.08);
         if (it.expired) tmpC.lerp(EXPIRED, 0.7);
         im.setColorAt(i, tmpC);
       });
@@ -372,6 +408,7 @@ export class World {
       if (near && !this.doorWas) this.onDoor && this.onDoor();
       this.doorWas = near;
     }
+    const bt = beltTexture(); if (bt && this.beltItems.length) bt.offset.x -= dt * 0.35;
     for (const e of this.furn.values()) {
       const g = e.group, f = e.data;
       if (e.pop > 0) { e.pop = Math.max(0, e.pop - dt * 4); const s = 1 + Math.sin(e.pop * Math.PI) * 0.12; g.scale.set(s, 1 - Math.sin(e.pop * Math.PI) * 0.1, s); }

@@ -323,3 +323,7 @@ canvas.chart { width: 100%; height: 190px; display: block; }
 #h-msgs { border: 0; background: #f1f5f9; border-radius: 10px; padding: 6px 10px; font-weight: 800; font-size: 13px; }
 #h-msgs.hot { background: #fee2e2; color: #b91c1c; animation: pulse 1.4s infinite; }
 #chat-log div.sys { background: rgba(249,115,22,.85); }
+
+#crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,.95); box-shadow: 0 0 0 2px rgba(15,23,42,.45); pointer-events: none; }
+#crosshair.hot { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: transparent; border: 2px solid #fff; }
+#lookhint { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); background: rgba(15,23,42,.75); color: #fff; padding: 8px 14px; border-radius: 12px; font-weight: 800; font-size: 14px; pointer-events: none; }

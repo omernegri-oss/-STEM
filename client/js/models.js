@@ -1,7 +1,8 @@
 // Procedural stylized low-poly models built from primitives (no external assets).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { FURNITURE, CATEGORIES, PRODUCT_MAP } from '/shared/data.js';
+import { FURNITURE, CATEGORIES, PRODUCT_MAP, slotRegions } from '/shared/data.js';
+import { PRODUCT_GEOS, productMaterials, packagingTexture } from './products3d.js';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -46,47 +47,9 @@ export function S(parent, r, color, x = 0, y = 0, z = 0, opts = {}) {
   m.position.set(x, y, z); m.castShadow = opts.shadow !== false; parent.add(m); return m;
 }
 
-// ------------------------------------------------------------------ product unit geometries
-function based(g) { g.computeBoundingBox(); g.translate(0, -g.boundingBox.min.y, 0); return g; }
-export const UNIT_GEOS = {
-  box: based(new THREE.BoxGeometry(0.17, 0.27, 0.08)),
-  flatbox: based(new THREE.BoxGeometry(0.21, 0.15, 0.12)),
-  bag: based(new THREE.BoxGeometry(0.17, 0.25, 0.08)),
-  can: based(new THREE.CylinderGeometry(0.058, 0.058, 0.15, 10)),
-  bottle: based(new THREE.CylinderGeometry(0.035, 0.058, 0.28, 8)),
-  jar: based(new THREE.CylinderGeometry(0.065, 0.068, 0.14, 10)),
-  carton: based(new THREE.BoxGeometry(0.1, 0.22, 0.1)),
-  tub: based(new THREE.CylinderGeometry(0.085, 0.07, 0.09, 12)),
-  sphere: based(new THREE.SphereGeometry(0.07, 10, 8)),
-  long: based(new THREE.CapsuleGeometry(0.035, 0.16, 3, 8).rotateZ(Math.PI / 2)),
-  slab: based(new THREE.BoxGeometry(0.2, 0.05, 0.14)),
-  wedge: based(new THREE.CylinderGeometry(0.12, 0.12, 0.09, 10, 1, false, 0, Math.PI * 0.6)),
-};
-// small cap/label accents drawn on top of some shapes
-export const ACCENT_GEOS = {
-  bottle: based(new THREE.CylinderGeometry(0.025, 0.025, 0.04, 6)).translate(0, 0.28, 0),
-  can: based(new THREE.CylinderGeometry(0.06, 0.06, 0.05, 10)).translate(0, 0.05, 0),
-  jar: based(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 10)).translate(0, 0.14, 0),
-  box: based(new THREE.BoxGeometry(0.175, 0.08, 0.085)).translate(0, 0.12, 0),
-  carton: based(new THREE.ConeGeometry(0.075, 0.06, 4).rotateY(Math.PI / 4)).translate(0, 0.22, 0),
-};
-
-// Where products sit inside each storage fixture (local coords, centred, front = +z).
-// returns array per slot: { x0, y, z0, cols, rows, dx, dz }
-export function slotLayout(type) {
-  switch (type) {
-    case 'shelf': return [0.1, 0.5, 0.9, 1.3].map(y => ({ x0: -0.75, y, z0: 0.14, cols: 6, rows: 2, dx: 0.3, dz: -0.24 }));
-    case 'shelf_large': return [0.1, 0.48, 0.86, 1.24, 1.62].map(y => ({ x0: -1.2, y, z0: 0.14, cols: 9, rows: 2, dx: 0.3, dz: -0.24 }));
-    case 'endcap': return [0.15, 0.55, 0.95].map(y => ({ x0: -0.3, y, z0: 0.14, cols: 4, rows: 2, dx: 0.2, dz: -0.24 }));
-    case 'fridge': return [0.22, 0.62, 1.02, 1.42].map(y => ({ x0: -0.66, y, z0: 0.12, cols: 5, rows: 2, dx: 0.33, dz: -0.24 }));
-    case 'freezer_upright': return [0.22, 0.62, 1.02, 1.42].map(y => ({ x0: -0.66, y, z0: 0.12, cols: 5, rows: 2, dx: 0.33, dz: -0.24 }));
-    case 'fridge_large': return [0.2, 0.55, 0.9, 1.25, 1.6].map(y => ({ x0: -1.14, y, z0: 0.16, cols: 7, rows: 2, dx: 0.38, dz: -0.24 }));
-    case 'freezer': return [-0.45, 0.45].map(x => ({ x0: x - 0.36, y: 0.42, z0: 0.22, cols: 5, rows: 3, dx: 0.18, dz: -0.22 }));
-    case 'produce': return [[-0.48, 0.42, 0.2], [0.48, 0.42, 0.2], [-0.48, 0.72, -0.18], [0.48, 0.72, -0.18]].map(([x, y, z]) => ({ x0: x - 0.3, y, z0: z + 0.08, cols: 4, rows: 3, dx: 0.2, dz: -0.08, pile: true }));
-    case 'butcher': case 'deli': return [-1.05, -0.35, 0.35, 1.05].map(x => ({ x0: x - 0.225, y: 0.62, z0: 1.18, cols: 4, rows: 2, dx: 0.15, dz: -0.2 }));
-  }
-  return [];
-}
+// ------------------------------------------------------------------ product geometries (see products3d.js)
+export const UNIT_GEOS = PRODUCT_GEOS;
+export function slotLayout(type) { return slotRegions(type); }
 
 // ------------------------------------------------------------------ text sprites
 const spriteTexCache = new Map();
@@ -138,79 +101,101 @@ export function makeFurniture(type, f = {}) {
   g.userData.anim = [];
   switch (type) {
     case 'shelf': case 'shelf_large': case 'endcap': {
-      const h = type === 'shelf_large' ? 2.05 : type === 'endcap' ? 1.3 : 1.72;
-      const ys = slotLayout(type).map(s => s.y);
-      B(g, W - 0.04, h, 0.06, 0xe2e8f0, 0, h / 2, -0.38);
-      B(g, 0.06, h, 0.86, 0xf1f5f9, -W / 2 + 0.05, h / 2, 0);
-      B(g, 0.06, h, 0.86, 0xf1f5f9, W / 2 - 0.05, h / 2, 0);
-      for (const y of ys) { B(g, W - 0.12, 0.04, 0.8, 0xffffff, 0, y - 0.02, 0); B(g, W - 0.12, 0.06, 0.02, cc, 0, y - 0.04, 0.41, { shadow: false }); }
-      B(g, W - 0.04, 0.08, 0.86, 0x94a3b8, 0, 0.04, 0);
-      B(g, W - 0.04, 0.22, 0.04, type === 'endcap' ? 0xef4444 : cc, 0, h + 0.11, -0.36);
-      if (type === 'endcap') { const l = makeLabel('SALE', 0.12, { bg: '#ef4444', color: '#fff', size: 36 }, 0.4); l.position.set(-W / 2 + 0.25, h + 0.11, -0.335); g.add(l); }
+      // metal gondola shelving: kick plate, pegboard back, steel decks with price rails, header
+      const h = type === 'shelf_large' ? 1.9 : type === 'endcap' ? 1.48 : 1.7;
+      const regs = slotRegions(type), ys = [...new Set(regs.map(r => r.y))];
+      const steel = mat(0xdfe3e8, { metal: 0.55, rough: 0.35 }), upr = mat(0x4b5563, { metal: 0.6, rough: 0.4 });
+      B(g, W - 0.02, 0.15, 0.03, 0x2d333b, 0, 0.075, 0.3, { material: mat(0x2d333b, { metal: 0.4, rough: 0.5 }) });
+      const peg = new THREE.Mesh(new THREE.BoxGeometry(W - 0.06, h - 0.15, 0.025), pegboardMat(W, h)); peg.position.set(0, h / 2 + 0.07, -0.29); peg.castShadow = true; peg.receiveShadow = true; g.add(peg);
+      const xs = [-W / 2 + 0.03, W / 2 - 0.03, ...[...new Set(regs.map(r => r.x1))].filter(x => x < W / 2 - 0.1).map(x => x + 0.03)];
+      for (const x of xs) { B(g, 0.05, h, 0.05, 0, x, h / 2, -0.29, { material: upr }); B(g, 0.03, 0.35, 0.56, 0, x, 0.3, 0.01, { material: upr }); }
+      for (const y of ys) {
+        B(g, W - 0.08, 0.022, 0.56, 0, 0, y - 0.011, -0.01, { material: steel });
+        B(g, W - 0.08, 0.05, 0.016, 0xe5e7eb, 0, y - 0.022, 0.275, { material: mat(0xf3f4f6, { rough: 0.3 }) });
+        B(g, W - 0.08, 0.008, 0.017, cc, 0, y + 0.005, 0.276, { shadow: false });
+      }
+      B(g, W - 0.06, 0.022, 0.56, 0, 0, h - 0.011, -0.01, { material: steel });
+      B(g, W, 0.2, 0.035, 0xffffff, 0, h + 0.1, -0.29, { material: mat(0xf8fafc, { rough: 0.4 }) });
+      B(g, W, 0.025, 0.04, cc, 0, h + 0.01, -0.29, { shadow: false });
+      const lbl = makeLabel(type === 'endcap' ? 'SPECIAL OFFER' : CATEGORIES[def.cat].name, 0.07, { bg: null, color: '#334155', size: 32 }, 0.6);
+      lbl.position.set(-W / 2 + 0.35, h + 0.1, -0.27); g.add(lbl);
+      if (type === 'endcap') B(g, W - 0.06, 0.2, 0.02, 0xdc2626, 0, h + 0.1, -0.268, { shadow: false });
       break;
     }
     case 'fridge': case 'freezer_upright': case 'fridge_large': {
-      const h = type === 'fridge_large' ? 2.0 : 1.9;
-      const body = type === 'freezer_upright' ? 0xdbeafe : 0xf1f5f9;
-      B(g, W, 0.16, 0.9, DARK, 0, 0.08, 0);
-      B(g, W, h - 0.16, 0.06, body, 0, h / 2 + 0.08, -0.42);
-      B(g, 0.06, h, 0.9, body, -W / 2 + 0.03, h / 2, 0);
-      B(g, 0.06, h, 0.9, body, W / 2 - 0.03, h / 2, 0);
-      B(g, W, 0.12, 0.9, body, 0, h + 0.02, 0);
-      B(g, W - 0.1, h - 0.3, 0.02, type === 'freezer_upright' ? 0x93c5fd : 0xe0f2fe, 0, h / 2 + 0.05, -0.39, { emissive: 0x7dd3fc, ei: 0.35 });
-      for (const s of slotLayout(type)) B(g, W - 0.12, 0.03, 0.78, 0xe2e8f0, 0, s.y - 0.015, -0.02, { opacity: 0.9 });
-      B(g, W, 0.24, 0.05, cc, 0, h + 0.2, 0.4);
-      const lbl = makeLabel(type === 'freezer_upright' ? 'Frozen' : 'Chilled', 0.1, { bg: null, color: '#fff', size: 34 }, 0.5);
-      lbl.position.set(-W / 2 + 0.3, h + 0.2, 0.43); g.add(lbl);
-      if (type !== 'fridge_large') {
+      // glass-door merchandiser (or open multideck for the large one) with LED lighting
+      const h = 2.05, open = type === 'fridge_large', frozen = type === 'freezer_upright';
+      const body = mat(open ? 0x1f2937 : 0x111827, { metal: 0.5, rough: 0.35 });
+      const inner = mat(frozen ? 0xdbeafe : 0xf1f5f9, { rough: 0.5, emissive: 0xffffff, ei: 0.12 });
+      B(g, W, 0.18, 0.92, 0, 0, 0.09, 0, { material: body });
+      B(g, W - 0.04, 0.12, 0.02, 0x374151, 0, 0.09, 0.465, { material: mat(0x374151, { metal: 0.7, rough: 0.3 }) }); // grille
+      B(g, W, h - 0.18, 0.05, 0, 0, h / 2 + 0.09, -0.44, { material: body });
+      B(g, W - 0.1, h - 0.3, 0.02, 0, 0, h / 2 + 0.06, -0.41, { material: inner });
+      B(g, 0.05, h, 0.92, 0, -W / 2 + 0.025, h / 2, 0, { material: body }); B(g, 0.05, h, 0.92, 0, W / 2 - 0.025, h / 2, 0, { material: body });
+      B(g, W, 0.16, 0.92, 0, 0, h + 0.08, 0, { material: body });
+      const wire = mat(0xe5e7eb, { metal: 0.7, rough: 0.3, opacity: 0.95 });
+      for (const y of [...new Set(slotRegions(type).map(r => r.y))]) {
+        B(g, W - 0.12, 0.015, 0.6, 0, 0, y - 0.008, 0.0, { material: wire });
+        B(g, W - 0.12, 0.04, 0.012, 0xffffff, 0, y - 0.02, 0.305, { material: mat(0xf8fafc) });
+        if (open) B(g, W - 0.12, 0.012, 0.02, 0xffffff, 0, y + 0.29, 0.28, { material: mat(0xffffff, { emissive: 0xffffff, ei: 1.2 }), shadow: false });
+      }
+      const header = B(g, W, 0.16, 0.03, 0, 0, h + 0.08, 0.465, { material: mat(cc, { rough: 0.4 }) });
+      void header;
+      const lbl = makeLabel(frozen ? 'Frozen' : 'Chilled', 0.08, { bg: null, color: '#fff', size: 32 }, 0.4);
+      lbl.position.set(-W / 2 + 0.25, h + 0.08, 0.483); g.add(lbl);
+      if (!open) {
         const doors = W > 2.5 ? 3 : 2;
         g.userData.doors = [];
+        const frame = mat(0x9ca3af, { metal: 0.85, rough: 0.25 });
         for (let i = 0; i < doors; i++) {
           const dw = W / doors;
-          const door = new THREE.Group(); door.position.set(-W / 2 + dw * i, 0, 0.44);
-          B(door, dw - 0.04, h - 0.25, 0.03, 0xbae6fd, dw / 2, h / 2 + 0.06, 0, { opacity: 0.22, rough: 0.05, shadow: false });
-          B(door, 0.04, h - 0.25, 0.05, 0x94a3b8, 0.02, h / 2 + 0.06, 0);
-          B(door, dw - 0.04, 0.04, 0.05, 0x94a3b8, dw / 2, 0.2, 0);
-          B(door, dw - 0.04, 0.04, 0.05, 0x94a3b8, dw / 2, h - 0.08, 0);
-          B(door, 0.03, 0.4, 0.06, 0x475569, dw - 0.1, h / 2, 0.03);
+          const door = new THREE.Group(); door.position.set(-W / 2 + dw * i + 0.02, 0, 0.45);
+          B(door, dw - 0.04, h - 0.3, 0.02, 0xdbeafe, dw / 2 - 0.02, h / 2 + 0.04, 0, { material: mat(0xdbeafe, { opacity: 0.16, rough: 0.02, metal: 0.1 }), shadow: false });
+          for (const [w_, hh, x, y] of [[0.04, h - 0.26, 0.0, h / 2 + 0.04], [0.04, h - 0.26, dw - 0.04, h / 2 + 0.04], [dw - 0.04, 0.04, dw / 2 - 0.02, 0.21], [dw - 0.04, 0.04, dw / 2 - 0.02, h - 0.11]]) B(door, w_, hh, 0.03, 0, x, y, 0, { material: frame });
+          B(door, 0.025, 0.9, 0.04, 0, dw - 0.12, h / 2, 0.035, { material: frame });
+          // vertical LED strip behind each door frame
+          B(g, 0.02, h - 0.4, 0.02, 0xffffff, -W / 2 + dw * i + 0.05, h / 2 + 0.06, 0.36, { material: mat(0xffffff, { emissive: 0xffffff, ei: 1.4 }), shadow: false });
           g.add(door); g.userData.doors.push(door);
         }
       } else {
-        B(g, W, 0.08, 0.2, 0x0f172a, 0, 0.22, 0.38); // air curtain strip
+        B(g, W - 0.1, 0.03, 0.06, 0x111827, 0, 0.3, 0.42, { material: mat(0x111827) });
+        B(g, W - 0.1, 0.06, 0.08, 0x9ca3af, 0, h - 0.05, 0.43, { material: mat(0x9ca3af, { metal: 0.6 }) }); // night blind roll
       }
-      const led = B(g, 0.1, 0.06, 0.02, 0x22c55e, W / 2 - 0.2, h + 0.02, 0.46, { emissive: 0x22c55e });
+      const led = B(g, 0.08, 0.04, 0.02, 0x22c55e, W / 2 - 0.15, 0.09, 0.47, { emissive: 0x22c55e });
       g.userData.led = led;
       break;
     }
     case 'freezer': {
-      B(g, W, 0.78, 0.9, 0xf1f5f9, 0, 0.39, 0);
-      B(g, W - 0.1, 0.05, 0.8, 0xbfdbfe, 0, 0.4, 0, { emissive: 0x93c5fd, ei: 0.4 });
+      // island chest freezer with sliding glass lids
+      const white = mat(0xf8fafc, { rough: 0.35 }), trim = mat(0x9ca3af, { metal: 0.85, rough: 0.25 });
+      B(g, W, 0.72, 0.92, 0, 0, 0.36, 0, { material: white });
+      B(g, W - 0.08, 0.04, 0.84, 0xbfdbfe, 0, 0.3, 0, { material: mat(0xbfdbfe, { emissive: 0x93c5fd, ei: 0.4 }) });
+      B(g, W, 0.12, 0.94, 0, 0, 0.06, 0, { material: mat(0x374151, { metal: 0.4 }) });
+      for (const z of [-0.46, 0.46]) B(g, W, 0.08, 0.03, 0, 0, 0.76, z, { material: trim });
+      for (const x of [-W / 2 + 0.015, W / 2 - 0.015, 0]) B(g, 0.03, 0.08, 0.94, 0, x, 0.76, 0, { material: trim });
+      B(g, W - 0.04, 0.16, 0.01, cc, 0, 0.56, 0.466, { shadow: false });
       const lid = new THREE.Group(); g.add(lid); g.userData.lid = lid;
-      B(lid, W / 2 - 0.04, 0.03, 0.84, 0xbae6fd, -W / 4, 0.82, 0, { opacity: 0.25, rough: 0.05, shadow: false });
-      B(lid, 0.04, 0.05, 0.86, 0x94a3b8, 0, 0.82, 0);
-      B(g, W / 2 - 0.04, 0.03, 0.84, 0xbae6fd, W / 4, 0.815, 0, { opacity: 0.25, rough: 0.05, shadow: false });
-      B(g, W, 0.12, 0.92, cc, 0, 0.74, 0);
-      B(g, W, 0.1, 0.92, DARK, 0, 0.05, 0);
-      const led = B(g, 0.1, 0.05, 0.02, 0x22c55e, W / 2 - 0.15, 0.6, 0.46, { emissive: 0x22c55e });
+      B(lid, W / 2 - 0.04, 0.02, 0.88, 0, -W / 4, 0.8, 0, { material: mat(0xdbeafe, { opacity: 0.2, rough: 0.02 }), shadow: false });
+      B(g, W / 2 - 0.04, 0.02, 0.88, 0, W / 4, 0.79, 0, { material: mat(0xdbeafe, { opacity: 0.2, rough: 0.02 }), shadow: false });
+      const led = B(g, 0.08, 0.04, 0.02, 0x22c55e, W / 2 - 0.15, 0.4, 0.465, { emissive: 0x22c55e });
       g.userData.led = led;
-      const lbl = makeLabel('Frozen', 0.09, { bg: '#818cf8', color: '#fff', size: 32 }, 0.4);
-      lbl.position.set(-W / 2 + 0.28, 0.62, 0.465); g.add(lbl);
+      const lbl = makeLabel('Frozen', 0.07, { bg: null, color: '#fff', size: 30 }, 0.3);
+      lbl.position.set(-W / 2 + 0.22, 0.56, 0.473); g.add(lbl);
       break;
     }
     case 'produce': {
-      B(g, W, 0.35, 0.9, WOOD2, 0, 0.17, 0);
-      for (const s of slotLayout(type)) {
-        const cx = s.x0 + 0.3, cz = s.z0 - 0.08;
-        B(g, 0.9, 0.04, 0.36, WOOD, cx, s.y - 0.02, cz);
-        B(g, 0.9, 0.12, 0.03, WOOD, cx, s.y + 0.04, cz + 0.18);
-        B(g, 0.9, 0.12, 0.03, WOOD, cx, s.y + 0.04, cz - 0.18);
-        B(g, 0.03, 0.12, 0.36, WOOD, cx - 0.45, s.y + 0.04, cz);
-        B(g, 0.03, 0.12, 0.36, WOOD, cx + 0.45, s.y + 0.04, cz);
-        if (s.y > 0.6) B(g, 0.9, s.y - 0.36, 0.3, WOOD2, cx, (s.y + 0.34) / 2, cz);
+      const wood = mat(0xb7834f, { rough: 0.8 }), wood2 = mat(0x8b5a2b, { rough: 0.85 });
+      B(g, W, 0.36, 0.86, 0, 0, 0.18, 0, { material: wood2 });
+      for (const r of slotRegions(type)) {
+        const cx = (r.x0 + r.x1) / 2, cw = r.x1 - r.x0, cz = r.zf - r.depth / 2;
+        B(g, cw, 0.03, r.depth, 0, cx, r.y - 0.015, cz, { material: wood });
+        for (const zz of [r.zf, r.zf - r.depth]) for (const yy of [0.03, 0.09]) B(g, cw, 0.04, 0.02, 0, cx, r.y + yy, zz, { material: wood });
+        for (const xx of [r.x0, r.x1]) B(g, 0.02, 0.12, r.depth, 0, xx, r.y + 0.05, cz, { material: wood });
+        if (r.y > 0.6) B(g, cw, r.y - 0.36, r.depth, 0, cx, (r.y + 0.36) / 2, cz, { material: wood2 });
       }
-      // awning
-      for (let i = 0; i < 6; i++) B(g, W / 6, 0.04, 0.5, i % 2 ? 0xffffff : 0x16a34a, -W / 2 + W / 12 + i * W / 6, 1.55, 0.1, { shadow: false }).rotation.x = 0.3;
-      C(g, 0.025, 0.025, 1.5, WOOD2, -W / 2 + 0.05, 0.78, -0.38); C(g, 0.025, 0.025, 1.5, WOOD2, W / 2 - 0.05, 0.78, -0.38);
+      for (const x of [-W / 2 + 0.04, W / 2 - 0.04]) C(g, 0.025, 0.025, 1.7, 0, x, 0.85, -0.38, { material: wood2 });
+      B(g, W, 0.24, 0.04, 0x166534, 0, 1.75, -0.38, { material: mat(0x166534, { rough: 0.6 }) });
+      const lbl = makeLabel('Fresh Produce', 0.09, { bg: null, color: '#fff', size: 32 }, 0.7); lbl.position.set(-W / 2 + 0.45, 1.75, -0.355); g.add(lbl);
       break;
     }
     case 'butcher': case 'deli': {
@@ -315,22 +300,41 @@ export function makeFurniture(type, f = {}) {
       break;
     }
     case 'checkout': {
-      B(g, W, 0.85, 0.7, 0x1e40af, 0, 0.42, 0);
-      B(g, W, 0.05, 0.75, 0xe2e8f0, 0, 0.87, 0);
-      const belt = B(g, W - 0.5, 0.03, 0.45, 0x1f2937, -0.2, 0.9, 0.05); g.userData.belt = belt;
-      B(g, 0.45, 0.05, 0.6, 0x94a3b8, W / 2 - 0.25, 0.9, 0);
-      // register
-      B(g, 0.32, 0.12, 0.28, 0x111827, W / 2 - 0.3, 0.98, -0.18);
-      const scr = B(g, 0.3, 0.2, 0.03, 0x0ea5e9, W / 2 - 0.3, 1.15, -0.22, { emissive: 0x0ea5e9, ei: 0.6 }); scr.rotation.x = -0.4;
+      // checkout lane: conveyor belt -> flatbed scanner -> bagging area, POS facing the cashier (-z)
+      const body = mat(0xe5e7eb, { rough: 0.5 }), wood = mat(0x9a6b3f, { rough: 0.6 }), steel = mat(0xcbd5e1, { metal: 0.8, rough: 0.25 });
+      B(g, W, 0.84, 0.66, 0, 0, 0.42, 0, { material: body });
+      B(g, W - 0.04, 0.5, 0.01, 0, 0, 0.45, 0.335, { material: wood });
+      B(g, W, 0.04, 0.72, 0, 0, 0.86, 0, { material: steel });
+      const belt = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.025, 0.42), beltMat()); belt.position.set(-0.42, 0.89, 0.06); belt.receiveShadow = true; g.add(belt);
+      g.userData.belt = belt;
+      for (const z of [-0.17, 0.29]) B(g, 1.08, 0.04, 0.03, 0, -0.42, 0.9, z, { material: steel });
+      B(g, 0.32, 0.03, 0.03, 0x111827, -0.7, 0.92, 0.06, { material: mat(0x111827) }); // divider bar
+      // flatbed scanner + tower
+      B(g, 0.28, 0.02, 0.3, 0x111827, 0.27, 0.885, 0.06, { material: mat(0x0f172a, { rough: 0.05, metal: 0.3 }) });
+      B(g, 0.2, 0.004, 0.02, 0xef4444, 0.27, 0.897, 0.06, { material: mat(0xef4444, { emissive: 0xef4444, ei: 2 }), shadow: false });
+      B(g, 0.28, 0.2, 0.05, 0x1f2937, 0.27, 0.98, -0.11, { material: mat(0x1f2937) });
+      B(g, 0.22, 0.12, 0.005, 0x0f172a, 0.27, 0.98, -0.083, { material: mat(0x0f172a, { rough: 0.05 }) });
+      // bagging area with bags
+      B(g, 0.52, 0.02, 0.62, 0, 0.72, 0.87, 0.0, { material: steel });
+      for (const x of [0.6, 0.85]) { const bag = B(g, 0.2, 0.26, 0.14, 0xf8fafc, x, 1.01, 0.12, { material: mat(0xf8fafc, { opacity: 0.85, rough: 0.6 }) }); bag.castShadow = false; }
+      // POS: monitor facing cashier, customer display, receipt printer, card terminal
+      C(g, 0.02, 0.02, 0.25, 0, 0.62, 1.0, -0.22, { material: steel });
+      const scr = B(g, 0.32, 0.22, 0.03, 0x0ea5e9, 0.62, 1.2, -0.24, { emissive: 0x0ea5e9, ei: 0.7 }); scr.rotation.y = Math.PI; scr.rotation.x = 0.2;
       g.userData.screen = scr;
-      // scanner glass
-      B(g, 0.22, 0.02, 0.22, 0xef4444, 0.35, 0.91, 0.05, { emissive: 0xef4444, ei: 0.5 });
-      // lane light
-      C(g, 0.02, 0.02, 1.2, 0x475569, -W / 2 + 0.08, 1.4, -0.28);
-      const lamp = B(g, 0.22, 0.22, 0.22, 0x22c55e, -W / 2 + 0.08, 2.05, -0.28, { emissive: 0x22c55e, ei: 0.2 });
+      B(g, 0.34, 0.24, 0.02, 0x111827, 0.62, 1.2, -0.23, { material: mat(0x111827) }).rotation.x = -0.2;
+      B(g, 0.16, 0.1, 0.03, 0x22c55e, 0.62, 1.32, -0.2, { emissive: 0x16a34a, ei: 0.5 });
+      B(g, 0.14, 0.1, 0.16, 0x374151, 0.9, 0.93, -0.22, { material: mat(0x374151) });
+      B(g, 0.08, 0.005, 0.05, 0xffffff, 0.9, 0.985, -0.16, { shadow: false });
+      C(g, 0.015, 0.015, 0.12, 0, 0.9, 0.94, 0.2, { material: steel });
+      B(g, 0.09, 0.14, 0.03, 0x111827, 0.9, 1.06, 0.2, { material: mat(0x111827) }).rotation.x = -0.4;
+      B(g, 0.07, 0.05, 0.005, 0x38bdf8, 0.9, 1.08, 0.217, { emissive: 0x38bdf8, ei: 0.8, shadow: false }).rotation.x = -0.4;
+      // cash drawer and lane light
+      B(g, 0.4, 0.1, 0.05, 0x1f2937, 0.62, 0.78, -0.335, { material: mat(0x1f2937) });
+      C(g, 0.025, 0.025, 1.3, 0, -W / 2 + 0.06, 1.5, -0.28, { material: steel });
+      const lamp = B(g, 0.22, 0.22, 0.06, 0x22c55e, -W / 2 + 0.06, 2.2, -0.28, { emissive: 0x22c55e, ei: 0.25 });
       g.userData.lamp = lamp;
-      // bags
-      B(g, 0.18, 0.22, 0.12, 0xfef3c7, W / 2 - 0.15, 1.02, 0.15);
+      // cashier stool
+      C(g, 0.17, 0.17, 0.05, 0x1f2937, -0.4, 0.68, -0.85, { material: mat(0x1f2937) }); C(g, 0.025, 0.025, 0.66, 0, -0.4, 0.34, -0.85, { material: steel });
       staffMat(g, -0.5);
       break;
     }
@@ -429,6 +433,27 @@ export function makeFurniture(type, f = {}) {
   return g;
 }
 
+let pegTex = null, beltTex = null, pegM = null, beltM = null;
+function pegboardMat() {
+  if (!pegTex) {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    g.fillStyle = '#e7eaee'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#9aa3ad';
+    for (let x = 8; x < 64; x += 16) for (let y = 8; y < 64; y += 16) { g.beginPath(); g.arc(x, y, 2.4, 0, 7); g.fill(); }
+    pegTex = new THREE.CanvasTexture(c); pegTex.wrapS = pegTex.wrapT = THREE.RepeatWrapping; pegTex.repeat.set(8, 7); pegTex.colorSpace = THREE.SRGBColorSpace;
+  }
+  return pegM ||= new THREE.MeshStandardMaterial({ map: pegTex, roughness: 0.55, metalness: 0.3 });
+}
+export function beltMat() {
+  if (!beltTex) {
+    const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d');
+    g.fillStyle = '#1f2328'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#2b3036';
+    for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 3, 64);
+    beltTex = new THREE.CanvasTexture(c); beltTex.wrapS = beltTex.wrapT = THREE.RepeatWrapping; beltTex.repeat.set(6, 1);
+  }
+  return beltM ||= new THREE.MeshStandardMaterial({ map: beltTex, roughness: 0.85 });
+}
+export function beltTexture() { return beltTex; }
+
 function staffMat(g, x) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.9 }));
   m.rotation.x = -Math.PI / 2; m.position.set(x, 0.006, -1); m.receiveShadow = true; g.add(m);
@@ -478,132 +503,132 @@ export function rng(seed) {
   let a = seed >>> 0;
   return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
-const SKINS = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a21, 0xfde3cf];
-const HAIRS = [0x2b1d0e, 0x4a2c17, 0x8b5a2b, 0xd6a75c, 0x111111, 0xb91c1c, 0xe5e7eb, 0x7c3aed];
-const SHIRTS = [0xf87171, 0xfb923c, 0xfacc15, 0x4ade80, 0x2dd4bf, 0x60a5fa, 0xa78bfa, 0xf472b6, 0xffffff, 0x94a3b8, 0x1e293b, 0x84cc16];
-const PANTS = [0x1e3a8a, 0x334155, 0x78350f, 0x111827, 0x6b7280, 0x065f46, 0x9a3412];
+const SKINS = [0xf6d3b8, 0xeac09a, 0xd9a07a, 0xc68642, 0x9c6a45, 0x6b4428, 0x4a2e1a, 0xfbe0cc];
+const HAIRS = [0x2b1d0e, 0x3b2414, 0x6b4423, 0x9a6a3a, 0xc9a26b, 0x111111, 0x7a1f12, 0xd8d8d8];
+const TOPS = [0xf1f5f9, 0x1e293b, 0x64748b, 0x1d4ed8, 0x0f766e, 0x9f1239, 0xa16207, 0x166534, 0x7c3aed, 0xea580c, 0xdc2626, 0xfde68a, 0x93c5fd, 0xfbcfe8];
+const BOTTOMS = [0x1e3a8a, 0x1e40af, 0x334155, 0x111827, 0x57534e, 0x78350f, 0x3f3f46, 0x6b7280];
+const SHOES = [0x111827, 0xf8fafc, 0x78350f, 0x374151, 0x991b1b];
 
 export function lookFromSeed(seed) {
   const r = rng(seed);
   const p = (arr) => arr[Math.floor(r() * arr.length)];
-  const kid = r() < 0.1, elder = !kid && r() < 0.15;
-  return { skin: p(SKINS), hair: elder ? 0xe5e7eb : p(HAIRS), shirt: p(SHIRTS), pants: p(PANTS), hairStyle: Math.floor(r() * 4),
-    scale: kid ? 0.68 : 0.9 + r() * 0.16, hat: r() < 0.12 ? p([0xef4444, 0x1e293b, 0x22c55e, 0xfacc15]) : null, glasses: r() < 0.2, width: 0.9 + r() * 0.25 };
+  const kid = r() < 0.08, elder = !kid && r() < 0.16, female = r() < 0.5;
+  return {
+    female, kid, skin: p(SKINS), hair: elder ? 0xd4d4d4 : p(HAIRS),
+    hairStyle: female ? p([1, 1, 3, 4, 0]) : p([0, 0, 0, 2, 5]),
+    shirt: p(TOPS), pants: p(BOTTOMS), shoes: p(SHOES), skirt: female && r() < 0.3, longSleeves: r() < 0.45,
+    jacket: r() < 0.22 ? p([0x1f2937, 0x78350f, 0x065f46, 0x1e3a8a, 0x9f1239]) : null,
+    scale: kid ? 0.66 + r() * 0.08 : (female ? 0.9 : 0.95) + r() * 0.08, width: 1.12 + r() * 0.38, belly: r() * 0.9,
+    glasses: r() < (elder ? 0.55 : 0.18), beard: !female && !kid && r() < 0.25, hat: r() < 0.06 ? p([0x1e293b, 0x7f1d1d, 0x14532d]) : null,
+  };
 }
 
+const capsuleCache = new Map();
+function capsule(r, len) { const k = r + ':' + len; if (!capsuleCache.has(k)) capsuleCache.set(k, new THREE.CapsuleGeometry(r, len, 4, 10)); return capsuleCache.get(k); }
+let torsoGeo = null;
+function torsoGeometry() {
+  if (!torsoGeo) torsoGeo = new THREE.LatheGeometry([[0.001, 0], [0.15, 0.0], [0.168, 0.07], [0.175, 0.17], [0.178, 0.28], [0.18, 0.37], [0.172, 0.44], [0.12, 0.5], [0.055, 0.53], [0.001, 0.535]].map(([x, y]) => new THREE.Vector2(x, y)), 20).scale(1, 1, 0.72);
+  return torsoGeo;
+}
+function part(parent, geo, material, x, y, z) { const m = new THREE.Mesh(geo, material); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; }
+
+// A realistically proportioned person (~1.75 m) with hips, knees, shoulders and elbows that animate.
 export function makeCharacter(look) {
   const g = new THREE.Group();
   const root = new THREE.Group(); g.add(root);
-  const sc = look.scale || 1; root.scale.setScalar(sc);
-  const skin = mat(look.skin), shirt = mat(look.shirt), pants = mat(look.pants);
+  root.scale.setScalar(look.scale || 1);
+  const W = look.width || 1;
+  const skin = mat(look.skin, { rough: 0.6 }), shirt = mat(look.shirt, { rough: 0.85 }), pants = mat(look.pants, { rough: 0.9 }), shoe = mat(look.shoes ?? 0x111827, { rough: 0.5 });
+  const sleeve = look.jacket ? mat(look.jacket, { rough: 0.8 }) : shirt;
   const P = {};
-  // legs
+  const hips = new THREE.Group(); hips.position.y = 0.78; root.add(hips); P.hips = hips;
   for (const side of [-1, 1]) {
-    const hip = new THREE.Group(); hip.position.set(side * 0.1, 0.58, 0); root.add(hip);
-    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.38, 3, 8), pants); leg.position.y = -0.27; leg.castShadow = true; hip.add(leg);
-    const shoe = B(hip, 0.14, 0.08, 0.22, 0x1f2937, 0, -0.54, 0.04);
-    P[side < 0 ? 'legL' : 'legR'] = hip;
-    void shoe;
+    const hip = new THREE.Group(); hip.position.set(side * 0.095 * W, 0, 0); hips.add(hip);
+    part(hip, capsule(0.075 * Math.min(1.3, W), 0.22), look.skirt ? skin : pants, 0, -0.17, 0);
+    const knee = new THREE.Group(); knee.position.y = -0.37; hip.add(knee);
+    part(knee, capsule(0.06 * Math.min(1.25, W), 0.2), look.skirt ? skin : pants, 0, -0.16, 0);
+    part(knee, boxGeo(0.11, 0.075, 0.25), shoe, 0, -0.37, 0.045);
+    P[side < 0 ? 'legL' : 'legR'] = hip; P[side < 0 ? 'kneeL' : 'kneeR'] = knee;
   }
-  const torso = new THREE.Group(); torso.position.y = 0.58; root.add(torso); P.torso = torso;
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2 * (look.width || 1), 0.32, 4, 12), shirt); body.position.y = 0.33; body.castShadow = true; torso.add(body);
-  if (look.apron) { const ap = B(torso, 0.34, 0.5, 0.05, look.apron, 0, 0.26, 0.19); ap.castShadow = false; }
-  if (look.badge) B(torso, 0.08, 0.05, 0.02, look.badge, 0.1, 0.5, 0.21, { emissive: look.badge, ei: 0.3 });
+  const torso = new THREE.Group(); hips.add(torso); P.torso = torso;
+  part(torso, sphGeo(0.5, 14, 8), pants, 0, 0.02, 0).scale.set(0.34 * W, 0.22, 0.25);
+  if (look.skirt) { const sk = part(torso, new THREE.CylinderGeometry(0.15 * W, 0.24 * W, 0.42, 16, 1, true), pants, 0, -0.17, 0); sk.material = mat(look.pants, { rough: 0.9, side: THREE.DoubleSide }); }
+  const body = part(torso, torsoGeometry(), look.jacket ? sleeve : shirt, 0, 0.0, 0); body.scale.set(W, 1, 0.9 + (W - 1) * 0.6);
+  const belly = part(torso, sphGeo(0.5, 16, 12), look.jacket ? sleeve : shirt, 0, 0.2, 0.05); belly.scale.set(0.3 * W, 0.34, 0.2 + (look.belly || 0) * 0.12 + (W - 1) * 0.15);
+  if (look.jacket) { B(torso, 0.06, 0.4, 0.01, look.shirt, 0, 0.27, 0.15 + (look.belly || 0) * 0.05, { shadow: false }); }
+  if (look.apron) { const ap = B(torso, 0.32 * W, 0.6, 0.02, look.apron, 0, 0.12, 0.17 + (look.belly || 0) * 0.06, { shadow: false }); void ap; }
+  if (look.badge) B(torso, 0.06, 0.035, 0.01, look.badge, 0.08, 0.4, 0.15, { emissive: look.badge, ei: 0.2, shadow: false });
+  part(torso, new THREE.CylinderGeometry(0.05, 0.058, 0.08, 10), skin, 0, 0.56, 0);
   // arms
   for (const side of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(side * 0.27 * (look.width || 1), 0.55, 0); torso.add(sh);
-    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.32, 3, 8), shirt); arm.position.y = -0.2; arm.castShadow = true; sh.add(arm);
-    S(sh, 0.065, look.skin, 0, -0.42, 0, { material: skin });
-    P[side < 0 ? 'armL' : 'armR'] = sh;
+    const sh = new THREE.Group(); sh.position.set(side * 0.215 * W, 0.46, 0); torso.add(sh);
+    part(sh, sphGeo(0.07, 10, 8), sleeve, 0, 0, 0);
+    part(sh, capsule(0.058, 0.17), sleeve, 0, -0.12, 0);
+    const el = new THREE.Group(); el.position.y = -0.25; sh.add(el);
+    part(el, capsule(0.049, 0.15), look.longSleeves || look.jacket ? sleeve : skin, 0, -0.1, 0);
+    part(el, sphGeo(0.05, 10, 8), skin, 0, -0.23, 0.005).scale.set(0.85, 1.2, 0.6);
+    P[side < 0 ? 'armL' : 'armR'] = sh; P[side < 0 ? 'elbowL' : 'elbowR'] = el;
   }
   // head
-  const head = new THREE.Group(); head.position.y = 0.88; torso.add(head); P.head = head;
-  S(head, 0.2, look.skin, 0, 0.0, 0, { material: skin, w: 16, h: 12 });
-  S(head, 0.028, 0x111111, -0.07, 0.03, 0.18, { shadow: false });
-  S(head, 0.028, 0x111111, 0.07, 0.03, 0.18, { shadow: false });
-  const mouth = B(head, 0.07, 0.015, 0.01, 0x7f1d1d, 0, -0.07, 0.19, { shadow: false }); P.mouth = mouth;
-  S(head, 0.035, look.skin, 0, -0.01, 0.2, { material: skin, shadow: false });
-  if (look.glasses) { B(head, 0.2, 0.02, 0.01, 0x111111, 0, 0.04, 0.2, { shadow: false }); }
-  const hm = mat(look.hair);
+  const head = new THREE.Group(); head.position.y = 0.72; torso.add(head); P.head = head;
+  part(head, sphGeo(0.5, 18, 14), skin, 0, 0, 0).scale.set(0.2, 0.235, 0.215);
+  part(head, sphGeo(0.5, 12, 8), skin, 0, -0.065, 0.03).scale.set(0.17, 0.13, 0.16); // round cheeks & jaw
+  for (const sd of [-1, 1]) {
+    part(head, sphGeo(0.025, 8, 6), skin, sd * 0.095, 0.0, -0.005).scale.set(0.6, 1.1, 1);
+    part(head, sphGeo(0.016, 10, 8), mat(0xffffff, { rough: 0.2 }), sd * 0.038, 0.02, 0.088);
+    part(head, sphGeo(0.009, 8, 6), mat(0x3b2a1a, { rough: 0.1 }), sd * 0.038, 0.02, 0.101);
+    B(head, 0.035, 0.008, 0.01, look.hair, sd * 0.04, 0.047, 0.095, { shadow: false });
+  }
+  part(head, new THREE.ConeGeometry(0.016, 0.045, 8), skin, 0, -0.005, 0.105).rotation.x = Math.PI / 2 - 0.25;
+  const mouth = B(head, 0.04, 0.008, 0.008, look.female ? 0xbe123c : 0x9f4f4f, 0, -0.05, 0.096, { shadow: false }); P.mouth = mouth;
+  if (look.glasses) { for (const sd of [-1, 1]) { const rim = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.003, 6, 14), mat(0x111111)); rim.position.set(sd * 0.038, 0.02, 0.105); head.add(rim); } B(head, 0.03, 0.003, 0.003, 0x111111, 0, 0.022, 0.106, { shadow: false }); }
+  if (look.beard) { const bd = part(head, sphGeo(0.5, 12, 8, 0), mat(look.hair, { rough: 0.95 }), 0, -0.075, 0.045); bd.scale.set(0.15, 0.1, 0.13); }
+  const hm = mat(look.hair, { rough: 0.9 });
   if (look.hairStyle !== 2) {
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.215, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hm);
-    hair.rotation.x = -0.25; hair.position.set(0, 0.02, -0.02); hair.castShadow = true; head.add(hair);
-    if (look.hairStyle === 1) { const lh = B(head, 0.36, 0.3, 0.12, look.hair, 0, -0.1, -0.13, { material: hm }); void lh; }
-    if (look.hairStyle === 3) S(head, 0.09, look.hair, 0, 0.17, -0.15, { material: hm });
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 10, 0, Math.PI * 2, 0, Math.PI * (look.hairStyle === 5 ? 0.38 : 0.55)), hm);
+    hair.scale.set(0.205, 0.25, 0.225); hair.rotation.x = -0.35; hair.position.set(0, 0.025, -0.01); hair.castShadow = true; head.add(hair);
+    if (look.hairStyle === 1) part(head, boxGeo(0.2, 0.26, 0.08), hm, 0, -0.1, -0.08);
+    if (look.hairStyle === 3) part(head, sphGeo(0.05, 10, 8), hm, 0, 0.11, -0.09);
+    if (look.hairStyle === 4) { part(head, sphGeo(0.035, 8, 6), hm, 0, 0.02, -0.12); part(head, capsule(0.03, 0.14), hm, 0, -0.08, -0.13); }
   }
-  if (look.hat) {
-    C(head, 0.21, 0.21, 0.1, look.hat, 0, 0.16, 0, { seg: 16 });
-    B(head, 0.2, 0.025, 0.14, look.hat, 0, 0.12, 0.2);
-  }
-  if (look.chef) { C(head, 0.17, 0.2, 0.22, 0xffffff, 0, 0.27, 0, { seg: 14 }); S(head, 0.2, 0xffffff, 0, 0.4, 0, { w: 12, h: 8 }); }
-  if (look.cap) { C(head, 0.21, 0.21, 0.12, look.cap, 0, 0.16, 0, { seg: 16 }); B(head, 0.22, 0.025, 0.18, look.cap, 0, 0.12, 0.22); }
-  if (look.hairnet) { const n = new THREE.Mesh(new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), mat(0xffffff, { opacity: 0.7 })); n.position.y = 0.03; head.add(n); }
-  // hands attach point for carried things
-  const hold = new THREE.Group(); hold.position.set(0, 0.95, 0.36); root.add(hold); P.hold = hold;
-  const side = new THREE.Group(); side.position.set(0.34, 0.2, 0.05); root.add(side); P.side = side;
+  if (look.hat) { C(head, 0.112, 0.112, 0.07, look.hat, 0, 0.1, 0, { seg: 18 }); B(head, 0.12, 0.012, 0.09, look.hat, 0, 0.07, 0.12); }
+  if (look.cap) { const c = C(head, 0.112, 0.112, 0.075, look.cap, 0, 0.1, -0.005, { seg: 18 }); void c; B(head, 0.13, 0.012, 0.11, look.cap, 0, 0.07, 0.13); }
+  if (look.chef) { C(head, 0.1, 0.115, 0.14, 0xffffff, 0, 0.17, 0, { seg: 16 }); S(head, 0.12, 0xffffff, 0, 0.26, 0, { w: 12, h: 8 }); }
+  if (look.hairnet) { const n = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), mat(0xffffff, { opacity: 0.55 })); n.scale.set(0.215, 0.26, 0.235); n.position.y = 0.02; head.add(n); }
+  const hold = new THREE.Group(); hold.position.set(0, 0.98, 0.42); root.add(hold); P.hold = hold;
+  const sideHold = new THREE.Group(); sideHold.position.set(0.3 * W, 0.4, 0.04); root.add(sideHold); P.side = sideHold;
   g.userData.parts = P;
   g.userData.phase = Math.random() * 6;
   return g;
 }
 
-// pose: 'walk' | 'idle' | 'carry' | 'work' | 'cart'
+// pose: 'walk' | 'carry' | 'work' | 'cart' | 'basket' | 'wave' | 'clean'
 export function animateCharacter(ch, dt, moving, pose, speed = 1) {
   const P = ch.userData.parts; if (!P) return;
-  ch.userData.phase += dt * (moving ? 9 * speed : 2);
+  ch.userData.phase += dt * (moving ? 7.5 * speed : 1.6);
   const ph = ch.userData.phase;
-  const sw = moving ? Math.sin(ph) * 0.65 : 0;
+  const sw = moving ? Math.sin(ph) * 0.5 : 0;
   P.legL.rotation.x = sw; P.legR.rotation.x = -sw;
-  P.torso.position.y = 0.58 + (moving ? Math.abs(Math.cos(ph)) * 0.04 : Math.sin(ph) * 0.006);
-  if (pose === 'carry' || pose === 'cart') {
-    P.armL.rotation.x = P.armR.rotation.x = -1.25 + (moving ? Math.sin(ph * 2) * 0.03 : 0);
-    P.armL.rotation.z = 0.15; P.armR.rotation.z = -0.15;
-  } else if (pose === 'work') {
-    P.armL.rotation.x = -0.9 + Math.sin(ph * 5) * 0.25; P.armR.rotation.x = -0.9 - Math.sin(ph * 5) * 0.25;
-    P.armL.rotation.z = 0.1; P.armR.rotation.z = -0.1;
-  } else if (pose === 'basket') {
-    P.armL.rotation.x = -sw * 0.8; P.armR.rotation.x = -0.15; P.armL.rotation.z = 0.05; P.armR.rotation.z = -0.05;
-  } else if (pose === 'wave') {
-    P.armR.rotation.x = -2.6; P.armR.rotation.z = -0.3 + Math.sin(ph * 6) * 0.4; P.armL.rotation.x = 0;
-  } else if (pose === 'clean') {
-    P.armL.rotation.x = -0.6 + Math.sin(ph * 6) * 0.4; P.armR.rotation.x = -0.6 + Math.sin(ph * 6) * 0.4;
-  } else {
-    P.armL.rotation.x = -sw * 0.8; P.armR.rotation.x = sw * 0.8; P.armL.rotation.z = 0.05; P.armR.rotation.z = -0.05;
-  }
-  P.head.rotation.y = moving ? 0 : Math.sin(ph * 0.4) * 0.25;
+  P.kneeL.rotation.x = moving ? 0.08 + 0.75 * Math.max(0, Math.sin(ph + 1.9)) : 0.03;
+  P.kneeR.rotation.x = moving ? 0.08 + 0.75 * Math.max(0, Math.sin(ph + 1.9 + Math.PI)) : 0.03;
+  P.hips.position.y = 0.78 - (moving ? Math.abs(Math.sin(ph)) * 0.025 : 0) + (moving ? 0 : Math.sin(ph) * 0.003);
+  P.torso.rotation.y = moving ? Math.sin(ph) * 0.06 : 0;
+  P.torso.rotation.x = pose === 'cart' ? 0.12 : moving ? 0.04 : 0;
+  const arms = (lx, rx, le, re, lz = 0.06, rz = -0.06) => { P.armL.rotation.x = lx; P.armR.rotation.x = rx; P.elbowL.rotation.x = le; P.elbowR.rotation.x = re; P.armL.rotation.z = lz; P.armR.rotation.z = rz; };
+  if (pose === 'carry') arms(-1.0, -1.0, -0.55, -0.55, 0.22, -0.22);
+  else if (pose === 'cart') arms(-0.85, -0.85, -0.45, -0.45, 0.1, -0.1);
+  else if (pose === 'work') { const w = Math.sin(ph * 5) * 0.18; arms(-0.7 + w, -0.7 - w, -0.9, -0.9, 0.15, -0.15); }
+  else if (pose === 'basket') arms(-sw * 0.7, -0.08, -0.2, -0.12, 0.06, -0.12);
+  else if (pose === 'wave') { arms(-sw * 0.7, -2.7, -0.2, -0.5 + Math.sin(ph * 6) * 0.4, 0.06, -0.2); }
+  else if (pose === 'clean') { const w = Math.sin(ph * 6) * 0.35; arms(-0.6 + w, -0.6 + w, -0.5, -0.5, 0.1, -0.1); }
+  else arms(-sw * 0.75, sw * 0.75, -0.18 - (moving ? 0.18 : 0), -0.18 - (moving ? 0.18 : 0));
+  P.head.rotation.y = moving ? 0 : Math.sin(ph * 0.35) * 0.3;
+  P.head.rotation.x = pose === 'work' || pose === 'clean' ? 0.25 : 0;
 }
 
 // ------------------------------------------------------------------ props
-const prodTexCache = new Map();
-// A printed package label: product colour, a white band with the product name.
-export function productTexture(p) {
-  if (prodTexCache.has(p.id)) return prodTexCache.get(p.id);
-  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-  const g = c.getContext('2d');
-  const col = '#' + p.color.toString(16).padStart(6, '0');
-  g.fillStyle = col; g.fillRect(0, 0, 128, 128);
-  g.fillStyle = 'rgba(255,255,255,0.92)'; g.fillRect(0, 40, 128, 50);
-  g.fillStyle = '#1e293b'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  const words = p.name.split(' ');
-  const lines = words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [p.name];
-  for (let i = 0; i < lines.length; i++) {
-    let size = 22; g.font = `800 ${size}px Nunito, sans-serif`;
-    while (g.measureText(lines[i]).width > 120 && size > 10) { size--; g.font = `800 ${size}px Nunito, sans-serif`; }
-    g.fillText(lines[i], 64, lines.length === 1 ? 65 : 54 + i * 22);
-  }
-  g.font = '24px "Segoe UI Emoji", "Apple Color Emoji", sans-serif'; g.fillText(p.icon, 64, 20);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  prodTexCache.set(p.id, t);
-  return t;
-}
-const LABELLED = new Set(['box', 'flatbox', 'carton', 'bag', 'can', 'bottle', 'jar', 'tub', 'slab', 'wedge']);
-export function productMaterial(p) {
-  const key = 'pm:' + p.id; let m = matCache.get(key);
-  if (!m) {
-    m = LABELLED.has(p.shape) ? new THREE.MeshStandardMaterial({ map: productTexture(p), roughness: 0.55 }) : new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.55 });
-    matCache.set(key, m);
-  }
-  return m;
-}
+export function productTexture(p) { return packagingTexture(p); }
+export function productMaterial(p) { return productMaterials(p); }
 export function makeFBox(type) {
   const def = FURNITURE[type];
   const g = new THREE.Group();
@@ -624,21 +649,40 @@ export function makeBox(pid, color) {
   for (const [z, ry] of [[0.212, 0], [-0.212, Math.PI]]) { const l = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), lm); l.position.set(0, 0.19, z); l.rotation.y = ry; g.add(l); }
   return g;
 }
-export function makeBasket(color = 0xef4444) {
+let latticeTex = null;
+function latticeMap() {
+  if (!latticeTex) {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    g.fillStyle = '#000'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#fff';
+    for (let i = 0; i <= 64; i += 8) { g.fillRect(i - 1, 0, 2, 64); g.fillRect(0, i - 1, 64, 2); }
+    latticeTex = new THREE.CanvasTexture(c); latticeTex.wrapS = latticeTex.wrapT = THREE.RepeatWrapping;
+  }
+  return latticeTex;
+}
+export function makeBasket(color = 0xdc2626) {
+  // plastic shopping basket with slotted sides and two handles
   const g = new THREE.Group();
-  B(g, 0.32, 0.16, 0.22, color, 0, 0.08, 0, { opacity: 0.95 });
-  B(g, 0.3, 0.02, 0.2, 0x111827, 0, 0.16, 0);
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.012, 6, 12, Math.PI), mat(0x111827)); handle.position.y = 0.16; g.add(handle);
+  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.5, alphaMap: latticeMap(), alphaTest: 0.5, side: THREE.DoubleSide });
+  const W = 0.4, H = 0.2, D = 0.28;
+  B(g, W * 0.9, 0.01, D * 0.9, color, 0, 0.005, 0, { material: mat(color, { rough: 0.5 }) });
+  for (const [w, d, x, z] of [[W, 0.005, 0, D / 2], [W, 0.005, 0, -D / 2], [0.005, D, W / 2, 0], [0.005, D, -W / 2, 0]]) { const p = new THREE.Mesh(new THREE.BoxGeometry(w, H, d), m); p.position.set(x, H / 2, z); g.add(p); }
+  B(g, W + 0.01, 0.02, D + 0.01, color, 0, H, 0, { material: mat(color, { rough: 0.5 }), shadow: false });
+  for (const sd of [-1, 1]) { const h = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.008, 6, 14, Math.PI), mat(0x111827)); h.position.set(0, H, sd * 0.05); g.add(h); }
   return g;
 }
 export function makeCart() {
+  // wire shopping trolley: mesh basket, tubular frame, red handle, casters, child seat
   const g = new THREE.Group();
-  const wire = mat(0x94a3b8, { metal: 0.7, rough: 0.3 });
-  const basket = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.7), mat(0x94a3b8, { opacity: 0.35, metal: 0.6 })); basket.position.set(0, 0.75, 0); g.add(basket);
-  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.5, 0.35, 0.7)), new THREE.LineBasicMaterial({ color: 0x64748b })); edges.position.copy(basket.position); g.add(edges);
-  for (const [x, z] of [[-0.2, -0.3], [0.2, -0.3], [-0.2, 0.3], [0.2, 0.3]]) { C(g, 0.05, 0.05, 0.04, 0x111827, x, 0.06, z).rotation.z = Math.PI / 2; C(g, 0.012, 0.012, 0.55, 0x64748b, x, 0.33, z, { material: wire }); }
-  B(g, 0.52, 0.03, 0.03, 0xef4444, 0, 1.02, -0.38);
-  g.userData.itemsAt = new THREE.Vector3(0, 0.62, 0);
+  const wire = new THREE.MeshStandardMaterial({ color: 0xc0c7d0, metalness: 0.85, roughness: 0.3, alphaMap: latticeMap(), alphaTest: 0.5, side: THREE.DoubleSide });
+  const tube = mat(0xb6bec8, { metal: 0.9, rough: 0.25 });
+  const W = 0.52, L = 0.8, H = 0.42, y0 = 0.5;
+  for (const [w, h, d, x, y, z] of [[W, H, 0.005, 0, y0 + H / 2, L / 2], [W * 0.85, H, 0.005, 0, y0 + H / 2, -L / 2], [0.005, H, L, W / 2, y0 + H / 2, 0], [0.005, H, L, -W / 2, y0 + H / 2, 0], [W, 0.005, L, 0, y0, 0]]) { const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wire); p.position.set(x, y, z); g.add(p); }
+  for (const x of [-W / 2, W / 2]) { const r = C(g, 0.01, 0.01, L, 0, x, y0 + H, 0, { material: tube }); r.rotation.x = Math.PI / 2; const b = C(g, 0.012, 0.012, L, 0, x * 0.8, 0.12, -0.02, { material: tube }); b.rotation.x = Math.PI / 2; C(g, 0.012, 0.012, y0, 0, x, y0 / 2 + 0.06, -L / 2, { material: tube }); }
+  const handle = C(g, 0.018, 0.018, W + 0.04, 0xdc2626, 0, y0 + H + 0.12, -L / 2 - 0.08, { material: mat(0xdc2626, { rough: 0.4 }) }); handle.rotation.z = Math.PI / 2;
+  for (const x of [-W / 2, W / 2]) { const a = C(g, 0.01, 0.01, 0.2, 0, x, y0 + H + 0.05, -L / 2 - 0.04, { material: tube }); a.rotation.x = -0.6; }
+  for (const [x, z] of [[-0.22, -0.32], [0.22, -0.32], [-0.18, 0.32], [0.18, 0.32]]) { const w = C(g, 0.045, 0.045, 0.03, 0x1f2937, x, 0.045, z, { material: mat(0x1f2937) }); w.rotation.z = Math.PI / 2; }
+  B(g, W * 0.8, 0.02, 0.2, 0xdc2626, 0, y0 + H - 0.05, -L / 2 + 0.12, { material: mat(0xdc2626, { rough: 0.45 }) });
+  g.userData.itemsAt = new THREE.Vector3(0, y0 + 0.02, 0.05);
   return g;
 }
 export function makeHandTruck() {

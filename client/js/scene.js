@@ -1,6 +1,12 @@
 // Renderer, camera, lighting with a day/night cycle, and the street environment around the store.
 import * as THREE from 'three';
 import { B, C, S, mat, makeTree, makeStreetLamp, rng, textTexture, mergeStatic } from './models.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 export function createScene(canvas, { low = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
@@ -15,7 +21,12 @@ export function createScene(canvas, { low = false } = {}) {
   scene.background = new THREE.Color(0x8fd3ff);
   scene.fog = new THREE.Fog(0x8fd3ff, 45, 110);
 
-  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 300);
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.05, 300);
+  scene.add(camera); // so first-person view models attached to the camera render
+  // image-based lighting for realistic reflections on glass, steel and packaging
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.4;
   const hemi = new THREE.HemisphereLight(0xdbeafe, 0x9a7b4f, 1.15);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff4d6, 2.2);
@@ -36,7 +47,24 @@ export function createScene(canvas, { low = false } = {}) {
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    if (composer) { composer.setSize(w, h); composer.setPixelRatio(renderer.getPixelRatio()); }
   }
+  // high quality: ambient occlusion + soft bloom on the fluorescent lights
+  let composer = null;
+  const makeComposer = () => {
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const ao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+    ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1, scale: 1 });
+    ao.blendIntensity = 0.75;
+    composer.addPass(ao);
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.3, 1.8));
+    composer.addPass(new OutputPass());
+  };
+  if (!low) { try { makeComposer(); } catch (e) { console.warn('post-processing unavailable', e); composer = null; } }
+  if (!low) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  sun.shadow.mapSize.set(low ? 1024 : 4096, low ? 1024 : 4096);
+  function render() { if (composer) composer.render(); else renderer.render(scene, camera); }
   window.addEventListener('resize', resize); resize();
 
   function buildEnvironment(W, D) {
@@ -142,7 +170,7 @@ export function createScene(canvas, { low = false } = {}) {
     const ang = (Math.max(7, Math.min(21, h)) - 7) / 14 * Math.PI; // east->west
     sun.position.set(state.W / 2 - Math.cos(ang) * 30, 12 + Math.sin(ang) * 28, state.D / 2 + 22);
     const storeOpen = phase === 'open' || phase === 'closing' || phase === 'prep';
-    const base = style === 'standard' ? 0 : style === 'gallery' ? 6 : 4;
+    const base = style === 'gallery' ? 6 : 3.5;
     interior.forEach((l, i) => {
       if (style === 'disco') lightCol.setHSL(((performance.now() / 4000) + i * 0.25) % 1, 0.9, 0.6); else lightCol.set(styleColor);
       l.color.copy(lightCol);
@@ -152,7 +180,7 @@ export function createScene(canvas, { low = false } = {}) {
     const lampOn = night > 0.3 || dusk > 0.6;
     for (const l of state.streetLamps) l.userData.bulb.material.emissiveIntensity = lampOn ? 1.5 : 0.1;
     for (const w of state.windows) w.emissiveIntensity = lampOn ? 0.7 : 0;
-    renderer.toneMappingExposure = 1.05 + night * 0.1;
+    renderer.toneMappingExposure = 0.98 + night * 0.1;
     return { night, dusk };
   }
 
@@ -160,9 +188,10 @@ export function createScene(canvas, { low = false } = {}) {
     renderer.shadowMap.enabled = !lowQ;
     renderer.setPixelRatio(lowQ ? 1 : Math.min(window.devicePixelRatio, 2));
     scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
+    if (lowQ) composer = null; else if (!composer) { try { makeComposer(); } catch { composer = null; } }
     resize();
   }
-  return { renderer, scene, camera, sun, hemi, resize, buildEnvironment, updateLighting, setQuality };
+  return { renderer, scene, camera, sun, hemi, resize, buildEnvironment, updateLighting, setQuality, render, get composer() { return composer; } };
 }
 
 function makeCar(color, x, z) {

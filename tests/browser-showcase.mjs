@@ -14,7 +14,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const page = await browser.newPage({ viewport: { width: 1100, height: 680 } });
 page.on('pageerror', e => errors.push(`PAGEERROR ${e.message}\n${e.stack}`));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-await page.addInitScript(() => localStorage.setItem('st_seen_help', '1'));
+await page.addInitScript(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); });
 await page.goto(`http://localhost:${port}/${process.env.HIGH ? '' : '?low'}`); await sleep(800);
 await page.fill('#m-name', 'Maya'); await page.click('#m-create'); await sleep(500);
 await page.click('#l-start'); await sleep(800);
@@ -66,6 +66,13 @@ await shot('62-butcher-closeup', { x: 13.5, z: 1.6, dist: 4.2, pitch: 0.35, yaw:
 await shot('63-stairs', { x: 21.5, z: 7, dist: 9, pitch: 0.6, yaw: -0.7 });
 await shot('64-upstairs', { x: 9, z: 5, f: 1, dist: 18, pitch: 0.95, yaw: 0.2 });
 await shot('65-front-sign', { x: 9, z: 16, dist: 16, pitch: 0.35, yaw: 0 });
+// first-person views
+const fps = (o) => page.evaluate((o) => { const d = window.__dbg; d.rig.fps = true; Object.assign(d.me, { x: o.x, z: o.z, floor: 0 }); d.rig.yaw = o.yaw; d.rig.look = o.look || 0; }, o);
+const fshot = async (n, o) => { await fps(o); await sleep(1300); await page.screenshot({ path: `${OUT}/${n}.png` }); };
+await fshot('66-fps-aisle', { x: 3, z: 6.2, yaw: Math.PI / 2 + 0.25, look: -0.12 });
+await fshot('67-fps-butcher', { x: 13.5, z: 4.2, yaw: 0.05, look: -0.2 });
+await fshot('68-fps-checkout', { x: 15.5, z: 9.2, yaw: 0.0, look: -0.45 });
+await fshot('69-fps-fridges', { x: 5, z: 2.6, yaw: 0.25, look: -0.05 });
 console.log('customers upstairs:', g.customers.filter(c => c.floor === 1).length, 'total', g.customers.length);
 console.log('errors:', errors.length ? errors.join('\n') : 'none');
 await browser.close(); srv.close(); process.exit(errors.length ? 1 : 0);

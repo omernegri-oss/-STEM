@@ -23,6 +23,8 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
 | Action | Key |
 | --- | --- |
 | Move / sprint | `WASD` / `Shift` |
+| Look around (first person) · switch camera | mouse · `V` |
+| Interact · drop (first person) | left click · right click |
 | Rotate camera / zoom | drag mouse, `Z`/`C` · mouse wheel |
 | Interact (hold to repeat) | `E` or `Space` |
 | Drop what you carry | `Q` |
@@ -74,6 +76,11 @@ tests/         sim.test.js · multiplayer.test.js · browser-e2e.mjs · browser-
 The server owns all game state. Clients send intents (`place`, `order`, `pickup`, `stock`, `work`…) and their
 own position (client-predicted movement with shared collision code). They receive world/meta updates when
 something changes, plus 10 Hz snapshots of moving actors, which they interpolate.
+
+## Web version (no server)
+
+`npm run build:static` creates `dist/`, a static single-player build. The same game server code runs inside
+the browser and stores are saved in the browser. You can host `dist/` on any static web host.
 
 ## Tests
 

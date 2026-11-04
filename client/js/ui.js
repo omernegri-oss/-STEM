@@ -1,7 +1,7 @@
 // HUD, the store computer, info panels and overlays.
 import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, CATEGORIES, ROLES, SHIFTS, TEAM_UPGRADES, ACHIEVEMENTS,
-  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits,
+  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap,
 } from '/shared/data.js';
 import { play, audio, setSfx, setMusic } from './audio.js';
 
@@ -162,7 +162,7 @@ export class UI {
   markDirty() { this.panelDirty = true; }
   maybeRender() {
     if (!this.panel || !this.panelDirty) return;
-    if (performance.now() - this.lastRender < 400) return;
+    if (performance.now() - this.lastRender < 400 || performance.now() - (this.lastClick || 0) < 1500) return;
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest('#p-body') && ae.tagName === 'INPUT') return;
     this.renderPanel();
@@ -257,7 +257,7 @@ export class UI {
       h += `<div class="section-title">${title}</div><div class="cards">`;
       for (const type of types) {
         const d = FURNITURE[type], lock = M.level < d.level;
-        h += `<div class="card ${lock ? 'locked' : ''}"><div class="row"><span class="ci">${d.icon}</span><span class="price">${fmtMoney(d.cost)}</span></div><h4>${esc(d.name)}</h4><p>${esc(d.desc)}${d.slots ? `<br>${d.slots}×${d.cap} units` : ''}${d.power ? ` · ⚡$${d.power}/day` : ''}${d.appeal > 0 ? ` · ✨+${d.appeal}` : ''}</p>
+        h += `<div class="card ${lock ? 'locked' : ''}"><div class="row"><span class="ci">${d.icon}</span><span class="price">${fmtMoney(d.cost)}</span></div><h4>${esc(d.name)}</h4><p>${esc(d.desc)}${d.slots ? `<br>${d.slots} product sections` : ''}${d.power ? ` · ⚡$${d.power}/day` : ''}${d.appeal > 0 ? ` · ✨+${d.appeal}` : ''}</p>
           <button class="btn small primary" data-act="buyf" data-type="${type}" ${lock || M.cash < d.cost + FURNITURE_SUPPLIER.fee ? 'disabled' : ''}>${lock ? `🔒 Level ${d.level}` : '🛒 Buy'}</button></div>`;
       }
       h += '</div>';
@@ -358,7 +358,7 @@ export class UI {
     for (const f of W.furniture.filter(f => f.slots || f.boxes)) {
       const def = FURNITURE[f.type];
       let fill = 0, cont = '';
-      if (f.slots) { fill = f.slots.reduce((a, s) => a + s.qty, 0) / (def.slots * def.cap); cont = f.slots.map(s => s.pid ? `${esc(PRODUCT_MAP[s.pid].name)} ${s.qty}${s.expired ? '🤢' : ''}` : '—').join(', '); }
+      if (f.slots) { fill = f.slots.reduce((a, s) => a + (s.pid ? s.qty / slotCap(f.type, s.pid) : 0), 0) / def.slots; cont = f.slots.map(s => s.pid ? `${esc(PRODUCT_MAP[s.pid].name)} ${s.qty}${s.expired ? '🤢' : ''}` : '—').join(', '); }
       else { fill = f.boxes.length / (def.boxes + (f.upg ? 4 : 0)); cont = `${f.boxes.length} boxes`; }
       const st = f.broken ? `<span class="chip bad">BROKEN ${f.temp}°C</span>` : f.temp !== undefined ? `<span class="chip blue">${f.temp}°C</span>${f.open ? ' <span class="chip warn">door open</span>' : ''}` : '';
       h += `<tr><td><b>${esc(def.name)}</b>${f.upg ? ' ⭐' : ''}</td><td>${(f.floor || 0) + 1}</td><td style="font-size:12px">${cont}</td><td style="width:110px"><div class="bar"><div style="width:${Math.round(fill * 100)}%;background:${fill < 0.25 ? '#ef4444' : fill < 0.5 ? '#f59e0b' : '#22c55e'}"></div></div></td><td>${st}</td></tr>`;
@@ -413,6 +413,7 @@ export class UI {
   }
 
   panelClick(e) {
+    this.lastClick = performance.now();
     const b = e.target.closest('[data-tab],[data-act],[data-goto]'); if (!b) return;
     if (b.dataset.goto) { this.panel = null; this.openPanel(b.dataset.goto); return; }
     if (b.dataset.tab) { this.tab[b.dataset.tab] = b.dataset.v; this.lastHtml = ''; this.renderPanel(true); play('click'); return; }

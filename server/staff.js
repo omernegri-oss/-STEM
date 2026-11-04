@@ -1,5 +1,5 @@
 // Employee AI: cashiers, shelf stockers, cleaners, butchers and deli clerks visibly doing their jobs.
-import { FURNITURE, SHIFTS, PRODUCT_MAP } from '../shared/data.js';
+import { FURNITURE, SHIFTS, PRODUCT_MAP, slotCap } from '../shared/data.js';
 import { route } from '../shared/grid.js';
 import { clamp, DOOR_TYPES } from './game.js';
 
@@ -213,8 +213,9 @@ function stockTarget(game, pid, onlyLow) {
     if (!f.slots || def.cat !== p.cat) continue;
     for (const sl of f.slots) {
       let score = -1;
-      if (sl.pid === pid && !sl.expired && sl.qty < def.cap) {
-        const fill = sl.qty / def.cap;
+      const cap = slotCap(f.type, pid);
+      if (sl.pid === pid && !sl.expired && sl.qty < cap) {
+        const fill = sl.qty / cap;
         if (onlyLow && fill > 0.5) continue;
         score = 10 - fill * 8;
       } else if (sl.qty === 0 && sl.pid === null) score = 3;

@@ -1,7 +1,7 @@
 // Build mode: place furniture from a carried box, and move / rotate / pack / sell / upgrade fixtures.
 // Buying happens on the store computer; furniture arrives in boxes you carry to where you want it.
 import * as THREE from 'three';
-import { FURNITURE, FIXTURE_UPGRADES, PRODUCT_MAP, FLOOR_H, fmtMoney } from '/shared/data.js';
+import { FURNITURE, FIXTURE_UPGRADES, PRODUCT_MAP, FLOOR_H, fmtMoney, slotCap } from '/shared/data.js';
 import { footprint, frontTiles, backTiles, needsBack, center, dims } from '/shared/grid.js';
 import { makeFurniture, ghostify } from './models.js';
 
@@ -164,7 +164,7 @@ export class BuildMode {
         h += `<div style="margin-top:6px">`;
         sel.slots.forEach((s, i) => {
           const p = s.pid ? PRODUCT_MAP[s.pid] : null;
-          h += `<div class="kv"><span>Slot ${i + 1}: ${p ? esc(p.name) : '<i>empty</i>'}${s.expired ? ' 🤢' : ''}</span><b>${s.qty}/${def.cap}${p && s.qty === 0 ? ` <button class="btn small" data-act="clearLabel" data-v="${i}" title="Free this slot for any product">↺</button>` : ''}</b></div>`;
+          h += `<div class="kv"><span>Slot ${i + 1}: ${p ? esc(p.name) : '<i>empty</i>'}${s.expired ? ' 🤢' : ''}</span><b>${s.qty}/${p ? slotCap(sel.type, p.id) : '–'}${p && s.qty === 0 ? ` <button class="btn small" data-act="clearLabel" data-v="${i}" title="Free this slot for any product">↺</button>` : ''}</b></div>`;
         });
         h += `</div>`;
       }

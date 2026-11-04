@@ -2,10 +2,11 @@
 import * as THREE from 'three';
 import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, FLOOR_H, fmtMoney } from '/shared/data.js';
 import { heightAt } from '/shared/grid.js';
+import { slotCap } from '/shared/data.js';
 import { Net } from './net.js';
 import { createScene } from './scene.js';
 import { World } from './world.js';
-import { Actors } from './actors.js';
+import { Actors, carryModel } from './actors.js';
 import { FX } from './fx.js';
 import { Input, LocalPlayer, CameraRig, findInteraction } from './player.js';
 import { BuildMode } from './build.js';
@@ -33,7 +34,32 @@ const fx = new FX(S.scene);
 const input = new Input(canvas);
 const me = new LocalPlayer();
 const rig = new CameraRig(S.camera);
-const net = new Net();
+try { rig.fps = localStorage.getItem('st_cam') !== 'tps'; } catch {}
+// first-person view model: whatever you hold, in front of the camera
+const viewModel = new THREE.Group(); S.camera.add(viewModel); viewModel.position.set(0.18, -0.36, -0.62);
+const fist = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshStandardMaterial({ color: 0xeac09a, roughness: 0.6 }));
+fist.scale.set(1, 0.9, 1.3); fist.position.set(0.12, 0.05, 0.1); fist.visible = false; viewModel.add(fist);
+let viewKey = '', punchT = 0;
+function syncViewModel() {
+  const top = (G.carry || []).at(-1) || '';
+  const key = (rig.fps && !build.active ? 'fps' : '') + top + (G.carry || []).length;
+  if (key === viewKey) return; viewKey = key;
+  for (const c of [...viewModel.children]) if (c !== fist) viewModel.remove(c);
+  if (!rig.fps || build.active || !top) return;
+  const m = carryModel(top); m.position.set(-0.18, -0.05, -0.05); m.rotation.y = Math.PI; viewModel.add(m);
+  for (const sd of [-1, 1]) { const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.32, 4, 8), new THREE.MeshStandardMaterial({ color: 0xeac09a, roughness: 0.6 })); a.rotation.x = Math.PI / 2.4; a.position.set(-0.18 + sd * 0.24, -0.02, 0.12); viewModel.add(a); }
+}
+function setCamMode(fpsOn) { rig.fps = fpsOn; try { localStorage.setItem('st_cam', fpsOn ? 'fps' : 'tps'); } catch {} if (!fpsOn && document.pointerLockElement) document.exitPointerLock(); viewKey = ''; }
+canvas.addEventListener('click', () => { if (G.started && rig.fps && !build.active && !ui.panel && !document.pointerLockElement && $('hud') && !$('hud').classList.contains('hidden')) canvas.requestPointerLock?.(); });
+// The static web version (no game server) runs the authoritative server inside the page.
+const net = window.ST_STATIC ? new (await import('./localserver.js')).LocalNet() : new Net();
+if (window.ST_STATIC) {
+  document.querySelector('.join-row')?.classList.add('hidden');
+  document.querySelector('label.check')?.classList.add('hidden');
+  const note = document.createElement('p'); note.className = 'help';
+  note.innerHTML = window.ST_MP_URL ? `Web version: you play in your browser (saved on this device). <b>Play with friends</b> on the <a href="${window.ST_MP_URL}">multiplayer server</a>.` : 'Web version: you play in your browser and your store is saved on this device.';
+  document.querySelector('.menu-actions')?.appendChild(note);
+}
 let envKey = '';
 S.buildEnvironment(12, 9);
 world.set({ name: 'Supermarket Tycoons', w: 12, d: 9, doorX: 5, floor: 'checker', wall: 'cream', furniture: demoFurniture(), boxes: [], dirt: [], prices: {} });
@@ -53,6 +79,7 @@ window.__dbg.build = build;
 
 function togglePanel(p) {
   if (!G.started) return;
+  if (document.pointerLockElement) document.exitPointerLock();
   if (p === 'build') { ui.closePanel(); build.toggle(me); syncDock(); return; }
   if (build.active) build.exit();
   ui.openPanel(p); syncDock();
@@ -201,7 +228,8 @@ addEventListener('keydown', (e) => {
     return; // build mode handles its own escape
   }
   if (build.active && ['u', 'x', 'm', 'r', 'p'].includes(k)) return; // build-mode shortcuts
-  if (k === 'f' && !build.active && G.meta?.phase !== 'naming') { net.act('punch'); actors.swing(G.me); play('whoosh'); return; }
+  if (k === 'f' && !build.active && G.meta?.phase !== 'naming') { net.act('punch'); actors.swing(G.me); punchT = 0.3; play('whoosh'); return; }
+  if (k === 'v' && !build.active) { setCamMode(!rig.fps); return; }
   if (PANEL_KEYS[k] && G.meta?.phase !== 'naming') { togglePanel(PANEL_KEYS[k]); e.preventDefault(); return; }
   if (EMOTES[k]) { net.send({ t: 'emote', e: EMOTES[k] }); return; }
   if (k === 'g' && !build.active) {
@@ -223,7 +251,9 @@ function frame(now) {
       const blockMove = G.meta?.phase === 'naming';
       if (!blockMove) me.update(dt, input, rig.yaw, world, (G.carry || []).length);
       me.y = heightAt(G.world.w, G.world.floors || 1, me.floor, me.x, me.z);
+      me.fpsReady = true;
       rig.update(dt, input, me);
+      if (rig.fps) me.rot = rig.yaw + Math.PI;
     } else {
       build.update(dt, input);
       rig.update(dt, input, build.focus);
@@ -237,7 +267,15 @@ function frame(now) {
     world.setViewFloor(viewFloor); actors.setDims(G.world.w, G.world.floors || 1, viewFloor);
     if (ui.panel && ui.isComputerTab(ui.panel)) { const c = G.world.furniture.find(f => f.type === 'computer' && (f.floor || 0) === me.floor && world.fixtureDistance(f, me.x, me.z) < 2.6); if (!c) ui.closePanel(); }
     // interaction
-    currentInter = build.active ? null : findInteraction(G, world, me, G.carry || [], G.station);
+    const fpsView = rig.fps && !build.active;
+    currentInter = build.active ? null : findInteraction(G, world, me, G.carry || [], G.station, fpsView);
+    actors.hideLocal = fpsView; world.setCeilingVisible(fpsView);
+    syncViewModel();
+    if (punchT > 0) { punchT -= dt; fist.visible = fpsView && !(G.carry || []).length; fist.position.z = 0.1 - Math.sin((0.3 - punchT) / 0.3 * Math.PI) * 0.35; } else fist.visible = false;
+    viewModel.position.y = -0.36 + (me.moving ? Math.sin(rig.bob * 2) * 0.008 : 0);
+    $('crosshair').classList.toggle('hidden', !fpsView || !input.mouse.locked);
+    $('crosshair').classList.toggle('hot', !!(currentInter && currentInter.action));
+    $('lookhint').classList.toggle('hidden', !fpsView || input.mouse.locked || !!ui.panel || $('chat-input') === document.activeElement);
     window.__dbg.lastInter = currentInter;
     const pr = $('prompt');
     if (currentInter && currentInter.label) {
@@ -252,7 +290,7 @@ function frame(now) {
     if (carry.length && !build.active) { const t = `Carrying: ${carry.map(nameOf).join(', ')}  ·  Q drop`; if (ce.textContent !== t) ce.textContent = t; ce.classList.remove('hidden'); } else ce.classList.add('hidden');
     me.cutting = !!(currentInter && currentInter.cutting && input.down('e'));
     const doAct = (a) => {
-      if (a.a === '_computer') { ui.openComputer(); return; }
+      if (a.a === '_computer') { if (document.pointerLockElement) document.exitPointerLock(); ui.openComputer(); return; }
       if (a.a === '_place') { const top = (G.carry || []).at(-1); if (top && top.startsWith('f:')) { build.enter(me, top.slice(2)); syncDock(); } return; }
       if (a.a === 'deptCut') G.deptProgress = (G.deptProgress || 0) + 1;
       net.act(a.a, a);
@@ -263,6 +301,11 @@ function frame(now) {
         else if ((input.down('e') || input.down(' ')) && currentInter.repeat && now - holdT > 190) { holdT = now; doAct(currentInter.action); }
       }
       const click = input.mouse.clicked;
+      // first person: left click = interact, right click = drop
+      if (click && fpsView && input.mouse.locked && !(G.station && world.beltItems.length)) {
+        if (click.button === 0 && currentInter && currentInter.action) doAct(currentInter.action);
+        if (click.button === 2) net.act('drop');
+      }
       if (click && click.button === 0 && G.station && world.beltItems.length) {
         const ray = new THREE.Raycaster(); ray.setFromCamera({ x: input.mouse.nx, y: input.mouse.ny }, S.camera);
         const hit = ray.intersectObjects(world.beltItems, false)[0];
@@ -286,7 +329,7 @@ function frame(now) {
   const chars = actors.positions(); if (inGame) chars.push(me);
   world.update(dt, chars, S.camera, inGame ? me : null);
   fx.update(dt);
-  S.renderer.render(S.scene, S.camera);
+  S.render();
   input.endFrame();
   requestAnimationFrame(frame);
 }
@@ -297,7 +340,7 @@ function demoFurniture() {
   const mk = (id, type, x, z, rot, fill) => {
     const def = FURNITURE[type];
     const f = { id, type, x, z, rot, upg: false, broken: false };
-    if (def.slots) f.slots = Array.from({ length: def.slots }, (_, i) => fill ? { pid: fill[i % fill.length], qty: def.cap - (i * 3) % 5, exp: 99, expired: false } : { pid: null, qty: 0 });
+    if (def.slots) f.slots = Array.from({ length: def.slots }, (_, i) => fill ? { pid: fill[i % fill.length], qty: slotCap(type, fill[i % fill.length]) - (i * 3) % 5, exp: 99, expired: false } : { pid: null, qty: 0 });
     if (def.kind === 'rack') f.boxes = [{ pid: 'cereal' }, { pid: 'milk' }, { pid: 'soda' }];
     return f;
   };

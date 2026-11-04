@@ -1,5 +1,5 @@
 // Customer AI: arrive -> browse departments -> pick items -> butcher/deli counters -> queue -> pay -> leave.
-import { PRODUCTS, PRODUCT_MAP, FURNITURE, CLOSE_HOUR, FIRST_NAMES } from '../shared/data.js';
+import { PRODUCTS, PRODUCT_MAP, FURNITURE, CLOSE_HOUR, FIRST_NAMES, slotCap } from '../shared/data.js';
 import { rnd, rndi, pick, clamp } from './game.js';
 
 const COUNTER_CATS = ['meat', 'deli'];
@@ -126,7 +126,7 @@ export function returnBasket(game, c) {
     const f = game.fixture(it.src);
     if (!f || !f.slots) continue;
     const def = FURNITURE[f.type];
-    const sl = f.slots.find(sl => sl.pid === it.pid && sl.qty < def.cap && !sl.expired) || f.slots.find(sl => sl.qty === 0 && (sl.pid === null || sl.pid === it.pid));
+    const sl = f.slots.find(sl => sl.pid === it.pid && sl.qty < slotCap(f.type, it.pid) && !sl.expired) || f.slots.find(sl => sl.qty === 0 && (sl.pid === null || sl.pid === it.pid));
     if (sl) { sl.pid = it.pid; sl.qty++; if (!sl.exp) sl.exp = game.s.day + PRODUCT_MAP[it.pid].life; }
   }
   if (c.basket.length) game.dirtyWorld();

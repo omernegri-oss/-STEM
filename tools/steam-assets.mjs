@@ -78,15 +78,16 @@ if (!CAPSULES_ONLY) {
 const bg = 'data:image/png;base64,' + fs.readFileSync(path.join(SRC, 'background.png')).toString('base64');
 const icon = fs.readFileSync(path.join(ROOT, 'build/icon.svg'), 'utf8');
 const art = await browser.newPage();
-const FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@800&display=swap">';
-const logo = (size, tagline, extra = '') => `<div class="logo" style="font-size:${size}px;${extra}"><div class="mark">${icon.replace('<svg ', `<svg width="${size * 1.15}" height="${size * 1.15}" `)}</div><div><div class="word">Supermarket</div>${tagline ? `<div class="tag" style="font-size:${size * 0.28}px">Build it. Stock it. Run it. Together.</div>` : ''}</div></div>`;
-const css = `*{box-sizing:border-box}body{margin:0;overflow:hidden;font-family:Fredoka,Nunito,system-ui,sans-serif}
-.cap{position:relative;overflow:hidden;background:#7c2d12 url(${bg}) center/cover no-repeat}
-.cap::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,23,42,0) 30%,rgba(15,23,42,.55) 100%),linear-gradient(90deg,rgba(234,88,12,.55),rgba(234,88,12,0) 60%)}
-.logo{position:absolute;z-index:2;display:flex;align-items:center;gap:.28em}
-.word{font-weight:700;color:#fff;line-height:.95;letter-spacing:.01em;-webkit-text-stroke:.06em #9a3412;paint-order:stroke fill;text-shadow:0 .06em 0 #9a3412,0 .12em .25em rgba(0,0,0,.35)}
-.tag{font-family:Nunito,system-ui,sans-serif;font-weight:800;color:#fff;margin-top:.35em;text-shadow:0 2px 6px rgba(0,0,0,.5)}
-.mark svg{display:block;filter:drop-shadow(0 .05em .1em rgba(0,0,0,.35))}`;
+const FONTS = `<style>${fs.readFileSync(path.join(ROOT, 'client/fonts/fonts.css'), 'utf8').replace(/url\('([^']+)'\)/g, (m, f) => `url('data:font/woff2;base64,${fs.readFileSync(path.join(ROOT, 'client/fonts', f)).toString('base64')}')`)}</style>`;
+const logo = (size, tagline, extra = '') => `<div class="logo" style="font-size:${size}px;${extra}"><div class="mark">${icon.replace('<svg ', `<svg width="${size * 1.15}" height="${size * 1.15}" `)}</div><div><div class="word">Supermarket</div>${tagline ? `<div class="tag" style="font-size:${size * 0.24}px">Run a supermarket with up to four friends</div>` : ''}</div></div>`;
+const css = `*{box-sizing:border-box}body{margin:0;overflow:hidden;font-family:Barlow,system-ui,sans-serif}
+.cap{position:relative;overflow:hidden;background:#15181c url(${bg}) center/cover no-repeat}
+.cap > div{z-index:2}
+.cap::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(14,16,19,.05) 25%,rgba(14,16,19,.82) 100%),linear-gradient(90deg,rgba(14,16,19,.55),rgba(14,16,19,0) 65%)}
+.logo{position:absolute;z-index:2;display:flex;align-items:center;gap:.3em}
+.word{font-family:'Barlow Condensed',Barlow,sans-serif;font-weight:700;color:#f4f6f2;line-height:.9;letter-spacing:.06em;text-transform:uppercase;text-shadow:0 .04em .2em rgba(0,0,0,.55)}
+.tag{font-family:Barlow,sans-serif;font-weight:600;color:#cfe8d9;margin-top:.45em;letter-spacing:.02em;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+.mark svg{display:block;filter:drop-shadow(0 .05em .12em rgba(0,0,0,.45))}`;
 async function capsule(file, w, h, inner, { transparent = false, cls = 'cap' } = {}) {
   await art.setViewportSize({ width: w, height: h });
   await art.setContent(`<html><head>${FONTS}<style>${css}</style></head><body style="width:${w}px;height:${h}px;${transparent ? 'background:transparent' : ''}"><div class="${cls}" style="width:${w}px;height:${h}px;position:relative">${inner}</div></body></html>`);

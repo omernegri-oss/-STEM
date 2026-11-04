@@ -19,14 +19,14 @@ async function run(label, args) {
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.waitForFunction(() => window.__G && window.steamDesk, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__dbg && window.steamDesk, null, { timeout: 30000 }); // __dbg is set once the menu is fully built
   const info = await page.evaluate(() => window.steamDesk.info);
   console.log(`[${label}] steam`, JSON.stringify(info));
   assert.ok(info.port > 0);
   const deskUi = await page.evaluate(() => ({ quit: !document.getElementById('m-quit').closest('[hidden]'), note: document.getElementById('m-steam-note').textContent }));
   assert.ok(deskUi.quit, 'quit button shown in the desktop app');
   await page.evaluate(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); localStorage.setItem('st_gfx', 'low'); });
-  await page.reload(); await page.waitForFunction(() => window.__G, null, { timeout: 30000 });
+  await page.reload(); await page.waitForFunction(() => window.__dbg, null, { timeout: 30000 });
   await page.fill('#m-name', 'Desk'); await page.click('#m-create');
   await page.waitForFunction(() => !document.getElementById('lobby').classList.contains('hidden'), null, { timeout: 20000 });
   const inviteShown = await page.evaluate(() => !document.getElementById('l-invite').hidden);

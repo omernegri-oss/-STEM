@@ -124,10 +124,18 @@ assert.ok(game.s.ledger.served >= 1, 'Bob checked out a customer by clicking pro
 
 // --- punching: Alice punches Bob
 await p1.bringToFront();
+// a punch hits the nearest person in front, so step right behind Bob (shoppers in the queue can be close by)
+const near = () => game.customers.filter(c => Math.hypot(c.x - bob[0], c.z - bob[1]) < 1.3).length;
 const bob = await G(p2, () => [window.__dbg.me.x, window.__dbg.me.z]);
-await tp(p1, bob[0], bob[1] - 0.8, 0); await sleep(400);
-await p1.keyboard.press('f');
-await waitFor(p2, () => window.__dbg.me.stunned, 5000);
+console.log('shoppers near Bob:', near());
+let stunned = false;
+for (let attempt = 0; attempt < 4 && !stunned; attempt++) {
+  await tp(p1, bob[0], bob[1] - 0.45, 0); await sleep(700);
+  await p1.keyboard.press('f');
+  stunned = await (async () => { try { await waitFor(p2, () => window.__dbg.me.stunned, 3000); return true; } catch { return false; } })();
+  if (!stunned) console.log('punch attempt', attempt + 1, 'hit someone else; punched customers so far', game.s.stats.punched);
+}
+assert.ok(stunned, 'Bob got punched');
 console.log('Bob stunned ✓');
 await shot(p1, '57-punch');
 

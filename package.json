@@ -1,7 +1,7 @@
 {
-  "name": "supermarket-tycoons",
+  "name": "supermarket",
   "version": "1.0.0",
-  "description": "Supermarket Tycoons - a cooperative 1-4 player multiplayer supermarket building & management game.",
+  "description": "Supermarket - a cooperative 1-4 player multiplayer supermarket building & management game.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {

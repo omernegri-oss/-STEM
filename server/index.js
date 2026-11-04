@@ -1,4 +1,4 @@
-// Supermarket Tycoons server: static file hosting + WebSocket multiplayer rooms.
+// Supermarket server: static file hosting + WebSocket multiplayer rooms.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -130,7 +130,7 @@ export function startServer(port = PORT) {
   // periodic autosave
   const autosave = setInterval(() => { for (const r of rooms.values()) if (r.started && r.game.s.phase === 'prep') r.save(); }, 30000);
 
-  server.listen(port, () => console.log(`🛒 Supermarket Tycoons running at http://localhost:${port}`));
+  server.listen(port, () => console.log(`🛒 Supermarket running at http://localhost:${port}`));
   return { server, wss, close: () => { clearInterval(loop); clearInterval(autosave); wss.close(); server.close(); } };
 }
 

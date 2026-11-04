@@ -1,4 +1,4 @@
-# 🛒 Supermarket Tycoons
+# 🛒 Supermarket
 
 A cooperative **1–4 player** multiplayer supermarket building and management game that runs in the browser.
 You and your friends start in an **empty building** with $5,000. You agree on a store name, then build, stock,

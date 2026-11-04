@@ -1,4 +1,4 @@
-// Supermarket Tycoons – client entry point: menus, lobby, networking glue and the main loop.
+// Supermarket – client entry point: menus, lobby, networking glue and the main loop.
 import * as THREE from 'three';
 import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, FLOOR_H, fmtMoney } from '/shared/data.js';
 import { heightAt } from '/shared/grid.js';
@@ -62,7 +62,7 @@ if (window.ST_STATIC) {
 }
 let envKey = '';
 S.buildEnvironment(12, 9);
-world.set({ name: 'Supermarket Tycoons', w: 12, d: 9, doorX: 5, floor: 'checker', wall: 'cream', furniture: demoFurniture(), boxes: [], dirt: [], prices: {} });
+world.set({ name: 'Supermarket', w: 12, d: 9, doorX: 5, floor: 'checker', wall: 'cream', furniture: demoFurniture(), boxes: [], dirt: [], prices: {} });
 
 const ui = new UI({ G, net, onPanel: (p) => togglePanel(p) });
 const gfxBtn = $('h-gfx');

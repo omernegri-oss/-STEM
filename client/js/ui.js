@@ -202,7 +202,15 @@ export class UI {
     }
     if (html === this.lastHtml && !scrollTop) return;
     this.lastHtml = html;
-    $('p-title').innerHTML = title; body.innerHTML = html;
+    $('p-title').innerHTML = title;
+    // the computer's tab bar is kept as is when only the page below it changed (buttons stay put under the cursor)
+    const m = html.match(/^(<div class="tabs comp-tabs">[\s\S]*?<\/div>)([\s\S]*)$/);
+    const tabsEl = body.querySelector(':scope > .comp-tabs'), contentEl = body.querySelector(':scope > .p-content');
+    if (m && tabsEl && contentEl) {
+      if (tabsEl.outerHTML !== m[1]) tabsEl.outerHTML = m[1];
+      contentEl.innerHTML = m[2];
+    } else if (m) body.innerHTML = `${m[1]}<div class="p-content">${m[2]}</div>`;
+    else body.innerHTML = html;
     body.scrollTop = scrollTop ? 0 : sc;
     if (this.panel === 'finance') this.drawChart();
   }

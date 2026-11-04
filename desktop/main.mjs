@@ -8,7 +8,10 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-app.setName('Supermarket'); // fixes the save folder: %APPDATA%/Supermarket, ~/Library/Application Support/Supermarket, ~/.config/Supermarket
+app.setName('Supermarket');
+// Steam's Linux runtime (also on Steam Deck) runs games in a container where Chromium's sandbox can't start.
+// The game only shows its own local pages, so it is safe to turn it off there.
+if (process.platform === 'linux' && (process.env.SteamAppId || process.env.SteamGameId || process.env.STEAM_COMPAT_DATA_PATH || process.argv.includes('--no-sandbox'))) app.commandLine.appendSwitch('no-sandbox'); // fixes the save folder: %APPDATA%/Supermarket, ~/Library/Application Support/Supermarket, ~/.config/Supermarket
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'steam-config.json'), 'utf8'));
 const APP_ID = +process.env.STEAM_APP_ID || config.appId;
 const TEST_APP_ID = 480; // Valve's public test app ("Spacewar"); replace with your own App ID in steam-config.json

@@ -1,0 +1,6 @@
+"DepotBuild"
+{
+	"DepotID" "482"
+	"ContentRoot" "../release/mac-universal/"
+	"FileMapping" { "LocalPath" "*" "DepotPath" "." "Recursive" "1" }
+}

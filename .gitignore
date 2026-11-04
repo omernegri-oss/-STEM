@@ -3,3 +3,4 @@ dist/
 node_modules/
 saves/*.json
 release/
+vendor/

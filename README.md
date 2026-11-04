@@ -70,12 +70,22 @@ server/        Node.js authoritative simulation (20 Hz) + WebSocket rooms
   customers.js   customer AI      staff.js   employee AI     persistence.js   JSON saves
 shared/        data.js (all game content & balance) · grid.js (placement rules, A*, collision)
 client/        Three.js renderer, procedural models, actors, build mode, UI panels, WebAudio
-tests/         sim.test.js · multiplayer.test.js · browser-e2e.mjs · browser-ui.mjs · browser-showcase.mjs
+desktop/       main.mjs (Electron app) · steam.mjs (Steamworks: lobbies, invites, achievements) · p2p.mjs (P2P bridge)
+steam/         SteamPipe build scripts, achievements.csv, store images
+tests/         sim · multiplayer · soak · p2p · steam-service (unit) · browser-* · desktop-smoke (Playwright)
 ```
 
 The server owns all game state. Clients send intents (`place`, `order`, `pickup`, `stock`, `work`…) and their
 own position (client-predicted movement with shared collision code). They receive world/meta updates when
 something changes, plus 10 Hz snapshots of moving actors, which they interpolate.
+
+## Steam / desktop version
+
+`npm run desktop` starts the desktop app (Electron). It runs the game server inside the app, uses Steam for
+invites, friends-only lobbies, P2P multiplayer and achievements when Steam is running, and plays offline
+otherwise. Builds for Windows, macOS and Linux come from `npm run dist:win|dist:mac|dist:linux` or from the
+**Desktop builds (Steam)** GitHub Actions workflow. See **[STEAM.md](STEAM.md)** for the whole Steam setup
+(App ID, depots, achievements, store images, upload).
 
 ## Web version (no server)
 
@@ -86,7 +96,8 @@ or in a subfolder. `dist/artifact.html` is the same page without the document wr
 ## Tests
 
 ```bash
-npm test                    # headless simulation + 4-client multiplayer protocol test
+npm test                    # simulation, multiplayer, Steam P2P bridge, Steam service, 8-day soak
+npm run test:desktop        # starts the Electron app and plays the opening (Linux: xvfb-run -a npm run test:desktop)
 npm run test:browser        # 2-player browser playthrough (needs Playwright + Chromium)
 node tests/browser-ui.mjs   # UI flows: butcher counter, build card, panels, events, report
 npm run showcase            # builds a level-10 store and saves screenshots (SHOTS=dir)

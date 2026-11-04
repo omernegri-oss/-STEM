@@ -15,10 +15,13 @@ const PORT = +process.env.PORT || 3000;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 
+// desktop builds ship three.js in vendor/three (see tools/prepare-desktop.mjs); otherwise use node_modules
+const VENDOR = path.join(ROOT, 'vendor', 'three');
+const HAS_VENDOR = fs.existsSync(path.join(VENDOR, 'build', 'three.module.js'));
 const STATIC = [
   ['/shared/', path.join(ROOT, 'shared')],
-  ['/vendor/', path.join(ROOT, 'node_modules', 'three', 'build')],
-  ['/addons/', path.join(ROOT, 'node_modules', 'three', 'examples', 'jsm')],
+  ['/vendor/', HAS_VENDOR ? path.join(VENDOR, 'build') : path.join(ROOT, 'node_modules', 'three', 'build')],
+  ['/addons/', HAS_VENDOR ? path.join(VENDOR, 'addons') : path.join(ROOT, 'node_modules', 'three', 'examples', 'jsm')],
   ['/', path.join(ROOT, 'client')],
 ];
 

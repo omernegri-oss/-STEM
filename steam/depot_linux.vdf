@@ -1,0 +1,6 @@
+"DepotBuild"
+{
+	"DepotID" "483"
+	"ContentRoot" "../release/linux-unpacked/"
+	"FileMapping" { "LocalPath" "*" "DepotPath" "." "Recursive" "1" }
+}

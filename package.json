@@ -14,10 +14,12 @@
     "test:all": "npm test && node tests/browser-e2e.mjs && node tests/browser-ui.mjs && node tools/build-static.mjs && node tests/browser-static.mjs && node tests/browser-soak.mjs",
     "desktop": "electron .",
     "desktop:offline": "electron . --no-steam",
-    "dist:linux": "electron-builder --linux --x64",
-    "dist:win": "electron-builder --win --x64",
-    "dist:mac": "electron-builder --mac --x64 --arm64",
-    "test:desktop": "node tests/desktop-smoke.mjs"
+    "dist:linux": "node tools/prepare-desktop.mjs && electron-builder --linux --x64",
+    "dist:win": "node tools/prepare-desktop.mjs && electron-builder --win --x64",
+    "dist:mac": "node tools/prepare-desktop.mjs && electron-builder --mac --universal",
+    "test:desktop": "node tests/desktop-smoke.mjs",
+    "steam:achievements": "node tools/steam-achievements.mjs",
+    "steam:assets": "node tools/steam-assets.mjs"
   },
   "engines": {
     "node": ">=18"

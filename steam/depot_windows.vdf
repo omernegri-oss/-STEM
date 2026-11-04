@@ -1,0 +1,6 @@
+"DepotBuild"
+{
+	"DepotID" "481"
+	"ContentRoot" "../release/win-unpacked/"
+	"FileMapping" { "LocalPath" "*" "DepotPath" "." "Recursive" "1" }
+}

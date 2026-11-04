@@ -1,0 +1,81 @@
+# Builds the Steam (desktop) version for Windows, macOS and Linux, and can upload it to Steam.
+# Run it from GitHub: Actions > "Desktop builds (Steam)" > Run workflow.
+# Downloads: each run's page lists Supermarket-windows / -mac / -linux under "Artifacts".
+name: Desktop builds (Steam)
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_steam:
+        description: Upload this build to Steam (needs the STEAM_* secrets, see STEAM.md)
+        type: boolean
+        default: false
+      steam_branch:
+        description: Steam branch to set the build live on (empty = upload only)
+        type: string
+        default: ''
+  push:
+    tags: ['v*']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows, script: 'dist:win', out: release/win-unpacked }
+          - { os: macos-latest, name: mac, script: 'dist:mac', out: release/mac-universal }
+          - { os: ubuntu-latest, name: linux, script: 'dist:linux', out: release/linux-unpacked }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      # on Windows the exe gets its icon; elsewhere the default config is used
+      - if: matrix.name == 'windows'
+        run: npm run ${{ matrix.script }} -- -c.win.signAndEditExecutable=true
+      - if: matrix.name != 'windows'
+        run: npm run ${{ matrix.script }}
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+      # the Linux build starts and plays the opening in a virtual display
+      - if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          npx playwright@1.56.1 install-deps chromium >/dev/null || true
+          npm i --no-save playwright@1.56.1
+          ELECTRON_PATH=$PWD/release/linux-unpacked/supermarket SHOTS=shots xvfb-run -a node tests/desktop-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Supermarket-${{ matrix.name }}
+          path: ${{ matrix.out }}
+          if-no-files-found: error
+
+  steam:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_to_steam }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: builds }
+      - uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: ${{ secrets.STEAM_APP_ID }}
+          buildDescription: ${{ github.sha }}
+          rootPath: builds
+          depot1Path: Supermarket-windows
+          depot2Path: Supermarket-mac
+          depot3Path: Supermarket-linux
+          releaseBranch: ${{ inputs.steam_branch }}

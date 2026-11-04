@@ -83,8 +83,9 @@ Byte quota 50 MB, number of files 200, then add these root paths. All use the pa
 **On GitHub (recommended).** Go to **Actions → "Desktop builds (Steam)" → Run workflow**. The workflow:
 
 1. Runs the tests.
-2. Builds all three versions on real Windows, Mac and Linux machines. The Mac build is *universal* (Intel +
-   Apple Silicon).
+2. Builds all three versions. The Mac app is built on Linux as an Intel app, which also runs on Apple Silicon
+   Macs through Rosetta (GitHub often has no macOS machine free for private repositories). For a *universal*
+   app, run `npm run dist:mac` on a Mac.
 3. Starts the Linux build to check it.
 
 Each run's page has **Supermarket-windows / -mac / -linux** to download.
@@ -95,6 +96,7 @@ npm install
 npm run desktop          # play the desktop version (uses Steam if it is running)
 npm run dist:win         # → release/win-unpacked/
 npm run dist:mac         # → release/mac-universal/   (must run on a Mac)
+npm run dist:mac-intel   # → release/mac/             (Intel app, works on any OS)
 npm run dist:linux       # → release/linux-unpacked/
 ```
 

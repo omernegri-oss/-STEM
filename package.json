@@ -19,7 +19,8 @@
     "dist:mac": "node tools/prepare-desktop.mjs && electron-builder --mac --universal",
     "test:desktop": "node tests/desktop-smoke.mjs",
     "steam:achievements": "node tools/steam-achievements.mjs",
-    "steam:assets": "node tools/steam-assets.mjs"
+    "steam:assets": "node tools/steam-assets.mjs",
+    "dist:mac-intel": "node tools/prepare-desktop.mjs && electron-builder --mac --x64"
   },
   "engines": {
     "node": ">=18"

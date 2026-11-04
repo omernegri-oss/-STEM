@@ -34,7 +34,8 @@ jobs:
       matrix:
         include:
           - { os: windows-latest, name: windows, script: 'dist:win', out: release/win-unpacked }
-          - { os: macos-latest, name: mac, script: 'dist:mac', out: release/mac-universal }
+          # macOS runners are often unavailable for this repo: build the Intel app on Linux (runs on Apple Silicon via Rosetta)
+          - { os: ubuntu-latest, name: mac, script: 'dist:mac-intel', out: release/mac }
           - { os: ubuntu-latest, name: linux, script: 'dist:linux', out: release/linux-unpacked }
     runs-on: ${{ matrix.os }}
     steps:
@@ -56,10 +57,16 @@ jobs:
           npx playwright@1.56.1 install-deps chromium >/dev/null || true
           npm i --no-save playwright@1.56.1
           ELECTRON_PATH=$PWD/release/linux-unpacked/supermarket SHOTS=shots xvfb-run -a node tests/desktop-smoke.mjs
+      # GitHub artifacts drop file permissions and symlinks, which breaks the Mac app and the Linux executable:
+      # pack them in archives that keep both (zip for macOS, tar.gz for Linux). Windows is uploaded as a folder.
+      - if: matrix.name == 'mac'
+        run: cd release/mac && zip -qry ../../Supermarket-mac.zip Supermarket.app
+      - if: matrix.name == 'linux'
+        run: tar -C release/linux-unpacked -czf Supermarket-linux.tar.gz .
       - uses: actions/upload-artifact@v4
         with:
           name: Supermarket-${{ matrix.name }}
-          path: ${{ matrix.out }}
+          path: ${{ matrix.name == 'mac' && 'Supermarket-mac.zip' || matrix.name == 'linux' && 'Supermarket-linux.tar.gz' || matrix.out }}
           if-no-files-found: error
 
   steam:
@@ -69,6 +76,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { path: builds }
+      - name: Unpack the macOS and Linux archives
+        run: |
+          cd builds
+          mkdir mac linux
+          unzip -q Supermarket-mac/Supermarket-mac.zip -d mac
+          tar -xzf Supermarket-linux/Supermarket-linux.tar.gz -C linux
       - uses: game-ci/steam-deploy@v3
         with:
           username: ${{ secrets.STEAM_USERNAME }}
@@ -77,6 +90,6 @@ jobs:
           buildDescription: ${{ github.sha }}
           rootPath: builds
           depot1Path: Supermarket-windows
-          depot2Path: Supermarket-mac
-          depot3Path: Supermarket-linux
+          depot2Path: mac
+          depot3Path: linux
           releaseBranch: ${{ inputs.steam_branch }}

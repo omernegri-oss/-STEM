@@ -70,7 +70,6 @@ if (!CAPSULES_ONLY) {
   await shot('../assets/source/background.png', { x: 12, z: 6.5, dist: 16, pitch: 0.62, yaw: 0.35 }, { ui: false });
   await page.setViewportSize({ width: 1920, height: 620 });
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
-  await page.evaluate(() => window.__dbg.S.renderer.setPixelRatio(2));
   await shot('../assets/source/hero.png', { x: 12, z: 6.5, dist: 14, pitch: 0.42, yaw: 0.3 }, { ui: false });
   srv.close();
 }

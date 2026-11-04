@@ -162,10 +162,10 @@ export function makeFurniture(type, f = {}) {
         B(g, W - 0.12, 0.04, 0.012, 0xffffff, 0, y - 0.02, 0.305, { material: mat(0xf8fafc) });
         if (open) B(g, W - 0.12, 0.012, 0.02, 0xffffff, 0, y + 0.29, 0.28, { material: mat(0xffffff, { emissive: 0xffffff, ei: 1.2 }), shadow: false });
       }
-      const header = B(g, W, 0.16, 0.03, 0, 0, h + 0.08, 0.465, { material: mat(cc, { rough: 0.4 }) });
+      const header = B(g, W, 0.16, 0.03, 0, 0, h + 0.08, 0.465, { material: mat(0x24282c, { rough: 0.4, metal: 0.3 }) }); void cc;
       void header;
-      const lbl = makeLabel(frozen ? 'Frozen' : 'Chilled', 0.08, { bg: null, color: '#fff', size: 32 }, 0.4);
-      lbl.position.set(-W / 2 + 0.25, h + 0.08, 0.483); g.add(lbl);
+      const lbl = makeLabel(frozen ? 'FROZEN FOODS' : 'DAIRY & CHILLED', 0.07, { bg: null, color: '#e8eae6', size: 32, font: 'Barlow Condensed', weight: 600 }, 0.9);
+      lbl.position.set(-W / 2 + 0.5, h + 0.08, 0.483); g.add(lbl);
       if (!open) {
         const doors = W > 2.5 ? 3 : 2;
         g.userData.doors = [];
@@ -310,11 +310,10 @@ export function makeFurniture(type, f = {}) {
       break;
     }
     case 'cactus': {
-      C(g, 0.18, 0.14, 0.26, 0xc2410c, 0, 0.13, 0);
-      C(g, 0.11, 0.12, 0.7, 0x15803d, 0, 0.6, 0, { seg: 8, flat: true });
-      const arm = C(g, 0.06, 0.06, 0.3, 0x16a34a, 0.15, 0.7, 0, { seg: 8 }); arm.rotation.z = -0.9;
-      C(g, 0.06, 0.06, 0.25, 0x16a34a, 0.26, 0.88, 0, { seg: 8 });
-      S(g, 0.04, 0xf472b6, 0, 0.98, 0);
+      C(g, 0.18, 0.14, 0.26, 0x8a5a3c, 0, 0.13, 0, { rough: 0.9 });
+      C(g, 0.11, 0.12, 0.7, 0x4a6b3a, 0, 0.6, 0, { seg: 12, rough: 0.8 });
+      const arm = C(g, 0.06, 0.06, 0.3, 0x506f3f, 0.15, 0.7, 0, { seg: 10, rough: 0.8 }); arm.rotation.z = -0.9;
+      C(g, 0.06, 0.06, 0.25, 0x506f3f, 0.26, 0.88, 0, { seg: 10, rough: 0.8 });
       break;
     }
     case 'plant_tall': {

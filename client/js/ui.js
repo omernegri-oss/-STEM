@@ -29,6 +29,8 @@ export class UI {
     document.querySelectorAll('#dock button').forEach(b => b.addEventListener('click', () => this.onPanel(b.dataset.panel)));
     $('p-close').addEventListener('click', () => this.closePanel());
     $('p-body').addEventListener('click', (e) => this.panelClick(e));
+    // while the mouse is moving over the panel, hold the live refresh so buttons don't change under the cursor
+    for (const ev of ['pointermove', 'pointerdown']) $('panel').addEventListener(ev, () => { this.lastPointer = performance.now(); });
     $('p-body').addEventListener('change', (e) => this.panelChange(e));
     $('h-open').addEventListener('click', () => this.net.act('open'));
     document.querySelectorAll('.tb-speed button').forEach(b => b.addEventListener('click', () => { const v = +b.dataset.speed; if (v === 0) this.net.act('pause'); else this.net.act('speed', { v }); }));
@@ -178,7 +180,8 @@ export class UI {
   markDirty() { this.panelDirty = true; }
   maybeRender() {
     if (!this.panel || !this.panelDirty) return;
-    if (performance.now() - this.lastRender < 1000 || performance.now() - (this.lastClick || 0) < 1500) return;
+    const now = performance.now();
+    if (now - this.lastRender < 1000 || now - (this.lastClick || 0) < 1500 || now - (this.lastPointer || 0) < 900) return;
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest('#p-body') && ae.tagName === 'INPUT') return;
     this.renderPanel();

@@ -107,6 +107,7 @@ export class CameraRig {
       this.camera.position.set(focus.x, eye, focus.z);
       const cp = Math.cos(this.look);
       this.camera.lookAt(focus.x - Math.sin(this.yaw) * cp, eye + Math.sin(this.look), focus.z - Math.cos(this.yaw) * cp);
+      this.applyShake(dt);
       this.cur.set(focus.x, eye, focus.z);
       return;
     }
@@ -124,6 +125,15 @@ export class CameraRig {
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     this.camera.position.set(this.cur.x + Math.sin(this.yaw) * cp * this.dist, this.cur.y + sp * this.dist, this.cur.z + Math.cos(this.yaw) * cp * this.dist);
     this.camera.lookAt(this.cur);
+    this.applyShake(dt);
+  }
+  // after a punch: the view jolts and sways for a moment
+  applyShake(dt) {
+    if (!(this.shake > 0)) return;
+    this.shake = Math.max(0, this.shake - dt);
+    const a = this.shake * this.shake, t = performance.now() / 1000;
+    this.camera.rotateZ(Math.sin(t * 9) * 0.09 * a);
+    this.camera.rotateX(Math.sin(t * 13) * 0.04 * a);
   }
 }
 
@@ -147,7 +157,7 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
         const [, , scanned, total, pids] = k;
         if (scanned < total) return { label: `Scan the products (click them or E) ${scanned}/${total}`, action: { a: 'work' }, repeat: true, station: { kind: 'checkout', scanned, total, pids } };
         const sum = pids.reduce((a, pid) => a + (W.prices[pid] || PRODUCT_MAP[pid].price) * (W.saleActive ? 0.85 : 1), 0);
-        return { label: `💳 Take payment ($${sum.toFixed(2)})`, action: { a: 'work' }, station: { kind: 'checkout', scanned, total, pids, pay: true } };
+        return { label: `Take payment ($${sum.toFixed(2)})`, action: { a: 'work' }, station: { kind: 'checkout', scanned, total, pids, pay: true } };
       }
       return { label: 'Waiting for customers… (walk away to leave)', action: null, station: { kind: 'checkout', idle: true, queue: k ? k[5] : 0 } };
     }
@@ -166,18 +176,18 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
     const def = FURNITURE[f.type];
     const info = { kind: 'dept', req, dept, presses: def.presses, progress: G.deptProgress || 0, where, meat: f.type === 'butcher' };
     if (where === 'fridge') {
-      if (prodPid && PRODUCT_MAP[prodPid].cat === def.cat) return { label: `📥 Stock ${PRODUCT_MAP[prodPid].name} into the fridge`, action: { a: 'stock', id: f.id, n: 3 }, repeat: true, station: info };
-      if (dept) return { label: '↩️ Put it back in the fridge', action: { a: 'deptReturn', id: f.id }, station: info };
-      if (!carry.length && req) return { label: `🚪 Open the fridge & take ${req.qty}× ${reqP.name}`, action: { a: 'deptTake', id: f.id }, station: info };
+      if (prodPid && PRODUCT_MAP[prodPid].cat === def.cat) return { label: `Stock ${PRODUCT_MAP[prodPid].name} into the fridge`, action: { a: 'stock', id: f.id, n: 3 }, repeat: true, station: info };
+      if (dept) return { label: '↩ Put it back in the fridge', action: { a: 'deptReturn', id: f.id }, station: info };
+      if (!carry.length && req) return { label: `Open the fridge & take ${req.qty}× ${reqP.name}`, action: { a: 'deptTake', id: f.id }, station: info };
       if (!carry.length) return { label: 'No orders waiting — customers order at the front counter', action: null, station: info };
     }
     if (where === 'station') {
-      if (dept === 'raw') return { label: `${f.type === 'butcher' ? '🔪 Cut' : '🧀 Slice'} & wrap (hold E)`, action: { a: 'deptCut', id: f.id }, repeat: true, station: info, cutting: true };
+      if (dept === 'raw') return { label: `${f.type === 'butcher' ? 'Cut' : 'Slice'} & wrap (hold E)`, action: { a: 'deptCut', id: f.id }, repeat: true, station: info, cutting: true };
       if (dept === 'pack') return { label: 'Wrapped! Bring it to the counter', action: null, station: info };
       return { label: 'Take the product from the fridge first', action: null, station: info };
     }
     if (where === 'counter') {
-      if (dept === 'pack') return { label: req ? `🤝 Hand ${reqP.name} to the customer` : 'Nobody is waiting', action: req ? { a: 'deptServe', id: f.id } : null, station: info };
+      if (dept === 'pack') return { label: req ? `Hand ${reqP.name} to the customer` : 'Nobody is waiting', action: req ? { a: 'deptServe', id: f.id } : null, station: info };
       return { label: req ? `Customer wants ${req.qty}× ${reqP.name} (${reqP.unit}) — get it from the fridge` : 'Waiting for customers…', action: null, station: info };
     }
   }
@@ -188,7 +198,7 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
       const bt = backTileOf(f);
       if (Math.hypot(bt[0] + 0.5 - me.x, bt[1] + 0.5 - me.z) < 0.8) {
         const busy = (G.snap?.P || []).some(p => p[0] !== G.me && p[6] === f.id);
-        if (!busy) return { label: '💵 Work the register', action: { a: 'station', id: f.id } };
+        if (!busy) return { label: 'Work the register', action: { a: 'station', id: f.id } };
       }
     }
   }
@@ -197,8 +207,8 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
   const near = furn.filter(f => fps ? reach(f) < 1.35 && facing(f) > 0.5 : reach(f) < 0.95 && facing(f) > -0.1).sort((a, b) => fps ? facing(b) - facing(a) + (reach(a) - reach(b)) * 0.5 : reach(a) - reach(b) - (facing(a) - facing(b)) * 0.3);
   // 4) the computer
   const comp = near.find(f => f.type === 'computer');
-  if (comp && !isFBox) return { label: '🖥️ Use the computer', action: { a: '_computer' } };
-  if (isFBox) return { label: `🪑 Place the ${FURNITURE[top.slice(2)].name}  ·  Q drop`, action: { a: '_place' } };
+  if (comp && !isFBox) return { label: 'Use the computer', action: { a: '_computer' } };
+  if (isFBox) return { label: `Place the ${FURNITURE[top.slice(2)].name}  ·  Q drop`, action: { a: '_place' } };
   if (dept) return { label: 'Bring it to the department station', action: null };
   if (prodPid) {
     const p = PRODUCT_MAP[prodPid];
@@ -206,41 +216,41 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
       const def = FURNITURE[f.type];
       if (f.slots && def.kind !== 'counter') {
         if (def.cat === p.cat) {
-          if (DOORS.has(f.type) && !f.open) return { label: `🚪 Open the ${def.name}`, action: { a: 'door', id: f.id } };
+          if (DOORS.has(f.type) && !f.open) return { label: `Open the ${def.name}`, action: { a: 'door', id: f.id } };
           const free = f.slots.some(s => (s.pid === prodPid && s.qty < slotCap(f.type, prodPid) && !s.expired) || s.qty === 0);
           if (!free) return { label: `${def.name} is full${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: null, warn: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };
-          return { label: `📥 Stock ${p.name}${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: { a: 'stock', id: f.id, n: 3 }, repeat: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };
+          return { label: `Stock ${p.name}${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: { a: 'stock', id: f.id, n: 3 }, repeat: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };
         }
         const need = CATEGORIES[p.cat];
         return { label: `${p.name} needs a ${FURNITURE[need.fixtures[0]].name}`, action: null, warn: true };
       }
-      if (def.kind === 'rack') return { label: '🗃️ Store box on rack', action: { a: 'rackPut', id: f.id } };
-      if (f.type === 'bin') return { label: '🗑️ Throw box away', action: { a: 'trash', id: f.id } };
+      if (def.kind === 'rack') return { label: 'Store box on rack', action: { a: 'rackPut', id: f.id } };
+      if (f.type === 'bin') return { label: 'Throw box away', action: { a: 'trash', id: f.id } };
     }
     if (carry.length < (G.meta?.carryCap || 1)) {
       const b = nearestBox(world, me, fps);
-      if (b && b.pid) return { label: `📦 Pick up another box (${PRODUCT_MAP[b.pid].name})`, action: { a: 'pickup', id: b.id } };
+      if (b && b.pid) return { label: `Pick up another box (${PRODUCT_MAP[b.pid].name})`, action: { a: 'pickup', id: b.id } };
     }
     return null;
   }
   // empty hands
   const b = nearestBox(world, me, fps);
   if (b) {
-    if (b.ftype) return { label: `📦 Pick up ${FURNITURE[b.ftype].name} box`, action: { a: 'pickup', id: b.id } };
+    if (b.ftype) return { label: `Pick up ${FURNITURE[b.ftype].name} box`, action: { a: 'pickup', id: b.id } };
     const p = PRODUCT_MAP[b.pid]; const bb = W.boxes.find(x => x.id === b.id);
-    return { label: `📦 Pick up ${p.name} (${bb ? bb.qty : '?'})${b.expired ? ' — EXPIRED' : ''}`, action: { a: 'pickup', id: b.id }, warn: b.expired };
+    return { label: `Pick up ${p.name} (${bb ? bb.qty : '?'})${b.expired ? ' — EXPIRED' : ''}`, action: { a: 'pickup', id: b.id }, warn: b.expired };
   }
   const d = W.dirt.find(d => (d.floor || 0) === fl && Math.hypot(d.x - me.x, d.z - me.z) < 1.1);
-  if (d) return { label: `🧽 Clean up mess (${d.hp ?? 3} scrubs)`, action: { a: 'clean', id: d.id }, repeat: true };
+  if (d) return { label: `Clean up mess (${d.hp ?? 3} scrubs)`, action: { a: 'clean', id: d.id }, repeat: true };
   for (const f of near) {
     const def = FURNITURE[f.type];
-    if (f.broken) return { label: `🔧 Repair ${def.name} (${f.repair || 0}/6)  ·  [X] call technician $180`, action: { a: 'repair', id: f.id }, repeat: true, alt: { a: 'callTech', id: f.id } };
+    if (f.broken) return { label: `Repair ${def.name} (${f.repair || 0}/6)  ·  [X] call technician $180`, action: { a: 'repair', id: f.id }, repeat: true, alt: { a: 'callTech', id: f.id } };
     if (f.slots && f.slots.some(s => s.expired && s.qty > 0)) {
-      if (DOORS.has(f.type) && !f.open) return { label: `🚪 Open the ${def.name}`, action: { a: 'door', id: f.id } };
-      return { label: `🤢 Clear expired items`, action: { a: 'clearExpired', id: f.id } };
+      if (DOORS.has(f.type) && !f.open) return { label: `Open the ${def.name}`, action: { a: 'door', id: f.id } };
+      return { label: `Clear expired items`, action: { a: 'clearExpired', id: f.id } };
     }
-    if (DOORS.has(f.type)) return { label: `🚪 ${f.open ? 'Close' : 'Open'} the ${def.name}`, action: { a: 'door', id: f.id } };
-    if (f.boxes && f.boxes.length) return { label: `🗃️ Take box from rack (${f.boxes.length})`, action: { a: 'rackTake', id: f.id } };
+    if (DOORS.has(f.type)) return { label: `${f.open ? 'Close' : 'Open'} the ${def.name}`, action: { a: 'door', id: f.id } };
+    if (f.boxes && f.boxes.length) return { label: `Take box from rack (${f.boxes.length})`, action: { a: 'rackTake', id: f.id } };
   }
   return null;
 }

@@ -3,24 +3,15 @@ import * as THREE from 'three';
 import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap } from '/shared/data.js';
 import { Grid, center, dims } from '/shared/grid.js';
 import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
-import { tileTexture } from './scene.js';
+import { pbr, surfaceMaps } from './textures.js';
+
+// store look: neutral painted block walls, a dark green brand band, aluminium storefront
+const BRAND = 0x1f5135, BRAND_CSS = '#1f5135';
 
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(1, 1, 1), tmpC = new THREE.Color();
 const EXPIRED = new THREE.Color(0x6b5b3e);
 const UP = new THREE.Vector3(0, 1, 0);
 const DOOR_TYPES = new Set(['fridge', 'freezer_upright', 'freezer', 'butcher', 'deli']);
-let vinylTex = null;
-function vinylTexture() {
-  if (vinylTex) return vinylTex.clone();
-  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
-  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#e9eaec' : '#f1f2f3'; g.fillRect(i * 128, j * 128, 128, 128); }
-  for (let k = 0; k < 2600; k++) { const v = Math.round(150 + Math.random() * 80); g.fillStyle = 'rgba(' + v + ',' + v + ',' + (v + 5) + ',' + (0.25 + Math.random() * 0.4) + ')'; g.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 1.5, 1 + Math.random() * 1.5); }
-  g.strokeStyle = 'rgba(150,155,160,0.55)'; g.lineWidth = 1.5;
-  for (let i = 0; i <= 2; i++) { g.beginPath(); g.moveTo(i * 128, 0); g.lineTo(i * 128, 256); g.stroke(); g.beginPath(); g.moveTo(0, i * 128); g.lineTo(256, i * 128); g.stroke(); }
-  vinylTex = new THREE.CanvasTexture(c); vinylTex.wrapS = vinylTex.wrapT = THREE.RepeatWrapping; vinylTex.colorSpace = THREE.SRGBColorSpace; vinylTex.anisotropy = 8;
-  return vinylTex.clone();
-}
-
 export class World {
   constructor(scene) {
     this.scene = scene;
@@ -75,16 +66,19 @@ export class World {
     const W = w.w, D = w.d, floors = w.floors || 1;
     const fl = FLOORS.find(f => f.id === w.floor) || FLOORS[0];
     const wl = WALLS.find(x => x.id === w.wall) || WALLS[0];
-    const floorTex = () => { const t = vinylTexture(); t.repeat.set(W / 1.2, D / 1.2); return t; };
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTex(), roughness: 0.32, metalness: 0.02 }));
+    void fl;
+    const floorTex = () => surfaceMaps('vct', W, D);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ ...floorTex(), roughness: 1, metalness: 0, envMapIntensity: 1.2 }));
     floor.rotation.x = -Math.PI / 2; floor.position.set(W / 2, 0.002, D / 2); floor.receiveShadow = true; this.shell.add(floor);
-    const sill = new THREE.Mesh(new THREE.PlaneGeometry(W, 1), mat(0xd6d3d1)); sill.rotation.x = -Math.PI / 2; sill.position.set(W / 2, 0.003, D + 0.5); this.shell.add(sill);
-    const H = 3.4, wc = new THREE.Color(wl.color).getHex();
+    const sill = new THREE.Mesh(new THREE.PlaneGeometry(W, 1), pbr('concrete', W, 1)); sill.rotation.x = -Math.PI / 2; sill.position.set(W / 2, 0.003, D + 0.5); this.shell.add(sill);
+    const H = 3.4; void wl;
     const mkWall = (parent, w_, d_, x, z, side, y0 = 0, h = H) => {
       const g = new THREE.Group();
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w_, h, d_), new THREE.MeshStandardMaterial({ color: wc, roughness: 0.9, transparent: true })); m.position.set(x, y0 + h / 2, z); m.castShadow = true; m.receiveShadow = true; g.add(m);
-      const base = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.18, d_ + 0.02), new THREE.MeshStandardMaterial({ color: 0x475569, transparent: true })); base.position.set(x, y0 + 0.09, z); g.add(base);
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.22, d_ + 0.02), new THREE.MeshStandardMaterial({ color: 0xf97316, transparent: true })); stripe.position.set(x, y0 + 2.7, z); g.add(stripe);
+      const len = Math.max(w_, d_);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w_, h, d_), pbr('block', len, h, { color: 0xe9e6df, transparent: true })); m.position.set(x, y0 + h / 2, z); m.castShadow = true; m.receiveShadow = true; g.add(m);
+      // rubber cove base and a painted brand band like real store walls
+      const base = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.1, d_ + 0.02), pbr('rubber', len, 0.1, { color: 0x3a3d40, transparent: true })); base.position.set(x, y0 + 0.05, z); g.add(base);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.5, d_ + 0.02), pbr('plaster', len, 0.5, { color: BRAND, transparent: true })); stripe.position.set(x, y0 + 2.75, z); g.add(stripe);
       parent.add(g); this.fadeWalls.push({ side, mats: [m.material, base.material, stripe.material] });
     };
     mkWall(this.shell, W + 0.4, 0.2, W / 2, -0.1, 'back');
@@ -93,10 +87,10 @@ export class World {
     // storefront
     const front = new THREE.Group(); this.shell.add(front);
     const fz = D + 0.5, dx0 = w.doorX, dx1 = w.doorX + 2;
-    const glassM = new THREE.MeshStandardMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false });
-    const baseM = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.8, transparent: true });
-    const frameM = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, transparent: true });
-    const fasciaM = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.6, transparent: true });
+    const glassM = new THREE.MeshStandardMaterial({ color: 0xc9d6d3, transparent: true, opacity: 0.16, roughness: 0.03, metalness: 0.2, depthWrite: false, envMapIntensity: 1.5 });
+    const baseM = pbr('brick', W, 0.5, { transparent: true });
+    const frameM = pbr('metal', 1, 1, { color: 0xb9bdc2, metalness: 0.85, transparent: true });
+    const fasciaM = pbr('plaster', W, 1, { color: 0x2b2f33, transparent: true });
     const glassRow = (parent, x0, x1, y0, withBase) => {
       if (x1 - x0 <= 0.01) return;
       const cx = (x0 + x1) / 2, ww = x1 - x0;
@@ -108,9 +102,9 @@ export class World {
     const top = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.1, 0.3), frameM); top.position.set(W / 2, 2.62, fz); front.add(top);
     const fascia = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.95, 0.3), fasciaM); fascia.position.set(W / 2, 3.12, fz); fascia.castShadow = true; front.add(fascia);
     const name = w.name || 'Your Supermarket';
-    const sign = textTexture(name.toUpperCase(), { size: 96, bg: '#ffffff', color: '#ea580c', pad: 26, radius: 30, border: '#fdba74', font: 'Fredoka' });
-    const sh = 0.78, swid = Math.min(W - 1, sh * sign.aspect);
-    const signM = new THREE.MeshStandardMaterial({ map: sign.tex, emissive: 0xffffff, emissiveMap: sign.tex, emissiveIntensity: 0.25, transparent: true });
+    const sign = textTexture(name.toUpperCase(), { size: 96, bg: null, color: '#f4f6f2', pad: 20, radius: 0, font: 'Barlow Condensed', weight: 700 });
+    const sh = 0.6, swid = Math.min(W - 1, sh * sign.aspect);
+    const signM = new THREE.MeshStandardMaterial({ map: sign.tex, emissive: 0xffffff, emissiveMap: sign.tex, emissiveIntensity: 0.9, transparent: true });
     const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(swid, swid / sign.aspect), signM); signMesh.position.set(W / 2, 3.12, fz + 0.16); front.add(signMesh);
     for (const x of [dx0, dx1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.2), frameM); p.position.set(x, 1.3, fz); front.add(p); }
     for (let i = 0; i < 2; i++) {
@@ -123,17 +117,18 @@ export class World {
       door.userData = { base, dir: i === 0 ? -1 : 1, open: 0 };
       front.add(door); this.doors.push(door);
     }
-    for (let i = 0; i < 6; i++) B(front, 0.52, 0.05, 1.3, i % 2 ? 0xffffff : 0xef4444, dx0 - 0.5 + 0.26 + i * 0.52, 2.45, fz + 0.65).rotation.x = 0.28;
-    const matM = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), mat(0x7f1d1d)); matM.rotation.x = -Math.PI / 2; matM.position.set(dx0 + 1, 0.006, D - 0.6); this.shell.add(matM);
+    { const can = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.12, 1.4), frameM); can.position.set(dx0 + 1, 2.72, fz + 0.7); can.castShadow = true; front.add(can); }
+    { const ex = makeLabel('EXIT', 0.14, { bg: '#1d2023', color: '#e0453b', size: 40, pad: 14, radius: 2, font: 'Barlow Condensed', weight: 700 }, 0.5); ex.material.toneMapped = false; ex.position.set(dx0 + 1, 2.75, fz - 0.12); ex.rotation.y = Math.PI; front.add(ex); }
+    const matM = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), pbr('rubber', 2, 1.2, { color: 0x4a4d50 })); matM.rotation.x = -Math.PI / 2; matM.position.set(dx0 + 1, 0.006, D - 0.6); this.shell.add(matM);
     this.frontMats = [baseM, frameM, fasciaM, signM];
     // entrance pylon sign with the store name (outside, next to the door)
     const py = new THREE.Group(); py.position.set(dx0 - 1.2, 0, D + 1.6); this.shell.add(py);
-    C(py, 0.08, 0.1, 2.6, 0x334155, 0, 1.3, 0);
-    B(py, 1.9, 0.7, 0.18, 0xf97316, 0, 2.75, 0);
-    const pt = textTexture(name, { size: 64, bg: '#ffffff', color: '#ea580c', pad: 18, radius: 16, font: 'Fredoka' });
+    C(py, 0.08, 0.1, 2.6, 0x3a3d40, 0, 1.3, 0, { metal: 0.6, rough: 0.4 });
+    B(py, 1.9, 0.7, 0.18, BRAND, 0, 2.75, 0);
+    const pt = textTexture(name, { size: 64, bg: BRAND_CSS, color: '#ffffff', pad: 18, radius: 4, font: 'Barlow Condensed', weight: 700 });
     const pw = Math.min(1.75, 0.55 * pt.aspect), pm = new THREE.MeshStandardMaterial({ map: pt.tex, emissive: 0xffffff, emissiveMap: pt.tex, emissiveIntensity: 0.35 });
     for (const [z, r] of [[0.1, 0], [-0.1, Math.PI]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, pw / pt.aspect), pm); m.position.set(0, 2.75, z); m.rotation.y = r; py.add(m); }
-    const op = makeLabel('OPEN 8:00 – 22:00', 0.12, { bg: '#1e293b', color: '#fde047', size: 32 }, 1.2); op.position.set(0, 2.25, 0.1); py.add(op);
+    const op = makeLabel('OPEN DAILY  8:00 – 22:00', 0.11, { bg: '#2b2f33', color: '#f4f6f2', size: 32, font: 'Barlow Condensed' }, 1.2); op.position.set(0, 2.25, 0.1); py.add(op);
 
     this.ceiling = new THREE.Group(); this.shell.add(this.ceiling);
     this.buildCeiling(this.ceiling, W, D, floors > 1 ? FLOOR_H - 0.2 : 3.35);
@@ -144,32 +139,32 @@ export class World {
   }
 
   buildCeiling(group, W, D, y) {
-    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-    g.fillStyle = '#f3f4f6'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#d1d5db'; g.fillRect(0, 0, 128, 3); g.fillRect(0, 0, 3, 128);
-    for (let i = 0; i < 260; i++) { g.fillStyle = 'rgba(120,120,120,' + (Math.random() * 0.15) + ')'; g.fillRect(Math.random() * 128, Math.random() * 128, 1.5, 1.5); }
-    const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(W / 1.2, D / 1.2); tex.colorSpace = THREE.SRGBColorSpace;
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, D + 1), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, side: THREE.DoubleSide }));
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, D + 1), pbr('ceiling', W, D + 1, { side: THREE.DoubleSide }));
     ceil.rotation.x = Math.PI / 2; ceil.position.set(W / 2, y, (D + 1) / 2); group.add(ceil);
-    const panelM = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfffbf2, emissiveIntensity: 2.2 });
-    const frameM = mat(0xd1d5db, { metal: 0.5 });
-    for (let x = 2; x < W - 1; x += 3) for (let z = 1.6; z < D - 0.5; z += 2.4) {
-      const fr = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.03, 0.45), frameM); fr.position.set(x, y - 0.015, z); group.add(fr);
-      const pn = new THREE.Mesh(new THREE.PlaneGeometry(1.18, 0.38), panelM); pn.rotation.x = Math.PI / 2; pn.position.set(x, y - 0.032, z); group.add(pn);
+    // 60x120 cm LED troffers in the grid, in rows like a real sales floor
+    const panelM = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf4f6ff, emissiveIntensity: 2.0 });
+    const frameM = mat(0xe5e7eb, { metal: 0.4, rough: 0.4 });
+    for (let x = 1.8; x < W - 0.9; x += 2.4) for (let z = 1.5; z < D - 0.4; z += 2.4) {
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.03, 0.64), frameM); fr.position.set(x, y - 0.015, z); group.add(fr);
+      const pn = new THREE.Mesh(new THREE.PlaneGeometry(1.18, 0.58), panelM); pn.rotation.x = Math.PI / 2; pn.position.set(x, y - 0.032, z); group.add(pn);
     }
+    // ceiling details: dome security cameras, sprinkler heads, exit signs over the doors
+    const domeM = new THREE.MeshStandardMaterial({ color: 0x111418, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.85 });
+    for (const [cx, cz] of [[0.8, 0.8], [W - 0.8, 0.8], [W / 2, D / 2]]) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), domeM); d.rotation.x = Math.PI; d.position.set(cx, y - 0.01, cz); group.add(d); C(group, 0.1, 0.1, 0.03, 0xf3f4f6, cx, y - 0.015, cz); }
+    for (let x = 3; x < W; x += 3) for (let z = 3; z < D; z += 3) C(group, 0.02, 0.012, 0.05, 0xd4d4d8, x, y - 0.03, z, { metal: 0.8, rough: 0.3, shadow: false });
   }
   setCeilingVisible(v) { this.ceilingOn = v; if (this.ceiling) this.ceiling.visible = v; if (this.ceiling2) this.ceiling2.visible = v; }
 
   buildUpperFloor(w, floorTex, mkWall, glassRow, glassM, frameM, fasciaM) {
     const W = w.w, D = w.d, s = stairInfo(W), U = this.upperShell;
     // slab with a hole for the stairwell
-    const slabM = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.8 });
+    const slabM = pbr('concrete', W, D, { color: 0xd8d8d6 });
     const slab = (x0, x1, z0, z1) => { if (x1 <= x0 || z1 <= z0) return; const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.2, z1 - z0), slabM); m.position.set((x0 + x1) / 2, FLOOR_H - 0.1, (z0 + z1) / 2); m.receiveShadow = true; m.castShadow = true; U.add(m); };
     slab(0, s.x, 0, D + 1); slab(s.x, W, 0, s.z0); slab(s.x, W, s.z1, D + 1);
-    const tex = floorTex();
-    const top = (x0, x1, z0, z1) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 })); m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, FLOOR_H + 0.003, (z0 + z1) / 2); m.receiveShadow = true; U.add(m); };
+    const top = (x0, x1, z0, z1) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshStandardMaterial({ ...surfaceMaps('vct', x1 - x0, z1 - z0), roughness: 1 })); m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, FLOOR_H + 0.003, (z0 + z1) / 2); m.receiveShadow = true; U.add(m); };
     top(0, s.x, 0, D); top(s.x, W, 0, s.z0); top(s.x, W, s.z1, D);
     // railings around the stairwell
-    const railM = new THREE.MeshStandardMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.35, depthWrite: false });
+    const railM = new THREE.MeshStandardMaterial({ color: 0xcfd8d6, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.2, depthWrite: false });
     const rail = (x, z, w_, d_) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w_, 1, d_), railM); m.position.set(x, FLOOR_H + 0.5, z); U.add(m); B(U, w_ + 0.02, 0.05, d_ + 0.02, 0x475569, x, FLOOR_H + 1.02, z); };
     rail(s.x, (s.z0 + s.z1) / 2, 0.05, s.z1 - s.z0); rail(s.x + 1, s.z1, 2, 0.05);
     // upper walls + storefront glass
@@ -178,23 +173,24 @@ export class World {
     mkWall(U, 0.2, D + 1, W + 0.1, (D + 1) / 2, 'right', FLOOR_H);
     const fz = D + 0.5;
     const up = new THREE.Group(); U.add(up);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.5, 0.25), new THREE.MeshStandardMaterial({ color: 0xb45309, transparent: true })); base.position.set(W / 2, FLOOR_H + 0.25, fz); up.add(base);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.5, 0.25), pbr('brick', W, 0.5, { transparent: true })); base.position.set(W / 2, FLOOR_H + 0.25, fz); up.add(base);
     glassRow(up, 0, W, FLOOR_H, false);
     const fas = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.6, 0.3), fasciaM); fas.position.set(W / 2, FLOOR_H + 2.95, fz); up.add(fas);
     this.frontMats.push(base.material);
     // stairs (always visible, part of the ground floor)
     const st = new THREE.Group(); this.shell.add(st);
     const steps = 14, run = (s.z1 - s.z0) / steps, rise = FLOOR_H / steps;
+    const stairM = pbr('concrete', 1, 1, { color: 0xc9c9c6 });
     for (let i = 0; i < steps; i++) {
       const z = s.z1 - (i + 0.5) * run, y = (i + 1) * rise;
-      B(st, 1.96, rise, run + 0.01, i % 2 ? 0xd6d3d1 : 0xe7e5e4, s.x + 1, y - rise / 2, z);
+      B(st, 1.96, rise, run + 0.01, 0, s.x + 1, y - rise / 2, z, { material: stairM }); B(st, 1.96, 0.02, 0.05, 0x8a8f94, s.x + 1, y + 0.005, z + run / 2 - 0.03, { shadow: false, metal: 0.8, rough: 0.35 });
     }
     const stringer = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, Math.hypot(s.z1 - s.z0, FLOOR_H)), mat(0x475569));
     stringer.position.set(s.x + 0.02, FLOOR_H / 2 + 0.25, (s.z0 + s.z1) / 2); stringer.rotation.x = Math.atan2(FLOOR_H, s.z1 - s.z0); st.add(stringer);
     const handrail = stringer.clone(); handrail.scale.set(0.5, 0.25, 1); handrail.position.y += 0.9; st.add(handrail);
     for (let i = 0; i <= 4; i++) { const z = s.z1 - i * (s.z1 - s.z0) / 4; C(st, 0.025, 0.025, 1, 0x475569, s.x + 0.02, (s.z1 - z) / (s.z1 - s.z0) * FLOOR_H + 0.5, z); }
-    B(st, 2, FLOOR_H, 1, 0xcbd5e1, s.x + 1, FLOOR_H / 2, s.z0 - 0.5); // closet under the landing
-    const lb = makeLabel('⬆️ Floor 2', 0.18, { bg: '#1e293b', color: '#fff', size: 34 }, 1); lb.position.set(s.x + 1, 0.9, s.z1 + 0.02); st.add(lb);
+    B(st, 2, FLOOR_H, 1, 0, s.x + 1, FLOOR_H / 2, s.z0 - 0.5, { material: pbr('block', 2, FLOOR_H, { color: 0xe9e6df }) }); // closet under the landing
+    const lb = makeLabel('UPPER LEVEL  ↑', 0.16, { bg: BRAND_CSS, color: '#fff', size: 34, font: 'Barlow Condensed' }, 1); lb.position.set(s.x + 1, 0.9, s.z1 + 0.02); st.add(lb);
   }
 
   // ---------------------------------------------------------------------------- furniture
@@ -207,7 +203,7 @@ export class World {
       if (!e || e.key !== key) {
         if (e) { e.group.removeFromParent(); disposeOwned(e.group); }
         const group = makeFurniture(f.type, f);
-        if (f.upg) { const s = makeLabel('⭐', 0.18, { bg: null }, 0.3); s.position.set(FURNITURE[f.type].w / 2 - 0.15, 0.3, 0.47); group.add(s); }
+        if (f.upg) { const s = makeLabel('PRO', 0.08, { bg: '#2b2f33', color: '#e9d27a', size: 30, font: 'Barlow Condensed', weight: 700, radius: 2 }, 0.3); s.position.set(FURNITURE[f.type].w / 2 - 0.15, 0.3, 0.47); group.add(s); }
         group.traverse(o => { o.userData.fid = f.id; });
         this.floorRoots[f.floor || 0].add(group);
         e = { group, key, data: f, label: null, tags: new THREE.Group(), tagKey: '', doorOpen: 0 };
@@ -222,12 +218,13 @@ export class World {
       const def = FURNITURE[f.type];
       let text = '';
       const expired = f.slots && f.slots.some(s => s.expired && s.qty > 0);
-      if (f.broken) text = `⚠️ BROKEN ${f.temp}°C${f.techEta != null ? ' 🧑‍🔧' : ` 🔧${f.repair || 0}/6`}`;
-      else if (def.temp !== undefined && f.temp > def.temp + 1) text = `🌡️ ${f.temp}°C`;
-      else if (expired) text = '🤢 Expired';
+      if (f.broken) text = `OUT OF ORDER  ${f.temp}°C  ${f.techEta != null ? 'TECHNICIAN ON THE WAY' : `REPAIR ${f.repair || 0}/6`}`;
+      else if (def.temp !== undefined && f.temp > def.temp + 1) text = `TEMP ${f.temp}°C`;
+      else if (expired) text = 'EXPIRED STOCK';
+      const lblOpts = { bg: f.broken ? 'rgba(160,32,32,0.92)' : 'rgba(150,100,20,0.92)', color: '#fff', size: 36, radius: 6, font: 'Barlow Condensed', weight: 700 };
       if (text) {
-        if (!e.label) { e.label = makeSprite(text, 0.26, { bg: f.broken ? '#dc2626' : '#f59e0b', color: '#fff', size: 36 }); e.group.add(e.label); }
-        setSpriteText(e.label, text, 0.26, { bg: f.broken ? '#dc2626' : '#f59e0b', color: '#fff', size: 36 });
+        if (!e.label) { e.label = makeSprite(text, 0.2, lblOpts); e.group.add(e.label); }
+        setSpriteText(e.label, text, 0.2, lblOpts);
         e.label.position.set(0, f.type === 'freezer' ? 1.3 : 2.5, 0); e.label.visible = true;
       } else if (e.label) e.label.visible = false;
       if (e.group.userData.led) e.group.userData.led.material = mat(f.broken ? 0xef4444 : 0x22c55e, { emissive: f.broken ? 0xef4444 : 0x22c55e });
@@ -235,6 +232,36 @@ export class World {
       this.priceTags(e, f, w);
     }
     for (const [id, e] of this.furn) if (!seen.has(id)) { e.group.removeFromParent(); disposeOwned(e.group); this.furn.delete(id); }
+    this.aisleSigns(w);
+  }
+
+  // hanging aisle signs over the gondola shelves: aisle number + what's on the shelf, like a real store
+  aisleSigns(w) {
+    const shelves = w.furniture.filter(f => f.type === 'shelf' || f.type === 'shelf_large' || f.type === 'endcap')
+      .sort((a, b) => (a.floor || 0) - (b.floor || 0) || a.x - b.x || a.z - b.z);
+    shelves.forEach((f, i) => {
+      const e = this.furn.get(f.id); if (!e) return;
+      const names = [...new Set((f.slots || []).filter(s => s.pid).map(s => PRODUCT_MAP[s.pid]?.name.split(' ').slice(-1)[0]))].slice(0, 3);
+      const key = `${i + 1}|${names.join('·')}`;
+      if (e.aisleKey === key) return;
+      e.aisleKey = key;
+      if (e.aisle) { e.aisle.removeFromParent(); disposeOwned(e.aisle); }
+      const g = new THREE.Group();
+      const top = names.length ? names.join('  ·  ').toUpperCase() : 'GROCERY';
+      const opts = { bg: BRAND_CSS, color: '#ffffff', size: 40, pad: 22, radius: 2, font: 'Barlow Condensed', weight: 700 };
+      const num = makeLabel(String(i + 1), 0.3, { ...opts, bg: '#f4f6f2', color: BRAND_CSS, size: 56 }, 0.34);
+      const lbl = makeLabel(top, 0.2, opts, 1.6);
+      const wN = num.scale.x, wL = lbl.scale.x;
+      for (const side of [1, -1]) {
+        const a = num.clone(), b = lbl.clone();
+        a.position.set(side * -(wL / 2 + 0.02), 0, side * 0.012); b.position.set(side * (wN / 2 + 0.02), 0, side * 0.012);
+        a.rotation.y = b.rotation.y = side > 0 ? 0 : Math.PI;
+        g.add(a, b);
+      }
+      for (const x of [-0.5, 0.5]) { const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.6, 4), mat(0x8a8f94, { metal: 0.8 })); wire.position.set(x * (wN + wL) * 0.8, 0.45, 0); wire.userData.owned = wire.userData.ownGeo = true; g.add(wire); }
+      g.position.set(0, 2.62, 0);
+      e.aisle = g; e.group.add(g);
+    });
   }
 
   // small shelf-edge tags with the product name and price under each section

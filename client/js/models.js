@@ -3,6 +3,15 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FURNITURE, CATEGORIES, PRODUCT_MAP, slotRegions } from '/shared/data.js';
 import { PRODUCT_GEOS, productMaterials, packagingTexture } from './products3d.js';
+import { surfaceMaps, pbrShared } from './textures.js';
+
+// clothing: woven fabric or denim texture, tinted; skin with a soft sheen
+const clothCache = new Map();
+function cloth(color, kind = 'fabric', rough = 0.9) {
+  const k = color + kind;
+  if (!clothCache.has(k)) { const m = new THREE.MeshStandardMaterial({ color, ...surfaceMaps(kind, 0.12, 0.12), roughness: rough }); m.normalScale.set(0.6, 0.6); clothCache.set(k, m); }
+  return clothCache.get(k);
+}
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -64,11 +73,11 @@ export function disposeOwned(obj) {
 
 // ------------------------------------------------------------------ text sprites
 const spriteTexCache = new Map();
-export function textTexture(text, { size = 48, color = '#1e293b', bg = 'rgba(255,255,255,0.95)', pad = 14, radius = 18, bold = true, border = null, font = 'Nunito' } = {}) {
-  const key = [text, size, color, bg, border].join('|');
+export function textTexture(text, { size = 48, color = '#1e293b', bg = 'rgba(255,255,255,0.95)', pad = 14, radius = 18, bold = true, border = null, font = 'Barlow', weight = null } = {}) {
+  const key = [text, size, color, bg, border, font, weight, bold, pad, radius].join('|');
   if (spriteTexCache.has(key)) { const hit = spriteTexCache.get(key); spriteTexCache.delete(key); spriteTexCache.set(key, hit); return hit; }
   const c = document.createElement('canvas'); const g = c.getContext('2d');
-  const f = `${bold ? '800' : '600'} ${size}px ${font}, "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+  const f = `${weight || (bold ? '700' : '500')} ${size}px "${font}", "Barlow", "Segoe UI", "Helvetica Neue", Arial, sans-serif`;
   g.font = f; const w = Math.ceil(g.measureText(text).width) + pad * 2; const h = size + pad * 1.3;
   c.width = w; c.height = h; g.font = f;
   if (bg) { g.fillStyle = bg; roundRect(g, 2, 2, w - 4, h - 4, radius); g.fill(); if (border) { g.lineWidth = 4; g.strokeStyle = border; g.stroke(); } }
@@ -133,7 +142,7 @@ export function makeFurniture(type, f = {}) {
       B(g, W, 0.025, 0.04, cc, 0, h + 0.01, -0.29, { shadow: false });
       const lbl = makeLabel(type === 'endcap' ? 'SPECIAL OFFER' : CATEGORIES[def.cat].name, 0.07, { bg: null, color: '#334155', size: 32 }, 0.6);
       lbl.position.set(-W / 2 + 0.35, h + 0.1, -0.27); g.add(lbl);
-      if (type === 'endcap') B(g, W - 0.06, 0.2, 0.02, 0xdc2626, 0, h + 0.1, -0.268, { shadow: false });
+      if (type === 'endcap') B(g, W - 0.06, 0.2, 0.02, 0x8a1c1c, 0, h + 0.1, -0.268, { shadow: false });
       break;
     }
     case 'fridge': case 'freezer_upright': case 'fridge_large': {
@@ -275,18 +284,19 @@ export function makeFurniture(type, f = {}) {
       const led = B(g, 0.1, 0.05, 0.02, 0x22c55e, 1.35, 0.4, cz + 0.43, { emissive: 0x22c55e });
       g.userData.led = led;
       // staff aisle mat
-      const mt = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 0.9), new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.9 }));
+      const mt = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 0.9), new THREE.MeshStandardMaterial({ color: 0x2f3236, ...surfaceMaps('rubber', 1, 1), roughness: 1 }));
       mt.rotation.x = -Math.PI / 2; mt.position.set(0, 0.006, 0); mt.receiveShadow = true; g.add(mt);
       break;
     }
     case 'computer': {
-      B(g, 1.8, 0.05, 0.7, 0x8b5a2b, 0, 0.76, 0);
-      for (const x of [-0.85, 0.85]) for (const z of [-0.3, 0.3]) B(g, 0.05, 0.75, 0.05, 0x334155, x, 0.37, z);
-      B(g, 1.7, 0.4, 0.04, 0x8b5a2b, 0, 0.55, -0.32);
+      const woodM = pbrShared('wood', 'desk', 1.2, { color: 0xc8b8a0 });
+      B(g, 1.8, 0.05, 0.7, 0, 0, 0.76, 0, { material: woodM });
+      for (const x of [-0.85, 0.85]) for (const z of [-0.3, 0.3]) B(g, 0.05, 0.75, 0.05, 0x2b2f33, x, 0.37, z, { metal: 0.6, rough: 0.4 });
+      B(g, 1.7, 0.4, 0.04, 0, 0, 0.55, -0.32, { material: woodM });
       // monitor facing the front (+z)
       C(g, 0.1, 0.14, 0.03, 0x1e293b, -0.2, 0.8, -0.15); B(g, 0.05, 0.3, 0.05, 0x1e293b, -0.2, 0.95, -0.17);
       B(g, 0.85, 0.52, 0.05, 0x111827, -0.2, 1.3, -0.15);
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.45), new THREE.MeshBasicMaterial({ map: textTexture('🛒 SuperOS', { size: 40, bg: '#0ea5e9', color: '#ffffff', pad: 30, radius: 4 }).tex }));
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.45), new THREE.MeshBasicMaterial({ map: textTexture('StoreOS', { size: 40, bg: '#1d2b26', color: '#e9efe9', pad: 30, radius: 2, font: 'Barlow', weight: 600 }).tex }));
       scr.position.set(-0.2, 1.3, -0.12); g.add(scr); g.userData.screen = scr;
       B(g, 0.5, 0.02, 0.16, 0x334155, -0.2, 0.79, 0.12);
       B(g, 0.07, 0.02, 0.1, 0x334155, 0.2, 0.79, 0.12);
@@ -362,13 +372,12 @@ export function makeFurniture(type, f = {}) {
       break;
     }
     case 'rack': {
-      for (const x of [-W / 2 + 0.05, W / 2 - 0.05]) for (const z of [-0.38, 0.38]) B(g, 0.06, 1.95, 0.06, 0x2563eb, x, 0.98, z);
-      for (const y of [0.1, 0.65, 1.2, 1.75]) { B(g, W - 0.04, 0.05, 0.8, 0xf59e0b, 0, y, 0); B(g, W, 0.08, 0.05, 0xf97316, 0, y, 0.4); }
+      for (const x of [-W / 2 + 0.05, W / 2 - 0.05]) for (const z of [-0.38, 0.38]) B(g, 0.06, 1.95, 0.06, 0x2a4a7a, x, 0.98, z, { metal: 0.4, rough: 0.5 });
+      for (const y of [0.1, 0.65, 1.2, 1.75]) { B(g, W - 0.04, 0.05, 0.8, 0xa58a5c, 0, y, 0); B(g, W, 0.08, 0.05, 0xd0682a, 0, y, 0.4, { metal: 0.4, rough: 0.5 }); }
       break;
     }
     case 'bin': {
       C(g, 0.2, 0.17, 0.6, 0x16a34a, 0, 0.3, 0); C(g, 0.22, 0.22, 0.06, 0x14532d, 0, 0.62, 0);
-      const s = makeSprite('🗑️', 0.18, { bg: null }); s.position.set(0, 0.9, 0); g.add(s);
       break;
     }
     case 'plant': {
@@ -393,17 +402,18 @@ export function makeFurniture(type, f = {}) {
       break;
     }
     case 'balloons': {
-      C(g, 0.1, 0.12, 0.08, 0x475569, 0, 0.04, 0);
-      const cols = [0xef4444, 0x3b82f6, 0xfacc15, 0x22c55e, 0xec4899];
-      const bg = new THREE.Group(); g.add(bg);
-      cols.forEach((c, i) => { const a = i / cols.length * Math.PI * 2; S(bg, 0.17, c, Math.cos(a) * 0.2, 1.7 + (i % 2) * 0.2, Math.sin(a) * 0.2, { rough: 0.3 }); C(bg, 0.005, 0.005, 1.6, 0xffffff, Math.cos(a) * 0.1, 0.85, Math.sin(a) * 0.1); });
-      g.userData.anim.push({ kind: 'bob', obj: bg });
+      // cardboard promo display (POS stand) with product trays and a header card
+      const card = 0xc9a97c;
+      B(g, 0.7, 0.08, 0.5, card, 0, 0.04, 0); B(g, 0.66, 1.3, 0.04, card, 0, 0.69, -0.23);
+      for (const x of [-0.33, 0.33]) B(g, 0.03, 1.3, 0.48, card, x, 0.69, 0);
+      for (const y of [0.32, 0.72, 1.12]) { B(g, 0.64, 0.02, 0.46, card, 0, y, 0); for (let i = 0; i < 4; i++) B(g, 0.13, 0.18, 0.12, [0x1f5135, 0x8a1c1c, 0xe9e4d8][(i + Math.round(y * 10)) % 3], -0.22 + i * 0.15, y + 0.1, 0.06); }
+      const hd = makeLabel('WEEKLY OFFER', 0.16, { bg: '#8a1c1c', color: '#ffffff', size: 34, font: 'Barlow Condensed', weight: 700, radius: 2 }, 0.62); hd.position.set(0, 1.5, -0.2); g.add(hd);
       break;
     }
     case 'vending': {
-      B(g, 0.8, 1.9, 0.75, 0xdc2626, 0, 0.95, -0.05);
+      B(g, 0.8, 1.9, 0.75, 0x1d2023, 0, 0.95, -0.05);
       B(g, 0.55, 1.3, 0.03, 0xe0f2fe, -0.08, 1.15, 0.33, { emissive: 0x93c5fd, ei: 0.4 });
-      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) C(g, 0.04, 0.04, 0.13, [0xfacc15, 0x22c55e, 0x3b82f6, 0xf97316][c], -0.28 + c * 0.13, 0.65 + r * 0.3, 0.25, { seg: 8 });
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) C(g, 0.04, 0.04, 0.13, [0xc8272d, 0xb9bdc2, 0x1f5135, 0xe9a23b][c], -0.28 + c * 0.13, 0.65 + r * 0.3, 0.25, { seg: 8, metal: 0.6, rough: 0.3 });
       B(g, 0.12, 0.3, 0.03, 0x111827, 0.3, 1.2, 0.33);
       break;
     }
@@ -417,27 +427,28 @@ export function makeFurniture(type, f = {}) {
       break;
     }
     case 'fountain': {
-      C(g, 0.95, 1.0, 0.45, 0xe7e5e4, 0, 0.22, 0, { seg: 24 });
-      const water = C(g, 0.88, 0.88, 0.05, 0x38bdf8, 0, 0.42, 0, { seg: 24, opacity: 0.8, rough: 0.1, emissive: 0x0284c7, ei: 0.2 });
-      C(g, 0.12, 0.16, 1.1, 0xd6d3d1, 0, 0.75, 0);
-      C(g, 0.4, 0.3, 0.12, 0xe7e5e4, 0, 1.3, 0, { seg: 16 });
-      const jet = C(g, 0.04, 0.08, 0.5, 0x7dd3fc, 0, 1.6, 0, { opacity: 0.7, emissive: 0x38bdf8, ei: 0.4 });
-      g.userData.anim.push({ kind: 'jet', obj: jet }, { kind: 'water', obj: water });
+      // café seating: round tables and chairs (deli/café corner)
+      const metal = { metal: 0.7, rough: 0.35 };
+      for (const [tx, tz] of [[-0.45, -0.45], [0.5, 0.45]]) {
+        C(g, 0.38, 0.38, 0.03, 0xe9e4d8, tx, 0.74, tz, { seg: 24, rough: 0.4 }); C(g, 0.03, 0.03, 0.72, 0x2b2f33, tx, 0.37, tz, metal); C(g, 0.22, 0.22, 0.02, 0x2b2f33, tx, 0.01, tz, metal);
+        for (const a of [0, Math.PI]) { const cx = tx + Math.cos(a) * 0.55, cz = tz + Math.sin(a) * 0.55; B(g, 0.4, 0.04, 0.4, 0x6b4a2a, cx, 0.46, cz); for (const [lx, lz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) C(g, 0.015, 0.015, 0.46, 0x2b2f33, cx + lx, 0.23, cz + lz, metal); B(g, 0.04, 0.4, 0.4, 0x6b4a2a, cx + Math.cos(a) * 0.2, 0.68, cz); }
+      }
       break;
     }
     case 'neon': {
-      B(g, 0.9, 0.06, 0.06, DARK, 0, 1.0, 0); C(g, 0.03, 0.03, 1.0, DARK, 0, 0.5, 0);
-      const s = makeSprite('★ OPEN ★', 0.28, { bg: '#0f172a', color: '#f0abfc', size: 44, border: '#e879f9' }); s.position.set(0, 1.3, 0); g.add(s);
-      g.userData.anim.push({ kind: 'blink', obj: s });
+      // digital signage screen on a stand
+      C(g, 0.18, 0.2, 0.03, 0x2b2f33, 0, 0.015, 0, { metal: 0.6 }); C(g, 0.03, 0.03, 1.3, 0x2b2f33, 0, 0.65, 0, { metal: 0.6 });
+      B(g, 0.8, 0.48, 0.05, 0x111316, 0, 1.45, 0);
+      const s = makeLabel('FRESH DEALS THIS WEEK', 0.14, { bg: '#1f5135', color: '#f4f6f2', size: 34, font: 'Barlow Condensed', weight: 700, radius: 0, pad: 30 }, 0.74); s.position.set(0, 1.45, 0.03); s.material.toneMapped = false; g.add(s);
       break;
     }
     case 'statue': {
-      B(g, 0.7, 0.6, 0.7, 0xe7e5e4, 0, 0.3, 0);
-      const gold = { metal: 0.9, rough: 0.25 };
-      const cart = new THREE.Group(); cart.position.y = 0.6; g.add(cart);
-      B(cart, 0.5, 0.3, 0.35, 0xfbbf24, 0, 0.35, 0, gold); C(cart, 0.05, 0.05, 0.04, 0xfbbf24, -0.18, 0.08, 0.15, gold).rotation.x = Math.PI / 2;
-      C(cart, 0.05, 0.05, 0.04, 0xfbbf24, 0.18, 0.08, 0.15, gold).rotation.x = Math.PI / 2; B(cart, 0.04, 0.35, 0.04, 0xfbbf24, -0.27, 0.5, 0, gold);
-      g.userData.anim.push({ kind: 'spin', obj: cart });
+      // coffee bar kiosk: counter with an espresso machine and cups
+      B(g, 0.9, 0.95, 0.7, 0, 0, 0.475, 0, { material: mat(0x2b2f33, { rough: 0.5 }) });
+      B(g, 0.92, 0.04, 0.72, 0xe9e4d8, 0, 0.97, 0, { rough: 0.3 });
+      B(g, 0.4, 0.35, 0.3, 0xb9bdc2, -0.1, 1.17, -0.1, { metal: 0.85, rough: 0.25 });
+      for (let i = 0; i < 4; i++) C(g, 0.035, 0.03, 0.09, 0xf2f2ef, 0.22 + (i % 2) * 0.09, 1.04, 0.12 + Math.floor(i / 2) * 0.1, { seg: 10 });
+      const hd = makeLabel('COFFEE TO GO', 0.12, { bg: '#2b2f33', color: '#e9e4d8', size: 34, font: 'Barlow Condensed', weight: 700, radius: 0 }, 0.8); hd.position.set(0, 0.6, 0.36); g.add(hd);
       break;
     }
     default: B(g, W, 1, D, 0x94a3b8, 0, 0.5, 0);
@@ -469,7 +480,7 @@ export function beltMat() {
 export function beltTexture() { return beltTex; }
 
 function staffMat(g, x) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.9 }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshStandardMaterial({ color: 0x2f3236, ...surfaceMaps('rubber', 1, 1), roughness: 1 }));
   m.rotation.x = -Math.PI / 2; m.position.set(x, 0.006, -1); m.receiveShadow = true; g.add(m);
   const t = makeSprite('STAFF', 0.12, { bg: null, color: '#bfdbfe', size: 30 }); t.position.set(x, 0.1, -1.3); g.add(t);
 }
@@ -519,9 +530,10 @@ export function rng(seed) {
 }
 const SKINS = [0xf6d3b8, 0xeac09a, 0xd9a07a, 0xc68642, 0x9c6a45, 0x6b4428, 0x4a2e1a, 0xfbe0cc];
 const HAIRS = [0x2b1d0e, 0x3b2414, 0x6b4423, 0x9a6a3a, 0xc9a26b, 0x111111, 0x7a1f12, 0xd8d8d8];
-const TOPS = [0xf1f5f9, 0x1e293b, 0x64748b, 0x1d4ed8, 0x0f766e, 0x9f1239, 0xa16207, 0x166534, 0x7c3aed, 0xea580c, 0xdc2626, 0xfde68a, 0x93c5fd, 0xfbcfe8];
-const BOTTOMS = [0x1e3a8a, 0x1e40af, 0x334155, 0x111827, 0x57534e, 0x78350f, 0x3f3f46, 0x6b7280];
-const SHOES = [0x111827, 0xf8fafc, 0x78350f, 0x374151, 0x991b1b];
+// everyday clothes in real-world colours (heather grey, navy, olive, burgundy, cream, black...)
+const TOPS = [0xd9d9d6, 0x8a8d8f, 0x3c4048, 0x1f2a3a, 0x2f3b2f, 0x55603a, 0x5e2129, 0x7a5a3c, 0xe9e4d8, 0x1a1a1a, 0x41566e, 0xb5a58a, 0x6b2f2f, 0xf2f2ef];
+const BOTTOMS = [0x2c3e5a, 0x3b4f70, 0x1f2b40, 0x5a6f8c, 0x1a1a1a, 0x3a3a3a, 0x8b7d63, 0x4a4238]; // first four are denim
+const SHOES = [0x1a1a1a, 0xeeeeea, 0x4a3426, 0x5a5d61, 0x2b2b2b];
 
 export function lookFromSeed(seed) {
   const r = rng(seed);
@@ -531,9 +543,9 @@ export function lookFromSeed(seed) {
     female, kid, skin: p(SKINS), hair: elder ? 0xd4d4d4 : p(HAIRS),
     hairStyle: female ? p([1, 1, 3, 4, 0]) : p([0, 0, 0, 2, 5]),
     shirt: p(TOPS), pants: p(BOTTOMS), shoes: p(SHOES), skirt: female && r() < 0.3, longSleeves: r() < 0.45,
-    jacket: r() < 0.22 ? p([0x1f2937, 0x78350f, 0x065f46, 0x1e3a8a, 0x9f1239]) : null,
+    jacket: r() < 0.22 ? p([0x262a30, 0x4a3a2a, 0x2f3b2f, 0x1f2a3a, 0x5a4a3a]) : null,
     scale: kid ? 0.66 + r() * 0.08 : (female ? 0.9 : 0.95) + r() * 0.08, width: 1.12 + r() * 0.38, belly: r() * 0.9,
-    glasses: r() < (elder ? 0.55 : 0.18), beard: !female && !kid && r() < 0.25, hat: r() < 0.06 ? p([0x1e293b, 0x7f1d1d, 0x14532d]) : null,
+    glasses: r() < (elder ? 0.55 : 0.18), beard: !female && !kid && r() < 0.25, hat: r() < 0.06 ? p([0x262a30, 0x3a3226, 0x2f3b2f]) : null,
   };
 }
 
@@ -565,9 +577,9 @@ function faceGeos() {
       ...pair(sd => placed(sphGeo(0.025, 8, 6), [sd * 0.095, 0, -0.005], [0.6, 1.1, 1])), // ears
       placed(new THREE.ConeGeometry(0.016, 0.045, 8), [0, -0.005, 0.105], [1, 1, 1], Math.PI / 2 - 0.25), // nose
     ]),
-    whites: mergeGeometries(pair(sd => placed(sphGeo(0.016, 10, 8), [sd * 0.038, 0.02, 0.088]))),
-    pupils: mergeGeometries(pair(sd => placed(sphGeo(0.009, 8, 6), [sd * 0.038, 0.02, 0.101]))),
-    brows: mergeGeometries(pair(sd => placed(new THREE.BoxGeometry(0.035, 0.008, 0.01), [sd * 0.04, 0.047, 0.095]))),
+    whites: mergeGeometries(pair(sd => placed(sphGeo(0.016, 10, 8), [sd * 0.037, 0.02, 0.09], [0.85, 0.62, 0.6]))),
+    pupils: mergeGeometries(pair(sd => placed(sphGeo(0.0075, 8, 6), [sd * 0.037, 0.02, 0.1]))),
+    brows: mergeGeometries(pair(sd => placed(new THREE.BoxGeometry(0.032, 0.006, 0.008), [sd * 0.038, 0.042, 0.096]))),
   };
   return faceCache;
 }
@@ -576,8 +588,9 @@ export function makeCharacter(look) {
   const root = new THREE.Group(); g.add(root);
   root.scale.setScalar(look.scale || 1);
   const W = Math.round((look.width || 1) * 20) / 20;
-  const skin = mat(look.skin, { rough: 0.6 }), shirt = mat(look.shirt, { rough: 0.85 }), pants = mat(look.pants, { rough: 0.9 }), shoe = mat(look.shoes ?? 0x111827, { rough: 0.5 });
-  const sleeve = look.jacket ? mat(look.jacket, { rough: 0.8 }) : shirt;
+  const denim = BOTTOMS.indexOf(look.pants) >= 0 && BOTTOMS.indexOf(look.pants) < 4;
+  const skin = mat(look.skin, { rough: 0.55 }), shirt = cloth(look.shirt), pants = cloth(look.pants, denim ? 'denim' : 'fabric'), shoe = mat(look.shoes ?? 0x111827, { rough: 0.45 });
+  const sleeve = look.jacket ? cloth(look.jacket, 'fabric', 0.8) : shirt;
   const P = {};
   const hips = new THREE.Group(); hips.position.y = 0.78; root.add(hips); P.hips = hips;
   for (const side of [-1, 1]) {
@@ -595,7 +608,7 @@ export function makeCharacter(look) {
   const belly = part(torso, sphGeo(0.5, 16, 12), look.jacket ? sleeve : shirt, 0, 0.2, 0.05); belly.scale.set(0.3 * W, 0.34, 0.2 + (look.belly || 0) * 0.12 + (W - 1) * 0.15);
   if (look.jacket) { B(torso, 0.06, 0.4, 0.01, look.shirt, 0, 0.27, 0.15 + (look.belly || 0) * 0.05, { shadow: false }); }
   if (look.apron) { const ap = B(torso, 0.32 * W, 0.6, 0.02, look.apron, 0, 0.12, 0.17 + (look.belly || 0) * 0.06, { shadow: false }); void ap; }
-  if (look.badge) B(torso, 0.06, 0.035, 0.01, look.badge, 0.08, 0.4, 0.15, { emissive: look.badge, ei: 0.2, shadow: false });
+  if (look.badge) B(torso, 0.06, 0.03, 0.006, look.badge, 0.08, 0.4, 0.15, { rough: 0.4, shadow: false });
   part(torso, cylGeo(0.05, 0.058, 0.08, 10), skin, 0, 0.56, 0);
   // arms
   for (const side of [-1, 1]) {
@@ -656,10 +669,16 @@ export function animateCharacter(ch, dt, moving, pose, speed = 1) {
   else if (pose === 'work') { const w = Math.sin(ph * 5) * 0.18; arms(-0.7 + w, -0.7 - w, -0.9, -0.9, 0.15, -0.15); }
   else if (pose === 'basket') arms(-sw * 0.7, -0.08, -0.2, -0.12, 0.06, -0.12);
   else if (pose === 'wave') { arms(-sw * 0.7, -2.7, -0.2, -0.5 + Math.sin(ph * 6) * 0.4, 0.06, -0.2); }
+  else if (pose === 'point') arms(0, -1.5, -0.1, -0.05, 0.06, -0.05);
+  else if (pose === 'thumbs') arms(0, -1.1, -0.1, -1.4, 0.06, -0.3);
+  else if (pose === 'shrug') arms(-0.25, -0.25, -1.3, -1.3, 0.5, -0.5);
+  else if (pose === 'clap') { const c = Math.abs(Math.sin(ph * 8)) * 0.25; arms(-1.1, -1.1, -0.9, -0.9, 0.55 - c, -0.55 + c); }
+  else if (pose === 'nod') arms(-sw * 0.7, sw * 0.7, -0.2, -0.2, 0.06, -0.06);
   else if (pose === 'clean') { const w = Math.sin(ph * 6) * 0.35; arms(-0.6 + w, -0.6 + w, -0.5, -0.5, 0.1, -0.1); }
   else arms(-sw * 0.75, sw * 0.75, -0.18 - (moving ? 0.18 : 0), -0.18 - (moving ? 0.18 : 0));
   P.head.rotation.y = moving ? 0 : Math.sin(ph * 0.35) * 0.3;
-  P.head.rotation.x = pose === 'work' || pose === 'clean' ? 0.25 : 0;
+  P.head.rotation.x = pose === 'work' || pose === 'clean' ? 0.25 : pose === 'nod' ? Math.abs(Math.sin(ph * 4)) * 0.35 : pose === 'shrug' ? -0.1 : 0;
+  P.head.rotation.y = 0;
 }
 
 // ------------------------------------------------------------------ props
@@ -746,8 +765,8 @@ export function makeTruck(color = 0xf97316, label = '') {
 
 export function makeTree(r) {
   const g = new THREE.Group();
-  C(g, 0.12, 0.16, 1.2, 0x7c4a1e, 0, 0.6, 0);
-  const cols = [0x16a34a, 0x15803d, 0x22c55e];
+  C(g, 0.12, 0.16, 1.2, 0x4b3a2c, 0, 0.6, 0, { rough: 0.95 });
+  const cols = [0x3c5a2c, 0x46663a, 0x557445]; // natural foliage greens
   for (let i = 0; i < 3; i++) S(g, 0.75 - i * 0.15, cols[i], (r() - 0.5) * 0.3, 1.5 + i * 0.45, (r() - 0.5) * 0.3, { flat: true, w: 8, h: 6 });
   return g;
 }

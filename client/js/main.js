@@ -12,6 +12,7 @@ import { Input, LocalPlayer, CameraRig, findInteraction } from './player.js';
 import { BuildMode } from './build.js';
 import { UI, esc } from './ui.js';
 import { initAudio, play, audio } from './audio.js';
+import { svg, setIcon, ROLE_ICON } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 const G = { me: null, code: '', world: null, meta: null, snap: null, players: [], started: false, host: false };
@@ -25,6 +26,11 @@ if (!prefs.name && window.steamDesk?.info?.available) prefs.name = String(window
 if (!prefs.name) prefs.name = ['Alex', 'Sam', 'Robin', 'Jules', 'Kai', 'Noa', 'Charlie'][Math.floor(Math.random() * 7)];
 
 // ----------------------------------------------------------------------------------- 3D setup
+// signs and packaging are drawn on canvases: wait (briefly) for the bundled fonts first
+await Promise.race([
+  Promise.all(['700 20px "Barlow Condensed"', '600 20px Barlow', '700 20px Barlow', '900 20px "Playfair Display"', '20px "Archivo Black"', '20px Pacifico'].map(f => document.fonts.load(f))).catch(() => {}),
+  new Promise(r => setTimeout(r, 2500)),
+]);
 const canvas = $('game'); canvas.tabIndex = 0;
 let lowGfx = /[?&]low/.test(location.search);
 let gfxChoice = null; try { gfxChoice = localStorage.getItem('st_gfx'); } catch {}
@@ -92,10 +98,10 @@ function watchPerf(dt) {
   if (slowWindows >= 2) {
     lowGfx = true; S.setQuality(true); syncGfx();
     try { localStorage.setItem('st_gfx', 'low'); } catch {}
-    ui.system('🔅 Switched to low graphics so the game runs smoothly (🔆 button to switch back).');
+    ui.system('Switched to low graphics so the game runs smoothly (graphics button in the top bar to switch back).');
   }
 }
-const syncGfx = () => { gfxBtn.textContent = lowGfx ? '🔅' : '🔆'; gfxBtn.title = `Graphics: ${lowGfx ? 'Low' : 'High'} (click to toggle)`; };
+const syncGfx = () => { setIcon(gfxBtn, lowGfx ? 'eco' : 'gauge', 16); gfxBtn.title = `Graphics: ${lowGfx ? 'Low' : 'High'} (click to toggle)`; };
 gfxBtn.onclick = () => { lowGfx = !lowGfx; gfxChoice = lowGfx ? 'low' : 'high'; try { localStorage.setItem('st_gfx', lowGfx ? 'low' : 'high'); } catch {} S.setQuality(lowGfx); syncGfx(); };
 syncGfx();
 const toggleHelp = (on) => $('help').classList.toggle('hidden', on === undefined ? undefined : !on);
@@ -138,6 +144,10 @@ if (steamJoin) setTimeout(async () => {
   loading(false); initAudio();
   net.send({ t: 'join', code: steamJoin.code, name: prefs.name, color: prefs.color });
 }, 0);
+// line icons on the top bar, dock and menu buttons
+for (const [id, ic] of [['h-sfx', 'speaker'], ['h-music', 'music'], ['h-invite', 'userplus'], ['h-help', 'help'], ['h-exit', 'exit']]) setIcon($(id), ic, 16);
+setIcon(document.querySelector('[data-speed="0"]'), 'pause', 14);
+for (const [p, ic] of [['build', 'layout'], ['inventory', 'box'], ['finance', 'chart'], ['stats', 'award']]) setIcon(document.querySelector(`#dock [data-panel="${p}"] i`), ic, 22);
 window.__dbg = { net, me, rig, ui, world, S, fx };
 const build = new BuildMode({ scene: S.scene, camera: S.camera, world, net, G, ui, rig });
 window.__dbg.build = build;
@@ -180,10 +190,10 @@ setInterval(() => { if (!$('menu').classList.contains('hidden')) refreshLists();
 refreshLists();
 
 // lobby
-$('l-copy').onclick = () => { navigator.clipboard?.writeText(G.code); ui.toast('Invite code copied!', 'info', '📋'); };
+$('l-copy').onclick = () => { navigator.clipboard?.writeText(G.code); ui.toast('Invite code copied!', 'info', ''); };
 $('l-leave').onclick = () => { net.send({ t: 'leave' }); G.code = ''; steam?.leave(); if (net.path) { location.reload(); return; } showScreen('menu'); refreshLists(); };
 $('l-start').onclick = () => net.send({ t: 'start' });
-$('l-roles').innerHTML = Object.entries(PLAYER_ROLES).map(([k, r]) => `<button data-role="${k}" title="${esc(r.desc)}">${r.icon} ${esc(r.name)}</button>`).join('');
+$('l-roles').innerHTML = Object.entries(PLAYER_ROLES).map(([k, r]) => `<button data-role="${k}" title="${esc(r.desc)}">${svg(ROLE_ICON[k] || 'users', 16)} ${esc(r.name)}</button>`).join('');
 $('l-roles').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; prefs.role = b.dataset.role; savePrefs(); net.send({ t: 'lobby', role: prefs.role }); };
 
 // ----------------------------------------------------------------------------------- network
@@ -204,7 +214,7 @@ net.on('lobby', (m) => {
   $('l-sub').textContent = m.loaded ? `Continuing "${m.storeName}" — Day ${m.day}` : 'A brand-new, completely empty supermarket awaits.';
   $('l-players').innerHTML = [0, 1, 2, 3].map(i => {
     const p = m.players[i];
-    return p ? `<div class="lp"><span class="dot" style="background:${esc(p.color)}">${PLAYER_ROLES[p.role]?.icon || '🙂'}</span><span>${esc(p.name)}${p.host ? ' 👑' : ''}${p.id === G.me ? ' (you)' : ''}<small>${esc(PLAYER_ROLES[p.role]?.name || '')}</small></span></div>` : '<div class="lp empty"><span class="dot" style="background:#cbd5e1">+</span><span>Waiting for player…<small>Share the code!</small></span></div>';
+    return p ? `<div class="lp"><span class="dot" style="background:${esc(p.color)}">${svg(ROLE_ICON[p.role] || 'users', 15)}</span><span>${esc(p.name)}${p.host ? ' ' : ''}${p.id === G.me ? ' (you)' : ''}<small>${esc(PLAYER_ROLES[p.role]?.name || '')}</small></span></div>` : '<div class="lp empty"><span class="dot" style="background:#cbd5e1">+</span><span>Waiting for player…<small>Share the code!</small></span></div>';
   }).join('');
   document.querySelectorAll('#l-roles button').forEach(b => b.classList.toggle('sel', mine && b.dataset.role === mine.role));
   $('l-start').classList.toggle('hidden', !G.host);
@@ -250,27 +260,25 @@ net.on('fx', (m) => {
   switch (m.k) {
     case 'err': ui.error(m.text); break;
     case 'snd': play(m.name, m.x, m.z); break;
-    case 'float': fx.float(m.text, m.x, m.z, m.color, (m.floor || 0) * FLOOR_H + 1.8); if (m.text.startsWith('+$')) fx.burst(m.x, (m.floor || 0) * FLOOR_H + 1.2, m.z, 6, [0xfacc15, 0x22c55e], 1.5); break;
-    case 'levelup': ui.system(`⭐ Level ${m.level}! New products and furniture are available on the computer.`); play('levelup'); fx.burst(me.x, (me.y || 0) + 2, me.z, 40); break;
+    case 'float': break; // money shows in the top bar (no floating numbers in the world)
+    case 'levelup': ui.system(`Store level ${m.level}. New products and fixtures are available on the computer.`); play('levelup'); break;
     case 'report': ui.showReport(m.report); break;
-    case 'delivery': ui.system(`📦 A delivery from ${m.name} arrived at the loading area.`); fx.truck(m.x, m.z, m.supplier); setTimeout(() => play('honk', m.x, m.z), 2200); break;
+    case 'delivery': ui.system(`Delivery from ${m.name} is at the loading zone.`); fx.truck(m.x, m.z, m.supplier); setTimeout(() => play('honk', m.x, m.z), 2200); break;
     case 'stocked': {
       const e = world.furn.get(m.id); if (!e) break;
       const src = m.by > 0 ? actors.players.get(m.by) : actors.staff.get(-m.by);
       const p = PRODUCT_MAP[m.pid];
       const yb = (e.data.floor || 0) * FLOOR_H;
-      if (src && p) fx.fly(p.shape, p.color, { x: src.x, z: src.z, y: yb }, { x: e.group.position.x, z: e.group.position.z, y: yb }, m.n);
+      void src; void p; void yb;
       play('pop', e.group.position.x, e.group.position.z); setTimeout(() => play('pop', e.group.position.x, e.group.position.z), 90);
       break;
     }
-    case 'placed': fx.burst(m.x + 1, (m.floor || 0) * FLOOR_H + 0.4, m.z + 0.5, 12, [0xffffff, 0xe2e8f0, 0xfde68a], 2); break;
-    case 'named': fx.burst(me.x, 2.5, me.z, 60); break;
-    case 'expanded': fx.burst(me.x, 3, me.z, 60); break;
+    case 'placed': case 'named': case 'expanded': break;
     case 'bankrupt': play('dayend'); break;
     case 'ping': fx.ping(m.x, m.z, m.color, m.name); play('ping', m.x, m.z); break;
     case 'swing': actors.swing(m.id); break;
-    case 'pow': fx.float('POW!', m.x, m.z, '#f97316', (m.floor || 0) * FLOOR_H + 1.6); fx.burst(m.x, (m.floor || 0) * FLOOR_H + 1.3, m.z, 10, [0xfacc15, 0xffffff, 0xf97316], 2.5); break;
-    case 'knock': if (m.id === G.me) { me.knock(m.dx, m.dz); ui.error(`${m.by} punched you! 💫`); } break;
+    case 'pow': play('punch', m.x, m.z); break;
+    case 'knock': if (m.id === G.me) { me.knock(m.dx, m.dz); rig.shake = 0.6; ui.error(`${m.by} punched you.`); } break;
   }
 });
 
@@ -290,7 +298,8 @@ function maybeFirstHelp() {
 
 // ----------------------------------------------------------------------------------- key commands
 const PANEL_KEYS = { b: 'build', i: 'inventory', m: 'finance', k: 'stats' };
-const EMOTES = { 1: '👋', 2: '😂', 3: '👍', 4: '❤️', 5: '😱', 6: '🎉' };
+// 1-6: body gestures (sent as short codes, shown as animations)
+const EMOTES = { 1: 'wave', 2: 'pnt', 3: 'thum', 4: 'shrg', 5: 'clap', 6: 'nod' };
 addEventListener('keydown', (e) => {
   initAudio();
   if (!G.started || $('hud').classList.contains('hidden')) return;

@@ -26,15 +26,15 @@ export const CATEGORIES = {
 // price: suggested retail price. box: units per delivery box. life: shelf life in days.
 export const PRODUCTS = [
   // ---------------- Grocery ----------------
-  { id: 'cereal',      name: 'Crunchy Cereal',     cat: 'grocery', cost: 1.60, price: 3.99, box: 12, shape: 'box',     color: 0xf4b400, life: 40, level: 1, icon: '🥣' },
+  { id: 'cereal',      name: 'Corn Flakes',     cat: 'grocery', cost: 1.60, price: 3.99, box: 12, shape: 'box',     color: 0xf4b400, life: 40, level: 1, icon: '🥣' },
   { id: 'pasta',       name: 'Spaghetti',          cat: 'grocery', cost: 0.80, price: 1.99, box: 12, shape: 'flatbox', color: 0x2563eb, life: 90, level: 1, icon: '🍝' },
   { id: 'rice',        name: 'Jasmine Rice',       cat: 'grocery', cost: 1.20, price: 2.79, box: 12, shape: 'bag',     color: 0xfafaf9, life: 120, level: 1, icon: '🍚' },
   { id: 'beans',       name: 'Canned Beans',       cat: 'grocery', cost: 0.55, price: 1.49, box: 12, shape: 'can',     color: 0xb91c1c, life: 120, level: 1, icon: '🥫' },
   { id: 'chips',       name: 'Potato Chips',       cat: 'grocery', cost: 0.90, price: 2.49, box: 12, shape: 'bag',     color: 0xfacc15, life: 50, level: 1, icon: '🥔' },
-  { id: 'cookies',     name: 'Choco Cookies',      cat: 'grocery', cost: 1.10, price: 2.99, box: 12, shape: 'flatbox', color: 0x7c2d12, life: 60, level: 1, icon: '🍪' },
-  { id: 'soda',        name: 'Fizzy Cola',         cat: 'grocery', cost: 0.45, price: 1.29, box: 12, shape: 'bottle',  color: 0xdc2626, life: 120, level: 1, icon: '🥤' },
+  { id: 'cookies',     name: 'Chocolate Chip Cookies',      cat: 'grocery', cost: 1.10, price: 2.99, box: 12, shape: 'flatbox', color: 0x7c2d12, life: 60, level: 1, icon: '🍪' },
+  { id: 'soda',        name: 'Cola Classic',         cat: 'grocery', cost: 0.45, price: 1.29, box: 12, shape: 'bottle',  color: 0xdc2626, life: 120, level: 1, icon: '🥤' },
   { id: 'water',       name: 'Spring Water',       cat: 'grocery', cost: 0.25, price: 0.89, box: 12, shape: 'bottle',  color: 0x7dd3fc, life: 200, level: 1, icon: '💧' },
-  { id: 'coffee',      name: 'Morning Coffee',     cat: 'grocery', cost: 2.80, price: 6.49, box: 12, shape: 'can',     color: 0x44403c, life: 120, level: 2, icon: '☕' },
+  { id: 'coffee',      name: 'Ground Coffee',     cat: 'grocery', cost: 2.80, price: 6.49, box: 12, shape: 'can',     color: 0x44403c, life: 120, level: 2, icon: '☕' },
   { id: 'tomsauce',    name: 'Tomato Sauce',       cat: 'grocery', cost: 0.70, price: 1.89, box: 12, shape: 'jar',     color: 0xef4444, life: 100, level: 2, icon: '🍅' },
   { id: 'chocolate',   name: 'Milk Chocolate',     cat: 'grocery', cost: 0.70, price: 1.99, box: 12, shape: 'flatbox', color: 0x92400e, life: 80, level: 2, icon: '🍫' },
   { id: 'oil',         name: 'Olive Oil',          cat: 'grocery', cost: 3.20, price: 7.49, box: 12, shape: 'bottle',  color: 0x65a30d, life: 150, level: 1, icon: '🫒' },
@@ -42,11 +42,11 @@ export const PRODUCTS = [
   { id: 'sugar',       name: 'White Sugar',        cat: 'grocery', cost: 0.80, price: 1.99, box: 12, shape: 'bag',     color: 0xf1f5f9, life: 300, level: 1, icon: '🧂' },
   { id: 'pbutter',     name: 'Peanut Butter',      cat: 'grocery', cost: 1.50, price: 3.79, box: 12, shape: 'jar',     color: 0xd97706, life: 120, level: 3, icon: '🥜' },
   { id: 'honey',       name: 'Wildflower Honey',   cat: 'grocery', cost: 2.40, price: 5.49, box: 12, shape: 'jar',     color: 0xfbbf24, life: 200, level: 4, icon: '🍯' },
-  { id: 'catfood',     name: 'Happy Cat Food',     cat: 'grocery', cost: 0.60, price: 1.59, box: 12, shape: 'can',     color: 0xa855f7, life: 150, level: 4, icon: '🐱' },
-  { id: 'toiletpaper', name: 'Toilet Paper 6pk',   cat: 'grocery', cost: 2.20, price: 4.99, box: 8,  shape: 'box',     color: 0xf0f9ff, life: 400, level: 4, icon: '🧻' },
-  { id: 'energy',      name: 'Zap Energy Drink',   cat: 'grocery', cost: 0.90, price: 2.49, box: 12, shape: 'can',     color: 0x22d3ee, life: 150, level: 5, icon: '⚡' },
-  { id: 'detergent',   name: 'Sparkle Detergent',  cat: 'grocery', cost: 3.50, price: 8.49, box: 8,  shape: 'bottle',  color: 0x0ea5e9, life: 400, level: 6, icon: '🧴' },
-  { id: 'wine',        name: 'Red Wine Reserve',   cat: 'grocery', cost: 5.50, price: 13.99, box: 8, shape: 'bottle',  color: 0x7f1d1d, life: 400, level: 7, icon: '🍷' },
+  { id: 'catfood',     name: 'Cat Food Chicken',     cat: 'grocery', cost: 0.60, price: 1.59, box: 12, shape: 'can',     color: 0xa855f7, life: 150, level: 4, icon: '🐱' },
+  { id: 'toiletpaper', name: 'Toilet Tissue 6 Rolls',   cat: 'grocery', cost: 2.20, price: 4.99, box: 8,  shape: 'box',     color: 0xf0f9ff, life: 400, level: 4, icon: '🧻' },
+  { id: 'energy',      name: 'Energy Drink',   cat: 'grocery', cost: 0.90, price: 2.49, box: 12, shape: 'can',     color: 0x22d3ee, life: 150, level: 5, icon: '⚡' },
+  { id: 'detergent',   name: 'Laundry Detergent',  cat: 'grocery', cost: 3.50, price: 8.49, box: 8,  shape: 'bottle',  color: 0x0ea5e9, life: 400, level: 6, icon: '🧴' },
+  { id: 'wine',        name: 'Cabernet Sauvignon',   cat: 'grocery', cost: 5.50, price: 13.99, box: 8, shape: 'bottle',  color: 0x7f1d1d, life: 400, level: 7, icon: '🍷' },
   { id: 'truffle',     name: 'Truffle Pasta',      cat: 'grocery', cost: 4.00, price: 9.99, box: 8,  shape: 'flatbox', color: 0x1c1917, life: 120, level: 8, icon: '✨' },
 
   // ---------------- Refrigerated ----------------
@@ -64,10 +64,10 @@ export const PRODUCTS = [
   { id: 'pizza',       name: 'Frozen Pizza',       cat: 'frozen', cost: 2.00, price: 4.99, box: 10, shape: 'flatbox', color: 0xdc2626, life: 90, level: 3, icon: '🍕' },
   { id: 'icecream',    name: 'Vanilla Ice Cream',  cat: 'frozen', cost: 1.80, price: 4.49, box: 10, shape: 'tub',     color: 0xfef9c3, life: 90, level: 3, icon: '🍨' },
   { id: 'fries',       name: 'Frozen Fries',       cat: 'frozen', cost: 1.10, price: 2.79, box: 10, shape: 'bag',     color: 0xfacc15, life: 120, level: 3, icon: '🍟' },
-  { id: 'veggies',     name: 'Frozen Veggie Mix',  cat: 'frozen', cost: 0.90, price: 2.29, box: 10, shape: 'bag',     color: 0x16a34a, life: 120, level: 3, icon: '🥦' },
+  { id: 'veggies',     name: 'Frozen Mixed Vegetables',  cat: 'frozen', cost: 0.90, price: 2.29, box: 10, shape: 'bag',     color: 0x16a34a, life: 120, level: 3, icon: '🥦' },
   { id: 'fishsticks',  name: 'Fish Sticks',        cat: 'frozen', cost: 1.90, price: 4.59, box: 10, shape: 'flatbox', color: 0x1d4ed8, life: 120, level: 4, icon: '🐟' },
   { id: 'dumplings',   name: 'Frozen Dumplings',   cat: 'frozen', cost: 2.20, price: 5.29, box: 10, shape: 'bag',     color: 0xf5f5f4, life: 120, level: 5, icon: '🥟' },
-  { id: 'popsicles',   name: 'Rainbow Popsicles',  cat: 'frozen', cost: 1.50, price: 3.79, box: 10, shape: 'box',     color: 0xec4899, life: 150, level: 6, icon: '🍭' },
+  { id: 'popsicles',   name: 'Fruit Ice Lollies',  cat: 'frozen', cost: 1.50, price: 3.79, box: 10, shape: 'box',     color: 0xec4899, life: 150, level: 6, icon: '🍭' },
   { id: 'frozenmeat',  name: 'Frozen Burgers',     cat: 'frozen', cost: 3.20, price: 7.49, box: 10, shape: 'box',     color: 0x991b1b, life: 120, level: 6, icon: '🍔' },
 
   // ---------------- Produce ----------------
@@ -76,7 +76,7 @@ export const PRODUCTS = [
   { id: 'tomatoes',    name: 'Vine Tomatoes',      cat: 'produce', cost: 0.35, price: 0.99, box: 16, shape: 'sphere',  color: 0xef4444, life: 6, level: 2, icon: '🍅' },
   { id: 'lettuce',     name: 'Crisp Lettuce',      cat: 'produce', cost: 0.50, price: 1.39, box: 12, shape: 'sphere',  color: 0x84cc16, life: 5, level: 2, icon: '🥬' },
   { id: 'carrots',     name: 'Carrots',            cat: 'produce', cost: 0.25, price: 0.79, box: 16, shape: 'long',    color: 0xf97316, life: 10, level: 3, icon: '🥕' },
-  { id: 'oranges',     name: 'Juicy Oranges',      cat: 'produce', cost: 0.35, price: 0.99, box: 16, shape: 'sphere',  color: 0xfb923c, life: 9, level: 3, icon: '🍊' },
+  { id: 'oranges',     name: 'Navel Oranges',      cat: 'produce', cost: 0.35, price: 0.99, box: 16, shape: 'sphere',  color: 0xfb923c, life: 9, level: 3, icon: '🍊' },
   { id: 'potatoes',    name: 'Potatoes',           cat: 'produce', cost: 0.20, price: 0.69, box: 16, shape: 'sphere',  color: 0xa16207, life: 15, level: 4, icon: '🥔' },
   { id: 'avocados',    name: 'Ripe Avocados',      cat: 'produce', cost: 0.80, price: 1.99, box: 12, shape: 'sphere',  color: 0x3f6212, life: 5, level: 6, icon: '🥑' },
   { id: 'strawberry',  name: 'Strawberries',       cat: 'produce', cost: 1.30, price: 3.29, box: 12, shape: 'tub',     color: 0xe11d48, life: 4, level: 7, icon: '🍓' },
@@ -144,12 +144,12 @@ export const FURNITURE = {
   lamp:           { name: 'Floor Lamp',         kind: 'decor', w: 1, d: 1, cost: 90,  power: 1, maint: 0, appeal: 2, level: 2, icon: '💡', desc: 'Warm cozy light.' },
   sign:           { name: 'Sale Sign',          kind: 'decor', w: 1, d: 1, cost: 70,  power: 0, maint: 0, appeal: 2, level: 2, icon: '🪧', desc: '"Fresh deals!" Shoppers notice.' },
   bench:          { name: 'Bench',              kind: 'decor', w: 2, d: 1, cost: 150, power: 0, maint: 0, appeal: 3, level: 3, icon: '🪑', desc: 'A place to rest tired feet.' },
-  balloons:       { name: 'Balloon Bunch',      kind: 'decor', w: 1, d: 1, cost: 120, power: 0, maint: 0, appeal: 4, level: 4, icon: '🎈', desc: 'Festive!' },
+  balloons:       { name: 'Promo Display',      kind: 'decor', w: 1, d: 1, cost: 120, power: 0, maint: 0, appeal: 4, level: 4, icon: '🎈', desc: 'Cardboard stand for the weekly offers.' },
   vending:        { name: 'Vending Machine',    kind: 'decor', w: 1, d: 1, cost: 650, power: 3, maint: 1, appeal: 1, level: 4, icon: '🥤', desc: 'Earns a little passive income each day.', income: 45 },
   flowers:        { name: 'Flower Display',     kind: 'decor', w: 2, d: 1, cost: 380, power: 0, maint: 1, appeal: 7, level: 7, icon: '💐', desc: 'Premium fresh flower stand.' },
-  fountain:       { name: 'Mini Fountain',      kind: 'decor', w: 2, d: 2, cost: 1500,power: 2, maint: 2, appeal: 14, level: 7, icon: '⛲', desc: 'A luxurious centrepiece.' },
-  neon:           { name: 'Neon Sign',          kind: 'decor', w: 1, d: 1, cost: 600, power: 2, maint: 0, appeal: 8, level: 8, icon: '🌈', desc: 'Glowing premium decor.' },
-  statue:         { name: 'Golden Cart Statue', kind: 'decor', w: 1, d: 1, cost: 3000,power: 0, maint: 0, appeal: 20, level: 10, icon: '🏆', desc: 'For the supermarket legends.' },
+  fountain:       { name: 'Café Seating',       kind: 'decor', w: 2, d: 2, cost: 1500,power: 2, maint: 2, appeal: 14, level: 7, icon: '⛲', desc: 'Tables and chairs for a café corner.' },
+  neon:           { name: 'Digital Signage',    kind: 'decor', w: 1, d: 1, cost: 600, power: 2, maint: 0, appeal: 8, level: 8, icon: '🌈', desc: "Screen showing this week's deals." },
+  statue:         { name: 'Coffee Kiosk',       kind: 'decor', w: 1, d: 1, cost: 3000,power: 0, maint: 0, appeal: 20, level: 10, icon: '🏆', desc: 'Self-serve coffee bar for shoppers.' },
 };
 
 // Per-fixture upgrades available in build mode.

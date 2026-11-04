@@ -7,19 +7,22 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { pbr, setTextureQuality } from './textures.js';
 
 export function createScene(canvas, { low = false } = {}) {
+  setTextureQuality(low);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
   renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  // AgX: a photographic response curve (keeps bright packaging and lights from looking cartoon-saturated)
+  renderer.toneMapping = THREE.AgXToneMapping;
+  renderer.toneMappingExposure = 1.15;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x8fd3ff);
-  scene.fog = new THREE.Fog(0x8fd3ff, 45, 110);
+  scene.background = new THREE.Color(0xa7bfd6);
+  scene.fog = new THREE.Fog(0xb4c4d2, 40, 120);
 
   const camera = new THREE.PerspectiveCamera(48, 1, 0.05, 300);
   scene.add(camera); // so first-person view models attached to the camera render
@@ -27,9 +30,9 @@ export function createScene(canvas, { low = false } = {}) {
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.4;
-  const hemi = new THREE.HemisphereLight(0xdbeafe, 0x9a7b4f, 1.15);
+  const hemi = new THREE.HemisphereLight(0xdfe7f0, 0x6f6658, 1.0);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff4d6, 2.2);
+  const sun = new THREE.DirectionalLight(0xfff1de, 2.6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.0004;
@@ -72,39 +75,43 @@ export function createScene(canvas, { low = false } = {}) {
     env.clear(); state.streetLamps = []; state.windows = [];
     const r = rng(1234);
     // ground
-    const grass = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), mat(0x86c96b, { rough: 1 }));
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), pbr('grass', 260, 260));
     grass.rotation.x = -Math.PI / 2; grass.position.set(W / 2, -0.02, D / 2); grass.receiveShadow = true; env.add(grass);
     // sidewalk with tile texture
-    const swTex = tileTexture('#e7e5e4', '#d6d3d1', 64, 2); swTex.repeat.set((W + 60) / 2, 2.2);
-    const sw = new THREE.Mesh(new THREE.PlaneGeometry(W + 60, 4.4), new THREE.MeshStandardMaterial({ map: swTex, roughness: 0.95 }));
+    const sw = new THREE.Mesh(new THREE.PlaneGeometry(W + 60, 4.4), pbr('concrete', W + 60, 4.4));
     sw.rotation.x = -Math.PI / 2; sw.position.set(W / 2, 0.005, D + 2.7); sw.receiveShadow = true; env.add(sw);
-    B(env, W + 60, 0.14, 0.25, 0xa8a29e, W / 2, 0.05, D + 4.95, { shadow: false });
+    B(env, W + 60, 0.14, 0.25, 0, W / 2, 0.05, D + 4.95, { shadow: false, material: pbr('concrete', W + 60, 0.4, { color: 0xbdbbb6 }) });
     // store apron / patio in front
-    const ap = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.4, 0.6), mat(0xa8a29e)); ap.rotation.x = -Math.PI / 2; ap.position.set(W / 2, 0.008, D + 0.8); env.add(ap);
+    const ap = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.4, 0.6), pbr('concrete', W, 0.6, { color: 0xcfcdc8 })); ap.rotation.x = -Math.PI / 2; ap.position.set(W / 2, 0.008, D + 0.8); env.add(ap);
     // road
-    const road = new THREE.Mesh(new THREE.PlaneGeometry(W + 140, 7), mat(0x3f4652, { rough: 0.9 }));
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(W + 140, 7), pbr('asphalt', W + 140, 7));
     road.rotation.x = -Math.PI / 2; road.position.set(W / 2, -0.005, D + 8.6); road.receiveShadow = true; env.add(road);
-    for (let x = -60; x < W + 70; x += 3) B(env, 1.6, 0.01, 0.15, 0xfde047, x, 0.005, D + 8.6, { shadow: false });
+    for (let x = -60; x < W + 70; x += 6) B(env, 3, 0.01, 0.12, 0xe8e6df, x, 0.005, D + 8.6, { shadow: false, rough: 0.7 });
+    for (const z of [D + 5.4, D + 11.8]) B(env, W + 140, 0.01, 0.1, 0xe8e6df, W / 2, 0.004, z, { shadow: false, rough: 0.7 });
     // sidewalk across the street + buildings
-    B(env, W + 140, 0.1, 3, 0xd6d3d1, W / 2, 0.03, D + 13.6, { shadow: false });
-    B(env, W + 140, 0.1, 3, 0xd6d3d1, W / 2, 0.03, D + 26.5, { shadow: false });
+    const swM = pbr('concrete', W + 140, 3);
+    B(env, W + 140, 0.1, 3, 0, W / 2, 0.03, D + 13.6, { shadow: false, material: swM });
+    B(env, W + 140, 0.1, 3, 0, W / 2, 0.03, D + 26.5, { shadow: false, material: swM });
     // a little park between the street and the far buildings
     for (let i = 0; i < 14; i++) { const t = makeTree(r); t.position.set(-20 + r() * (W + 40), 0, D + 16.5 + r() * 7); t.scale.setScalar(0.7 + r() * 0.5); env.add(t); }
     for (let x = -24; x < W + 26; x += 9) { B(env, 1.6, 0.08, 0.5, 0x92400e, x, 0.45, D + 15.6); B(env, 0.1, 0.45, 0.4, 0x334155, x - 0.7, 0.22, D + 15.6); B(env, 0.1, 0.45, 0.4, 0x334155, x + 0.7, 0.22, D + 15.6); }
-    const colors = [0xfca5a5, 0xfde68a, 0xa7f3d0, 0xbfdbfe, 0xddd6fe, 0xfbcfe8, 0xfed7aa];
-    const winOn = new THREE.MeshStandardMaterial({ color: 0x93c5fd, emissive: 0xfde68a, emissiveIntensity: 0, roughness: 0.3 });
-    const winOff = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.3 });
+    const colors = [0xb9a68d, 0xd2cbbd, 0x8f9a9e, 0xc8b8a2, 0xa89f94, 0xd9d3c7, 0x9c8f80]; // plaster tones (brick facades alternate)
+    const awnCols = [0x2d4a3a, 0x5a2a2a, 0x24324a, 0x3b3b3b];
+    const brickM = pbr('brick', 12, 12), plasterM = pbr('plaster', 12, 12);
+    const winOn = new THREE.MeshStandardMaterial({ color: 0x2c3a44, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.08, metalness: 0.4 });
+    const winOff = new THREE.MeshStandardMaterial({ color: 0x27323a, roughness: 0.08, metalness: 0.5 });
     state.windows = [winOn]; let wi = 0;
     for (let x = -40, i = 0; x < W + 44; i++) {
       const w = 5 + Math.floor(r() * 5), h = 4 + Math.floor(r() * 7), d = 6;
       const bx = x + w / 2, bz = D + 31;
-      B(env, w - 0.3, h, d, colors[i % colors.length], bx, h / 2, bz);
-      B(env, w - 0.1, 0.3, d + 0.2, 0x64748b, bx, h + 0.15, bz);
+      const fac = i % 3 === 0 ? brickM : plasterM.clone(); if (fac !== brickM) fac.color.setHex(colors[i % colors.length]);
+      B(env, w - 0.3, h, d, 0, bx, h / 2, bz, { material: fac });
+      B(env, w - 0.1, 0.3, d + 0.2, 0x55595d, bx, h + 0.15, bz);
       for (let fy = 1.6; fy < h - 0.6; fy += 2.2) for (let fx = -w / 2 + 1.2; fx < w / 2 - 0.6; fx += 1.6) {
         B(env, 0.8, 1.0, 0.05, 0x93c5fd, bx + fx, fy, bz - d / 2 - 0.02, { shadow: false, material: (wi++ * 7919) % 3 ? winOn : winOff });
       }
       if (r() < 0.5) { // awning
-        for (let k = 0; k < 4; k++) { const a = B(env, (w - 1) / 4, 0.05, 1.0, k % 2 ? 0xffffff : colors[(i + 3) % colors.length], bx - (w - 1) / 2 + (w - 1) / 8 + k * (w - 1) / 4, 2.6, bz - d / 2 - 0.4, { shadow: false }); a.rotation.x = 0.3; }
+        for (let k = 0; k < 4; k++) { const a = B(env, (w - 1) / 4, 0.05, 1.0, k % 2 ? 0xffffff : awnCols[(i + k) % 2 ? i % awnCols.length : (i + 1) % awnCols.length], bx - (w - 1) / 2 + (w - 1) / 8 + k * (w - 1) / 4, 2.6, bz - d / 2 - 0.4, { shadow: false }); a.rotation.x = 0.3; }
       }
       x += w;
     }
@@ -124,20 +131,21 @@ export function createScene(canvas, { low = false } = {}) {
       const l = makeStreetLamp(); l.position.set(x, 0, D + 4.6); l.rotation.y = Math.PI / 2; env.add(l); state.streetLamps.push(l);
     }
     // parking lot to the right with cars
-    const lot = new THREE.Mesh(new THREE.PlaneGeometry(10, D + 1), mat(0x52525b, { rough: 0.9 }));
+    const lot = new THREE.Mesh(new THREE.PlaneGeometry(10, D + 1), pbr('asphalt', 10, D + 1));
     lot.rotation.x = -Math.PI / 2; lot.position.set(W + 6.5, 0.004, (D + 1) / 2 - 0.3); lot.receiveShadow = true; env.add(lot);
     for (let z = 0.5; z < D; z += 2.4) B(env, 4, 0.01, 0.08, 0xffffff, W + 6.5, 0.008, z, { shadow: false });
-    const carCols = [0xef4444, 0x3b82f6, 0xf8fafc, 0x22c55e, 0xfacc15];
+    const carCols = [0xc7cacd, 0x1c1f22, 0xf2f2f0, 0x3d4b5c, 0x7a1e1e, 0x5d6166];
     for (let i = 0, z = 1.7; z < D - 1; z += 2.4, i++) { if (r() < 0.35) continue; env.add(makeCar(carCols[i % carCols.length], W + 6.5, z)); }
     // delivery pad markings
-    const padTex = textTexture('🚚 DELIVERIES', { size: 60, bg: null, color: '#facc15' });
-    const pad = new THREE.Mesh(new THREE.PlaneGeometry(4, 2), new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.18 }));
+    const padTex = textTexture('LOADING ZONE', { size: 60, bg: null, color: '#e9d27a', font: 'Barlow Condensed', weight: 700 });
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(4, 2), new THREE.MeshBasicMaterial({ color: 0xe9d27a, transparent: true, opacity: 0.06 }));
     pad.rotation.x = -Math.PI / 2; pad.position.set(2, 0.012, D + 2); env.add(pad);
-    for (const [x, z, w, d] of [[2, D + 1.02, 4, 0.08], [2, D + 2.98, 4, 0.08], [0.04, D + 2, 0.08, 2], [3.96, D + 2, 0.08, 2]]) B(env, w, 0.012, d, 0xfacc15, x, 0.012, z, { shadow: false });
+    for (let k = 0; k < 7; k++) { const h = B(env, 0.1, 0.011, 2.4, 0xd8c26a, 0.4 + k * 0.55, 0.011, D + 2, { shadow: false, rough: 0.8 }); h.rotation.y = 0.6; h.scale.z = 0.8; }
+    for (const [x, z, w, d] of [[2, D + 1.02, 4, 0.08], [2, D + 2.98, 4, 0.08], [0.04, D + 2, 0.08, 2], [3.96, D + 2, 0.08, 2]]) B(env, w, 0.012, d, 0xd8c26a, x, 0.012, z, { shadow: false });
     const lbl = new THREE.Mesh(new THREE.PlaneGeometry(3, 3 / padTex.aspect), new THREE.MeshBasicMaterial({ map: padTex.tex, transparent: true }));
     lbl.rotation.x = -Math.PI / 2; lbl.position.set(2, 0.015, D + 3.45); env.add(lbl);
     // overflow pad (beside the building)
-    const pad2 = new THREE.Mesh(new THREE.PlaneGeometry(5, 2), new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.1 }));
+    const pad2 = new THREE.Mesh(new THREE.PlaneGeometry(5, 2), new THREE.MeshBasicMaterial({ color: 0xd8c26a, transparent: true, opacity: 0.05 }));
     pad2.rotation.x = -Math.PI / 2; pad2.position.set(-2.5, 0.011, D + 2); env.add(pad2);
     mergeStatic(env);
     // sun & shadow frustum around the store
@@ -149,7 +157,7 @@ export function createScene(canvas, { low = false } = {}) {
     interior.forEach((l, i) => l.position.set((W / 4) * (1 + (i % 2) * 2), 3.2, (D / 4) * (1 + Math.floor(i / 2) * 2)));
   }
 
-  const SKY = { day: new THREE.Color(0x8fd3ff), dusk: new THREE.Color(0xf6a26b), night: new THREE.Color(0x1e2a4a), dawn: new THREE.Color(0xffc9a3) };
+  const SKY = { day: new THREE.Color(0xa7bfd6), dusk: new THREE.Color(0xd9a07a), night: new THREE.Color(0x141c2b), dawn: new THREE.Color(0xe6c0a4) };
   const tmp = new THREE.Color();
   const lightCol = new THREE.Color();
   function updateLighting(minute, phase, style = 'standard', styleColor = '#fff1d0') {

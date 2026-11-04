@@ -41,7 +41,7 @@ export class FX {
     const g = new THREE.Group();
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; ring.userData.owned = ring.userData.ownGeo = true; g.add(ring);
-    const pin = makeSprite('📍 ' + name, 0.35, { bg: color, color: '#fff', size: 40 }); pin.position.y = 1.4; pin.material.depthTest = false; g.add(pin);
+    const pin = makeSprite('▼  ' + name, 0.22, { bg: 'rgba(17,20,24,0.78)', color: '#f4f6f2', size: 40, radius: 8, font: 'Barlow', weight: 600 }); pin.position.y = 1.4; pin.material.depthTest = false; g.add(pin);
     g.position.set(x, 0, z); this.scene.add(g);
     this.items.push({ obj: g, ring, t: 0, life: 4, kind: 'ping' });
   }

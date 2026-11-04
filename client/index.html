@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Supermarket</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'></text></svg>" />
   <link rel="stylesheet" href="/css/style.css" />
   <script type="importmap">{ "imports": { "three": "/vendor/three.module.js", "three/addons/": "/addons/" } }</script>
 </head>
@@ -16,8 +16,8 @@
     <section id="menu" class="screen">
       <div class="menu-bg"></div>
       <div class="menu-card">
-        <div class="logo"><span class="logo-cart">🛒</span><h1><b>Supermarket</b></h1></div>
-        <p class="tagline">Build it. Stock it. Run it. Together.</p>
+        <div class="logo"><img class="logo-mark" src="img/logo.svg" alt="" width="56" height="56" /><h1>SUPERMARKET</h1></div>
+        <p class="tagline">Run a neighbourhood supermarket with up to four friends.</p>
         <div class="field">
           <label>Your name</label>
           <input id="m-name" maxlength="16" placeholder="Shopkeeper" />
@@ -27,17 +27,17 @@
           <div id="m-colors" class="color-row"></div>
         </div>
         <div class="menu-actions">
-          <button id="m-create" class="btn big primary">🏗️ Build a New Store</button>
-          <p id="m-steam-note" class="help desk-only" hidden>Friends join your store through a Steam invite: press <b>👥 Invite</b> in the lobby or in the game.</p>
+          <button id="m-create" class="btn big primary">Build a New Store</button>
+          <p id="m-steam-note" class="help desk-only" hidden>Friends join your store through a Steam invite: press <b>Invite</b> in the lobby or in the game.</p>
           <label class="check"><input type="checkbox" id="m-public" checked /> Listed publicly (friends can find it)</label>
           <div class="join-row">
             <input id="m-code" maxlength="5" placeholder="CODE" />
-            <button id="m-join" class="btn">🚪 Join with code</button>
+            <button id="m-join" class="btn">Join with code</button>
           </div>
         </div>
         <div class="menu-lists">
-          <div><h3>🌐 Open stores</h3><div id="m-rooms" class="list"><i>Looking…</i></div></div>
-          <div><h3>💾 Saved stores</h3><div id="m-saves" class="list"><i>None yet</i></div></div>
+          <div><h3>Open stores</h3><div id="m-rooms" class="list"><i>Looking…</i></div></div>
+          <div><h3>Saved stores</h3><div id="m-saves" class="list"><i>None yet</i></div></div>
         </div>
         <div class="menu-actions row desk-only" hidden><button id="m-fullscreen" class="btn">⛶ Fullscreen (F11)</button><button id="m-quit" class="btn">⏻ Quit game</button></div>
         <p class="help">WASD move · Mouse drag rotate camera · <b>E</b> interact · <b>Q</b> drop · <b>B</b> build · <b>O</b> order stock</p>
@@ -48,7 +48,7 @@
     <section id="lobby" class="screen hidden">
       <div class="menu-bg"></div>
       <div class="menu-card lobby-card">
-        <h2>🏪 Store Lobby</h2>
+        <h2>Store Lobby</h2>
         <div class="code-box">Invite code: <b id="l-code">-----</b> <button class="btn small" id="l-copy">Copy</button></div>
         <p id="l-sub" class="tagline"></p>
         <div id="l-players" class="lobby-players"></div>
@@ -56,7 +56,7 @@
         <div id="l-roles" class="role-row"></div>
         <div class="menu-actions row">
           <button id="l-leave" class="btn">← Leave</button>
-          <button id="l-invite" class="btn" hidden>👥 Invite Steam friends</button>
+          <button id="l-invite" class="btn" hidden>Invite Steam friends</button>
           <button id="l-start" class="btn big primary">▶ Start</button>
         </div>
         <p id="l-wait" class="help"></p>
@@ -68,34 +68,34 @@
       <header id="topbar">
         <div class="tb-store"><span id="h-name">—</span><span id="h-code" class="code-chip"></span></div>
         <div class="tb-clock"><span id="h-day">Day 1</span><b id="h-time">07:00</b><span id="h-phase" class="phase-chip">PREP</span></div>
-        <div class="tb-cash"><span>💰</span><b id="h-cash">$0</b><span id="h-cashdelta" class="delta"></span></div>
+        <div class="tb-cash"><span></span><b id="h-cash">$0</b><span id="h-cashdelta" class="delta"></span></div>
         <div class="tb-rep" title="Reputation"><span id="h-stars">★★★☆☆</span></div>
         <div class="tb-level" title="Store level"><span id="h-level">Lv 1</span><div class="xpbar"><div id="h-xp"></div></div></div>
         <div class="tb-speed">
-          <button data-speed="0" title="Pause">⏸</button><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="3">3×</button>
+          <button data-speed="0" title="Pause"></button><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="3">3×</button>
         </div>
-        <button id="h-open" class="btn primary glow">🔓 Open Store</button>
-        <button id="h-msgs" class="msgs" title="Messages and bills are on the store computer">📨 0</button>
-        <div class="tb-audio"><button id="h-sfx" title="Sound effects">🔊</button><button id="h-music" title="Music">🎵</button><button id="h-gfx"></button><button id="h-invite" title="Invite Steam friends" hidden>👥</button><button id="h-help" title="How to play (?)">❔</button><button id="h-exit" title="Leave store (progress is saved)">🚪</button></div>
+        <button id="h-open" class="btn primary glow">Open Store</button>
+        <button id="h-msgs" class="msgs" title="Messages and bills are on the store computer">0</button>
+        <div class="tb-audio"><button id="h-sfx" title="Sound effects"></button><button id="h-music" title="Music"></button><button id="h-gfx"></button><button id="h-invite" title="Invite Steam friends" hidden></button><button id="h-help" title="How to play (?)"></button><button id="h-exit" title="Leave store (progress is saved)"></button></div>
       </header>
 
 
       <nav id="dock">
-        <button data-panel="build"><i>🛠️</i><span>Arrange</span><kbd>B</kbd></button>
-        <button data-panel="inventory"><i>📦</i><span>Stock</span><kbd>I</kbd></button>
-        <button data-panel="finance"><i>📊</i><span>Money</span><kbd>M</kbd></button>
-        <button data-panel="stats"><i>🏆</i><span>Progress</span><kbd>K</kbd></button>
+        <button data-panel="build"><i></i><span>Arrange</span><kbd>B</kbd></button>
+        <button data-panel="inventory"><i></i><span>Stock</span><kbd>I</kbd></button>
+        <button data-panel="finance"><i></i><span>Money</span><kbd>M</kbd></button>
+        <button data-panel="stats"><i></i><span>Progress</span><kbd>K</kbd></button>
       </nav>
 
       <div id="crosshair" class="hidden"></div>
-      <div id="lookhint" class="hidden">🖱️ Click to look around · V switch camera</div>
+      <div id="lookhint" class="hidden">Click to look around · V switch camera</div>
       <div id="prompt" class="hidden"></div>
       <div id="station-bar" class="hidden"><div id="sb-title"></div><div id="sb-items"></div><div class="sb-progress"><div id="sb-fill"></div></div><div id="sb-hint"></div></div>
       <div id="carry" class="hidden"></div>
       <div id="toasts"></div>
       <div id="chat"><div id="chat-log"></div><input id="chat-input" maxlength="140" placeholder="Press Enter to chat…" /></div>
       <div id="playerlist"></div>
-      <div id="emote-hint">F punch · 1-6 emotes · G ping · Enter chat</div>
+      <div id="emote-hint">F punch · 1–6 gestures · G mark a spot · Enter chat</div>
 
       <!-- panels -->
       <div id="panel" class="hidden"><div class="panel-head"><h2 id="p-title"></h2><button class="x" id="p-close">✕</button></div><div id="p-body"></div></div>
@@ -104,11 +104,11 @@
       <!-- overlays -->
       <div id="naming" class="overlay hidden">
         <div class="ov-card">
-          <h2>🏷️ Name your supermarket</h2>
+          <h2>Name your supermarket</h2>
           <p>The whole team must agree. Anyone can type — editing resets the votes.</p>
-          <input id="n-input" maxlength="28" placeholder="e.g. The Happy Cart" />
+          <input id="n-input" maxlength="28" placeholder="e.g. Corner Market" />
           <div id="n-votes" class="votes"></div>
-          <button id="n-vote" class="btn big primary">👍 I like this name!</button>
+          <button id="n-vote" class="btn big primary">I like this name!</button>
           <p id="n-err" class="err"></p>
         </div>
       </div>
@@ -117,10 +117,10 @@
       <div id="levelup" class="hidden"></div>
       <div id="bankrupt" class="overlay hidden"><div class="ov-card" id="bk-body"></div></div>
       <div id="help" class="overlay hidden"><div class="ov-card wide">
-        <h2>❔ How to play Supermarket</h2>
+        <h2>How to play Supermarket</h2>
         <div class="report-grid">
           <div>
-            <div class="section-title">🎮 Controls</div>
+            <div class="section-title">Controls</div>
             <div class="kv"><span>Move / sprint</span><b>WASD · Shift</b></div>
             <div class="kv"><span>Look around (first person)</span><b>Mouse</b></div>
             <div class="kv"><span>Interact · drop</span><b>Left click / E · Right click / Q</b></div>
@@ -132,12 +132,12 @@
             <div class="kv"><span>Punch (friends get dizzy, customers walk out!)</span><b>F</b></div>
             <div class="kv"><span>Arrange furniture (R rotate, M move, P pack, X sell)</span><b>B</b></div>
             <div class="kv"><span>Stock · Money · Progress</span><b>I · M · K</b></div>
-            <div class="kv"><span>Chat · Emotes · Ping</span><b>Enter · 1-6 · G</b></div>
+            <div class="kv"><span>Chat · Gestures (wave, point, thumbs up, shrug, clap, nod) · Mark a spot</span><b>Enter · 1–6 · G</b></div>
           </div>
           <div>
-            <div class="section-title">🖥️ The store computer</div>
+            <div class="section-title">The store computer</div>
             <p class="note" style="font-size:13px">Walk to the computer and press E. There you order stock, unlock new products, buy furniture and plants (delivered in boxes), set prices, hire staff, pay your bills and read messages from customers.</p>
-            <div class="section-title">🧊 Fridges & counters</div>
+            <div class="section-title">Fridges & counters</div>
             <p class="note" style="font-size:13px">Open fridge doors (E) before stocking them. At the butcher and deli: take the product from the big fridge, cut it at the station, hand it over at the counter.</p>
           </div>
         </div>
@@ -145,13 +145,13 @@
       </div></div>
     </section>
 
-    <div id="loading" class="hidden"><div class="spinner">🛒</div><p>Connecting…</p></div>
+    <div id="loading" class="hidden"><div class="spinner"></div><p>Connecting…</p></div>
     <div id="toast-err"></div>
   </div>
   <!-- phones and tablets (touch only): the game needs a keyboard and mouse, so explain instead of loading the 3D scene -->
   <section id="phone-note" hidden>
     <div class="phone-card">
-      <div class="phone-cart">🛒</div>
+      <img class="phone-cart" src="img/logo.svg" alt="" width="64" height="64" />
       <h1>Supermarket</h1>
       <p>This is a computer game. It needs a keyboard and a mouse.</p>
       <p class="phone-sub">Open this page on a computer to play.</p>

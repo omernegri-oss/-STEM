@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#ea580c"/></linearGradient>
+    <linearGradient id="basket" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e2e8f0"/></linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="210" fill="url(#bg)"/>
+  <!-- shop awning -->
+  <g>
+    <path d="M150 210 h724 l-40 120 h-644 z" fill="#ffffff"/>
+    <path d="M241 210 h90 l-18 120 h-90 z M422 210 h90 l-6 120 h-90 z M603 210 h90 l6 120 h-90 z M784 210 h90 l-40 120 h-50 z" fill="#dc2626"/>
+    <path d="M190 330 q40 46 81 0 q40 46 81 0 q40 46 81 0 q40 46 81 0 q40 46 81 0 q40 46 81 0 q40 46 81 0 q40 46 81 0" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round"/>
+  </g>
+  <!-- shopping cart -->
+  <g fill="none" stroke="#1e293b" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M196 470 h92 l70 300 h356 l62 -228 h-460"/>
+  </g>
+  <path d="M332 542 h438 l-50 186 h-344 z" fill="url(#basket)"/>
+  <g stroke="#94a3b8" stroke-width="14"><path d="M430 552 l18 170 M530 552 v170 M630 552 l-18 170 M352 610 h402 M366 668 h372"/></g>
+  <circle cx="400" cy="846" r="46" fill="#1e293b"/><circle cx="672" cy="846" r="46" fill="#1e293b"/>
+  <circle cx="400" cy="846" r="16" fill="#cbd5e1"/><circle cx="672" cy="846" r="16" fill="#cbd5e1"/>
+  <!-- groceries poking out -->
+  <rect x="420" y="430" width="88" height="128" rx="14" fill="#facc15" stroke="#1e293b" stroke-width="12"/>
+  <circle cx="600" cy="500" r="58" fill="#22c55e" stroke="#1e293b" stroke-width="12"/>
+  <path d="M600 444 q10 -34 40 -40" fill="none" stroke="#1e293b" stroke-width="12" stroke-linecap="round"/>
+</svg>

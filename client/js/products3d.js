@@ -4,8 +4,6 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SHAPE_DIMS } from '/shared/data.js';
 
-const BRANDS = ['Golden Fields', 'Pantry Pride', 'Daily Fresh', 'Sunny Farm', 'Nordic Choice', 'Casa Bella', 'Green Leaf', 'Happy Valley', 'Blue Harbor', 'Maple & Co'];
-const SIZES = { box: '500 g', flatbox: '400 g', bag: '1 kg', can: '400 g', bottle: '1.5 L', jar: '350 g', carton: '1 L', tub: '150 g', slab: '500 g', wedge: '250 g' };
 
 function based(g) { g.computeBoundingBox(); g.translate(0, -g.boundingBox.min.y, 0); return g; }
 function oneGroup(g, idx = 0) { g.clearGroups(); g.addGroup(0, g.index ? g.index.count : g.attributes.position.count, idx); return g; }
@@ -78,43 +76,147 @@ function build() {
 export const PRODUCT_GEOS = build();
 
 // ---------------------------------------------------------------- packaging artwork
+// Every product gets a brand identity (typeface, colours, layout) and a drawn product image ("photo window")
+// instead of an emoji. Drawn once per product on a 256x256 canvas that wraps the package.
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 function shade(c, f) { const col = new THREE.Color(c); col.multiplyScalar(f); return '#' + col.getHexString(); }
 function lum(c) { const col = new THREE.Color(c); return 0.299 * col.r + 0.587 * col.g + 0.114 * col.b; }
+function rnd(seed) { let s = seed >>> 0 || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+const seedOf = (id) => [...id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7);
+
+// brand identities: background, ink, accent, typefaces, layout
+const BRAND_STYLE = {
+  'Golden Fields': { bg: '#efe6d2', ink: '#3b2f1e', accent: '#b8862b', brandFont: '700 26px "Playfair Display"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'heritage' },
+  'Pantry Pride': { bg: '#ffffff', ink: '#1d1f22', accent: '#c8272d', brandFont: '700 22px "Barlow Condensed"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'band' },
+  'Daily Fresh': { bg: '#f7faf6', ink: '#1f3a2a', accent: '#2f7d4a', brandFont: '600 21px Barlow', nameFont: 'Barlow', nameWeight: 700, layout: 'clean' },
+  'Sunny Farm': { bg: '#f6efe0', ink: '#4a2c17', accent: '#d9822b', brandFont: '30px Pacifico', nameFont: '"Barlow Condensed"', nameWeight: 600, layout: 'heritage' },
+  'Nordic Choice': { bg: '#eef3f6', ink: '#1c2b3a', accent: '#3a6f9a', brandFont: '500 20px Barlow', nameFont: 'Barlow', nameWeight: 600, layout: 'clean' },
+  'Casa Bella': { bg: '#1f3b2c', ink: '#f3eee2', accent: '#c0392b', brandFont: 'italic 700 26px "Playfair Display"', nameFont: '"Playfair Display"', nameWeight: 700, layout: 'dark' },
+  'Green Leaf': { bg: '#c9a97c', ink: '#2e2416', accent: '#3f6b35', brandFont: '22px "Archivo Black"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'kraft' },
+  'Valley Farms': { bg: '#fbfaf7', ink: '#22303a', accent: '#5b8c3a', brandFont: '700 24px "Playfair Display"', nameFont: 'Barlow', nameWeight: 700, layout: 'clean' },
+  'Blue Harbor': { bg: '#172a45', ink: '#ffffff', accent: '#4fa3d9', brandFont: '700 22px "Barlow Condensed"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'dark' },
+  'Maple & Co': { bg: '#141414', ink: '#efe7d3', accent: '#c9a45c', brandFont: '900 24px "Playfair Display"', nameFont: '"Playfair Display"', nameWeight: 700, layout: 'premium' },
+};
+const BRANDS = Object.keys(BRAND_STYLE);
+const BRAND_FOR = { pasta: 'Casa Bella', tomsauce: 'Casa Bella', olives: 'Casa Bella', salami: 'Casa Bella', truffle: 'Maple & Co', wine: 'Maple & Co', wagyu: 'Maple & Co', honey: 'Golden Fields', flour: 'Golden Fields', cereal: 'Golden Fields',
+  sugar: 'Pantry Pride', rice: 'Pantry Pride', beans: 'Pantry Pride', toiletpaper: 'Pantry Pride', detergent: 'Nordic Choice', water: 'Nordic Choice', fishsticks: 'Blue Harbor', sushi: 'Blue Harbor', milk: 'Valley Farms', butter: 'Valley Farms', cream: 'Valley Farms', eggs: 'Sunny Farm', yogurt: 'Sunny Farm',
+  salad: 'Daily Fresh', hummus: 'Daily Fresh', potsalad: 'Daily Fresh', kombucha: 'Green Leaf', veggies: 'Green Leaf', coffee: 'Maple & Co', chocolate: 'Maple & Co' };
+const DESCRIPTOR = { grocery: 'CLASSIC', fridge: 'KEEP REFRIGERATED', frozen: 'KEEP FROZEN  −18°C', produce: 'FRESH', meat: 'FRESH · BUTCHER CUT', deli: 'DELI SELECTION' };
+const SIZES = { box: '500 g', flatbox: '400 g', bag: '1 kg', can: '400 g', bottle: '1.5 L', jar: '350 g', carton: '1 L', tub: '150 g', slab: '500 g', wedge: '250 g' };
+
+// --- small painting helpers for the product images (soft shading so they read like photos)
+function ball(g, x, y, r, col, hi = 0.35) {
+  const gr = g.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+  gr.addColorStop(0, shade(col, 1 + hi)); gr.addColorStop(0.55, hex(col)); gr.addColorStop(1, shade(col, 0.55));
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+}
+function ell(g, x, y, rx, ry, col, rot = 0, hi = 0.3) {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(1, ry / rx); ball(g, 0, 0, rx, col, hi); g.restore();
+}
+function shadow(g, x, y, rx) { g.fillStyle = 'rgba(0,0,0,0.18)'; g.beginPath(); g.ellipse(x, y, rx, rx * 0.22, 0, 0, Math.PI * 2); g.fill(); }
+const MOTIFS = {
+  cereal(g, w, h, r) { ell(g, w / 2, h * 0.62, w * 0.36, h * 0.16, 0xf2f2ee, 0, 0.1); for (let i = 0; i < 26; i++) ell(g, w * 0.22 + r() * w * 0.56, h * 0.42 + r() * h * 0.2, 10 + r() * 6, 6 + r() * 3, 0xe0a030, r() * 3); },
+  pasta(g, w, h, r) { g.lineCap = 'round'; for (let i = 0; i < 22; i++) { g.strokeStyle = r() < 0.5 ? '#e8c46a' : '#d9b257'; g.lineWidth = 3; g.beginPath(); const x = w * 0.15 + r() * w * 0.7; g.moveTo(x, h * 0.25); g.bezierCurveTo(x + 30 * (r() - 0.5), h * 0.45, x + 40 * (r() - 0.5), h * 0.6, x + 20 * (r() - 0.5), h * 0.85); g.stroke(); } },
+  rice(g, w, h, r) { for (let i = 0; i < 140; i++) ell(g, w * 0.15 + r() * w * 0.7, h * 0.35 + r() * h * 0.45, 5, 2.4, 0xf4f1e6, r() * 3, 0.15); },
+  beans(g, w, h, r) { for (let i = 0; i < 40; i++) ell(g, w * 0.18 + r() * w * 0.64, h * 0.4 + r() * h * 0.4, 9, 6, 0xb5482a, r() * 3); },
+  chips(g, w, h, r) { for (let i = 0; i < 12; i++) ell(g, w * 0.2 + r() * w * 0.6, h * 0.35 + r() * h * 0.45, 24, 15, 0xf0c35a, r() * 3, 0.25); },
+  cookies(g, w, h, r) { for (const [x, y] of [[0.35, 0.55], [0.62, 0.5], [0.5, 0.72]]) { ell(g, w * x, h * y, 34, 30, 0xc98a45, 0, 0.2); for (let i = 0; i < 6; i++) ell(g, w * x + (r() - 0.5) * 40, h * y + (r() - 0.5) * 34, 4, 3.5, 0x3d2416, r() * 3, 0.1); } },
+  soda(g, w, h, r) { for (let i = 0; i < 40; i++) { const x = w * 0.15 + r() * w * 0.7, y = h * 0.3 + r() * h * 0.55, s = 2 + r() * 6; g.strokeStyle = 'rgba(255,255,255,0.65)'; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, s, 0, Math.PI * 2); g.stroke(); } },
+  water(g, w, h, r) { g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 4; for (let k = 0; k < 3; k++) { g.beginPath(); for (let x = 20; x <= w - 20; x += 4) g.lineTo(x, h * (0.5 + k * 0.1) + Math.sin(x / 18 + k) * 6); g.stroke(); } MOTIFS.soda(g, w, h, r); },
+  coffee(g, w, h, r) { for (let i = 0; i < 18; i++) { const x = w * 0.18 + r() * w * 0.64, y = h * 0.38 + r() * h * 0.42, a = r() * 3; ell(g, x, y, 13, 9, 0x5a3420, a, 0.35); g.strokeStyle = '#2b170c'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y, 9, 1.5, a, 0, Math.PI * 2); g.stroke(); } },
+  tomsauce(g, w, h, r) { ball(g, w * 0.4, h * 0.6, 34, 0xc8341f); ball(g, w * 0.62, h * 0.58, 28, 0xd9442a); g.fillStyle = '#2f6b2a'; for (const x of [0.4, 0.62]) { g.beginPath(); g.ellipse(w * x, h * 0.6 - 30, 10, 4, 0.4, 0, Math.PI * 2); g.fill(); } void r; },
+  chocolate(g, w, h) { for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) { const x = w * 0.2 + i * 40, y = h * 0.45 + j * 40; g.fillStyle = '#4a2a1a'; g.fillRect(x, y, 36, 36); g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(x, y, 36, 5); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x, y + 31, 36, 5); } },
+  oil(g, w, h) { const x = w / 2, y = h * 0.62; const gr = g.createRadialGradient(x - 10, y - 10, 4, x, y, 44); gr.addColorStop(0, '#f6e27a'); gr.addColorStop(1, '#8a7a12'); g.fillStyle = gr; g.beginPath(); g.moveTo(x, y - 62); g.bezierCurveTo(x + 40, y - 10, x + 40, y + 34, x, y + 34); g.bezierCurveTo(x - 40, y + 34, x - 40, y - 10, x, y - 62); g.fill(); ell(g, w * 0.3, h * 0.78, 16, 10, 0x5b6b2a, 0.3); ell(g, w * 0.7, h * 0.8, 14, 9, 0x4f5e24, -0.2); },
+  flour(g, w, h) { g.strokeStyle = '#b08433'; g.lineWidth = 3; for (const dx of [-40, 0, 40]) { const x = w / 2 + dx; g.beginPath(); g.moveTo(x, h * 0.88); g.quadraticCurveTo(x + dx * 0.2, h * 0.6, x + dx * 0.3, h * 0.36); g.stroke(); for (let k = 0; k < 6; k++) { ell(g, x + dx * 0.3 * (1 - k / 8) - 7, h * (0.4 + k * 0.05), 7, 4, 0xd9a443, -0.6); ell(g, x + dx * 0.3 * (1 - k / 8) + 7, h * (0.4 + k * 0.05), 7, 4, 0xd9a443, 0.6); } } },
+  sugar(g, w, h, r) { for (let i = 0; i < 6; i++) { const x = w * 0.25 + (i % 3) * 46, y = h * 0.5 + Math.floor(i / 3) * 40; g.fillStyle = '#ffffff'; g.fillRect(x, y, 36, 34); g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(x + 30, y, 6, 34); g.fillRect(x, y + 28, 36, 6); } void r; },
+  pbutter(g, w, h) { ball(g, w * 0.4, h * 0.62, 26, 0xb07a3c); ball(g, w * 0.62, h * 0.6, 22, 0xa56f35); ell(g, w * 0.52, h * 0.78, 60, 14, 0xc8914c, 0, 0.1); },
+  honey(g, w, h) { g.strokeStyle = '#e0a020'; g.lineWidth = 3; for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) { const x = w * 0.22 + i * 30 + (j % 2) * 15, y = h * 0.45 + j * 26; g.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + Math.PI / 6; g.lineTo(x + Math.cos(a) * 15, y + Math.sin(a) * 15); } g.closePath(); g.fillStyle = 'rgba(232,170,40,0.55)'; g.fill(); g.stroke(); } },
+  catfood(g, w, h) { const x = w / 2, y = h * 0.64; for (const [dx, dy, s] of [[-30, -20, 12], [-10, -36, 12], [14, -36, 12], [34, -20, 12]]) ball(g, x + dx, y + dy, s, 0x3a3a3a, 0.2); ell(g, x + 2, y + 6, 30, 24, 0x3a3a3a, 0, 0.2); },
+  toiletpaper(g, w, h) { for (let i = 0; i < 3; i++) { const x = w * 0.28 + i * 52, y = h * 0.62; g.fillStyle = '#f7f7f4'; g.fillRect(x - 22, y - 30, 44, 60); ell(g, x, y - 30, 22, 8, 0xffffff, 0, 0.05); ell(g, x, y - 30, 7, 3, 0xb9a98a, 0, 0); } },
+  energy(g, w, h) { g.fillStyle = '#e8f03a'; g.beginPath(); g.moveTo(w * 0.55, h * 0.3); g.lineTo(w * 0.38, h * 0.62); g.lineTo(w * 0.52, h * 0.62); g.lineTo(w * 0.44, h * 0.9); g.lineTo(w * 0.66, h * 0.52); g.lineTo(w * 0.52, h * 0.52); g.closePath(); g.fill(); },
+  detergent(g, w, h, r) { for (let i = 0; i < 16; i++) { const x = w * 0.2 + r() * w * 0.6, y = h * 0.4 + r() * h * 0.45, s = 8 + r() * 16; const gr = g.createRadialGradient(x - s / 3, y - s / 3, 1, x, y, s); gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(1, 'rgba(190,220,255,0.35)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, s, 0, Math.PI * 2); g.fill(); } },
+  wine(g, w, h) { for (let i = 0; i < 9; i++) ball(g, w * 0.4 + (i % 3) * 22 - Math.floor(i / 3) * 4, h * 0.45 + Math.floor(i / 3) * 22, 12, 0x4a1630, 0.4); ell(g, w * 0.62, h * 0.38, 18, 9, 0x3f5a2a, -0.5); },
+  truffle(g, w, h) { ball(g, w * 0.45, h * 0.62, 32, 0x2e2420, 0.15); ball(g, w * 0.62, h * 0.66, 20, 0x3a2e28, 0.15); MOTIFS.pasta(g, w, h * 0.6, rnd(3)); },
+  milk(g, w, h) { const gr = g.createLinearGradient(0, h * 0.5, 0, h); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#dfe6ec'); g.fillStyle = gr; g.beginPath(); g.moveTo(0, h * 0.68); for (let x = 0; x <= w; x += 8) g.lineTo(x, h * 0.66 + Math.sin(x / 20) * 8); g.lineTo(w, h); g.lineTo(0, h); g.fill(); for (const [x, s] of [[0.3, 10], [0.55, 14], [0.75, 8]]) ball(g, w * x, h * 0.52 - s, s, 0xffffff, 0.05); },
+  yogurt(g, w, h) { MOTIFS.milk(g, w, h); for (const [x, y] of [[0.38, 0.5], [0.6, 0.48]]) { ell(g, w * x, h * y, 22, 26, 0xc8202d, 0, 0.35); g.fillStyle = '#f5e08a'; for (let i = 0; i < 8; i++) g.fillRect(w * x - 12 + (i % 3) * 10, h * y - 12 + Math.floor(i / 3) * 10, 2, 3); } },
+  butter(g, w, h) { g.fillStyle = '#f2d36b'; g.fillRect(w * 0.3, h * 0.52, w * 0.4, h * 0.22); g.fillStyle = '#f8e39a'; g.fillRect(w * 0.3, h * 0.52, w * 0.4, 8); g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(w * 0.3, h * 0.72, w * 0.4, 6); },
+  eggs(g, w, h) { for (const [x, y] of [[0.35, 0.62], [0.55, 0.58], [0.7, 0.68], [0.45, 0.76]]) ell(g, w * x, h * y, 22, 28, 0xead2b0, 0.2, 0.3); },
+  cheese(g, w, h) { MOTIFS.gouda(g, w, h); },
+  juice(g, w, h) { for (const [x, y, s] of [[0.38, 0.62, 40], [0.66, 0.58, 30]]) { ball(g, w * x, h * y, s, 0xf08a1a, 0.25); g.fillStyle = '#ffd27a'; g.beginPath(); g.arc(w * x, h * y, s * 0.82, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#f2a640'; g.lineWidth = 2; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; g.beginPath(); g.moveTo(w * x, h * y); g.lineTo(w * x + Math.cos(a) * s * 0.8, h * y + Math.sin(a) * s * 0.8); g.stroke(); } } },
+  cream(g, w, h) { MOTIFS.milk(g, w, h); },
+  salad(g, w, h, r) { for (let i = 0; i < 14; i++) ell(g, w * 0.2 + r() * w * 0.6, h * 0.4 + r() * h * 0.42, 22, 12, r() < 0.5 ? 0x5f9a3a : 0x86b84a, r() * 3); for (let i = 0; i < 5; i++) ball(g, w * 0.25 + r() * w * 0.5, h * 0.45 + r() * h * 0.35, 8, 0xd23a2a); },
+  kombucha(g, w, h) { ell(g, w * 0.48, h * 0.62, 34, 22, 0xc89b4a, 0.4); ell(g, w * 0.62, h * 0.7, 16, 10, 0xb88a3a, -0.3); },
+  pizza(g, w, h) { ball(g, w / 2, h * 0.62, 58, 0xd9a25a, 0.1); g.fillStyle = '#c4452c'; g.beginPath(); g.arc(w / 2, h * 0.62, 50, 0, Math.PI * 2); g.fill(); for (const [dx, dy] of [[-22, -14], [18, -20], [-6, 18], [26, 14], [-30, 20]]) ball(g, w / 2 + dx, h * 0.62 + dy, 9, 0x8a2a1e, 0.2); g.fillStyle = 'rgba(250,240,200,0.6)'; g.beginPath(); g.arc(w / 2 - 6, h * 0.6, 24, 0, Math.PI * 2); g.fill(); },
+  icecream(g, w, h) { for (const [x, y, s] of [[0.4, 0.62, 30], [0.6, 0.6, 28], [0.5, 0.48, 26]]) ball(g, w * x, h * y, s, 0xf5ead0, 0.08); },
+  fries(g, w, h, r) { for (let i = 0; i < 18; i++) { g.save(); g.translate(w * 0.25 + r() * w * 0.5, h * 0.5 + r() * h * 0.3); g.rotate((r() - 0.5) * 1.2); g.fillStyle = '#e8b84a'; g.fillRect(-4, -26, 8, 52); g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(2, -26, 2, 52); g.restore(); } },
+  veggies(g, w, h, r) { for (let i = 0; i < 26; i++) { const t = r(); ball(g, w * 0.2 + r() * w * 0.6, h * 0.4 + r() * h * 0.42, t < 0.4 ? 7 : 9, t < 0.4 ? 0x5a9a3a : t < 0.7 ? 0xe58a2a : 0xf0d040); } },
+  fishsticks(g, w, h) { for (let i = 0; i < 4; i++) { g.save(); g.translate(w * 0.5, h * 0.48 + i * 20); g.rotate(-0.08 + i * 0.05); const gr = g.createLinearGradient(0, -8, 0, 8); gr.addColorStop(0, '#e7a64a'); gr.addColorStop(1, '#b8742c'); g.fillStyle = gr; g.fillRect(-60, -8, 120, 16); g.restore(); } },
+  dumplings(g, w, h) { for (const [x, y] of [[0.35, 0.6], [0.6, 0.56], [0.48, 0.74]]) { ell(g, w * x, h * y, 30, 20, 0xf1e6d0, 0, 0.15); g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 2; for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(w * x + k * 9, h * y - 18); g.lineTo(w * x + k * 7, h * y - 6); g.stroke(); } } },
+  popsicles(g, w, h) { [0xd23a3a, 0xf0a020, 0x6a3fb0].forEach((c, i) => { const x = w * (0.32 + i * 0.18); g.fillStyle = '#e2c79a'; g.fillRect(x - 4, h * 0.7, 8, 34); g.fillStyle = hex(c); g.beginPath(); g.roundRect ? g.roundRect(x - 18, h * 0.38, 36, h * 0.34, 16) : g.rect(x - 18, h * 0.38, 36, h * 0.34); g.fill(); }); },
+  frozenmeat(g, w, h) { ell(g, w / 2, h * 0.62, 56, 18, 0x6a3a26, 0, 0.2); g.strokeStyle = '#3d2014'; g.lineWidth = 3; for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(w / 2 - 40, h * 0.62 + k * 6); g.lineTo(w / 2 + 40, h * 0.62 + k * 6 - 4); g.stroke(); } },
+  steak(g, w, h, r, col = 0xa8322c) { ell(g, w / 2, h * 0.62, 62, 40, col, 0.1, 0.15); g.strokeStyle = 'rgba(255,240,230,0.55)'; g.lineWidth = 2; for (let i = 0; i < 12; i++) { g.beginPath(); const x = w / 2 + (r() - 0.5) * 90, y = h * 0.62 + (r() - 0.5) * 50; g.moveTo(x, y); g.quadraticCurveTo(x + 10, y + 6, x + 22 * r(), y + 10 * r()); g.stroke(); } g.strokeStyle = 'rgba(255,245,235,0.8)'; g.lineWidth = 7; g.beginPath(); g.ellipse(w / 2, h * 0.62, 60, 38, 0.1, 3.6, 5.2); g.stroke(); },
+  gouda(g, w, h) { g.fillStyle = '#e8b93c'; g.beginPath(); g.moveTo(w * 0.22, h * 0.78); g.lineTo(w * 0.78, h * 0.78); g.lineTo(w * 0.7, h * 0.42); g.closePath(); g.fill(); g.fillStyle = '#f3cc58'; g.beginPath(); g.moveTo(w * 0.22, h * 0.78); g.lineTo(w * 0.7, h * 0.42); g.lineTo(w * 0.62, h * 0.4); g.closePath(); g.fill(); g.fillStyle = 'rgba(160,110,20,0.6)'; for (const [x, y, s] of [[0.5, 0.66, 7], [0.62, 0.7, 5], [0.65, 0.56, 4], [0.4, 0.72, 4]]) { g.beginPath(); g.arc(w * x, h * y, s, 0, Math.PI * 2); g.fill(); } },
+  olives(g, w, h, r) { for (let i = 0; i < 14; i++) ell(g, w * 0.22 + r() * w * 0.56, h * 0.42 + r() * h * 0.38, 15, 11, r() < 0.5 ? 0x4f5a1e : 0x2c2a20, r() * 3, 0.45); },
+  hummus(g, w, h) { ell(g, w / 2, h * 0.64, 60, 26, 0xd9bf8c, 0, 0.1); g.strokeStyle = 'rgba(150,110,60,0.6)'; g.lineWidth = 2; g.beginPath(); g.ellipse(w / 2, h * 0.64, 36, 14, 0, 0, Math.PI * 2); g.stroke(); g.fillStyle = 'rgba(200,120,40,0.7)'; g.beginPath(); g.ellipse(w / 2, h * 0.64, 14, 5, 0, 0, Math.PI * 2); g.fill(); },
+  roast(g, w, h) { shadow(g, w / 2, h * 0.8, 60); ell(g, w / 2, h * 0.62, 58, 40, 0xb8732e, 0, 0.35); ell(g, w * 0.3, h * 0.68, 18, 12, 0xa8652a, 0.6); ell(g, w * 0.7, h * 0.68, 18, 12, 0xa8652a, -0.6); },
+  sushi(g, w, h) { for (let i = 0; i < 3; i++) { const x = w * 0.3 + i * 50, y = h * 0.64; ell(g, x, y, 22, 14, 0xf6f4ee, 0, 0.1); ell(g, x, y - 10, 22, 9, i === 1 ? 0xe8774a : 0xf08a6a, 0, 0.3); } },
+};
+const MOTIF_FOR = { cheese: 'gouda', groundbeef: 'steak', ribeye: 'steak', wagyu: 'steak', lamb: 'steak', ribs: 'steak', chicken: 'steak', ham: 'steak', salami: 'steak', sausages: 'frozenmeat', potsalad: 'salad', roastchicken: 'roast', strawberry: 'yogurt' };
+const MEAT_COL = { chicken: 0xe8b8a0, ham: 0xe8a0a0, lamb: 0xb04a3c, salami: 0x9a2a2a, wagyu: 0xc04a44 };
+
 const texCache = new Map();
 export function packagingTexture(p) {
   if (texCache.has(p.id)) return texCache.get(p.id);
   const W = 256, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
-  const base = hex(p.color), dark = lum(p.color) < 0.55;
-  const ink = dark ? '#ffffff' : '#1e293b';
-  const grad = g.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, shade(p.color, 1.15)); grad.addColorStop(1, shade(p.color, 0.78));
-  g.fillStyle = grad; g.fillRect(0, 0, W, H);
-  // decorative swoosh
-  g.fillStyle = dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.35)';
-  g.beginPath(); g.moveTo(0, H * 0.62); g.bezierCurveTo(W * 0.3, H * 0.48, W * 0.7, H * 0.8, W, H * 0.6); g.lineTo(W, H); g.lineTo(0, H); g.fill();
-  const brand = BRANDS[(p.id.length * 7 + p.id.charCodeAt(0)) % BRANDS.length];
+  const r = rnd(seedOf(p.id));
+  const brand = BRAND_FOR[p.id] || BRANDS[seedOf(p.id) % BRANDS.length];
+  const S = BRAND_STYLE[brand];
+  // background
+  g.fillStyle = S.bg; g.fillRect(0, 0, W, H);
+  if (S.layout === 'kraft') { for (let i = 0; i < 1400; i++) { g.fillStyle = `rgba(80,55,25,${r() * 0.12})`; g.fillRect(r() * W, r() * H, 1 + r() * 2, 1); } }
+  if (S.layout === 'premium') { g.strokeStyle = S.accent; g.lineWidth = 2; g.strokeRect(8, 8, W - 16, H - 16); }
+  // product colour field behind the image
+  const fieldTop = 70, fieldH = 116;
+  const fg = g.createLinearGradient(0, fieldTop, 0, fieldTop + fieldH);
+  fg.addColorStop(0, shade(p.color, 1.12)); fg.addColorStop(1, shade(p.color, 0.72));
+  g.fillStyle = fg;
+  if (S.layout === 'band' || S.layout === 'clean') g.fillRect(0, fieldTop, W, fieldH);
+  else { g.beginPath(); g.ellipse(W / 2, fieldTop + fieldH / 2, W * 0.46, fieldH * 0.5, 0, 0, Math.PI * 2); g.fill(); }
+  // the product image
+  g.save(); g.beginPath(); g.rect(0, fieldTop - 20, W, fieldH + 22); g.clip();
+  const motif = MOTIFS[p.id] || MOTIFS[MOTIF_FOR[p.id]];
+  if (motif) { g.save(); g.translate(0, fieldTop - 72); motif(g, W, 230, r, MEAT_COL[p.id] || 0xa8322c); g.restore(); }
+  else { shadow(g, W / 2, fieldTop + fieldH - 14, 50); ball(g, W / 2, fieldTop + fieldH / 2, 42, p.color); }
+  g.restore();
+  // brand line
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillStyle = dark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.6)'; g.fillRect(0, 10, W, 34);
-  g.fillStyle = ink; g.font = 'italic 700 22px Georgia, serif'; g.fillText(brand, W / 2, 28);
-  g.font = '72px "Segoe UI Emoji","Apple Color Emoji",sans-serif'; g.fillText(p.icon, W / 2, 104);
-  const words = p.name.toUpperCase().split(' ');
-  const lines = words.length > 2 ? [words.slice(0, 2).join(' '), words.slice(2).join(' ')] : words.length === 2 && p.name.length > 12 ? words : [words.join(' ')];
-  g.fillStyle = '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 5; g.lineJoin = 'round';
+  if (S.layout === 'band') { g.fillStyle = S.accent; g.fillRect(0, 0, W, 50); g.fillStyle = '#ffffff'; g.font = S.brandFont; g.fillText(brand.toUpperCase(), W / 2, 26); }
+  else { g.fillStyle = S.layout === 'dark' || S.layout === 'premium' ? S.accent : S.ink; g.font = S.brandFont; g.fillText(S.layout === 'premium' ? brand.toUpperCase() : brand, W / 2, 34); }
+  if (S.layout === 'heritage') { g.strokeStyle = S.accent; g.lineWidth = 1.5; g.beginPath(); g.moveTo(40, 56); g.lineTo(W - 40, 56); g.stroke(); }
+  // product name (fits the width; up to two lines)
+  const name = S.layout === 'premium' || S.nameFont.includes('Playfair') ? p.name : p.name.toUpperCase();
+  const words = name.split(' ');
+  const lines = words.length > 2 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [name];
+  g.fillStyle = S.ink;
   lines.forEach((ln, i) => {
-    let size = 34; g.font = `900 ${size}px Nunito, Arial, sans-serif`;
-    while (g.measureText(ln).width > W - 20 && size > 14) { size--; g.font = `900 ${size}px Nunito, Arial, sans-serif`; }
-    const y = 168 + i * (size + 2) - (lines.length - 1) * 16;
-    g.strokeText(ln, W / 2, y); g.fillText(ln, W / 2, y);
+    let size = lines.length > 1 ? 26 : 32;
+    const font = () => `${S.nameWeight} ${size}px ${S.nameFont}, "Barlow", Arial, sans-serif`;
+    g.font = font(); while (g.measureText(ln).width > W - 24 && size > 12) { size--; g.font = font(); }
+    g.fillText(ln, W / 2, fieldTop + fieldH + 22 + i * (size + 1) - (lines.length > 1 ? 4 : 0));
   });
-  g.font = '700 18px Nunito, Arial'; g.fillStyle = ink; g.textAlign = 'left'; g.fillText(SIZES[p.shape] || '', 12, H - 18);
-  // barcode
-  g.fillStyle = '#fff'; g.fillRect(W - 78, H - 38, 66, 30); g.fillStyle = '#111';
-  for (let i = 0, x = W - 74; x < W - 16; i++) { const w = 1 + ((i * 7 + p.id.length) % 3); g.fillRect(x, H - 35, w, 24); x += w + 1 + (i % 2); }
+  // descriptor, size and barcode
+  g.font = '600 12px Barlow, Arial, sans-serif'; g.fillStyle = S.layout === 'dark' || S.layout === 'premium' ? S.accent : S.accent;
+  g.fillText(p.id === 'wine' ? 'RESERVE 2021' : DESCRIPTOR[p.cat] || '', W / 2, fieldTop - 9);
+  g.font = '600 15px "Barlow Condensed", Arial, sans-serif'; g.fillStyle = S.ink; g.textAlign = 'left'; g.fillText(SIZES[p.shape] || '', 12, H - 18);
+  g.fillStyle = '#fff'; g.fillRect(W - 74, H - 36, 62, 28); g.fillStyle = '#111';
+  for (let i = 0, x = W - 70; x < W - 16; i++) { const bw = 1 + ((i * 7 + p.id.length) % 3); g.fillRect(x, H - 33, bw, 20); x += bw + 1 + (i % 2); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   texCache.set(p.id, t);
   return t;
 }
+// small product picture for the interface (data URL of the packaging art)
+export function productThumb(p) { const t = packagingTexture(p); return t.image.toDataURL ? t.image.toDataURL('image/png') : ''; }
 
 const matCache = new Map();
 const shared = {

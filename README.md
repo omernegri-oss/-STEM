@@ -31,7 +31,7 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
 | Punch (friends get dizzy, customers walk out) | `F` |
 | Arrange furniture (move / rotate / pack / sell) | `B` (`M` / `R` / `P` / `X`) |
 | Stock overview · money · progress | `I` · `M` · `K` |
-| Chat · emotes · ping a spot | `Enter` · `1`–`6` · `G` |
+| Chat · gestures (wave, point, thumbs up, shrug, clap, nod) · mark a spot | `Enter` · `1`–`6` · `G` |
 | Help | `?` |
 
 **How it works**

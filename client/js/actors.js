@@ -15,14 +15,15 @@ export function carryModel(code) {
   }
   return makeBox(code, PRODUCT_MAP[code]?.color ?? 0xffffff);
 }
-function makeStars() { const g = new THREE.Group(); for (let i = 0; i < 3; i++) { const s = Sph(g, 0.06, 0xfacc15, Math.cos(i * 2.1) * 0.25, 0, Math.sin(i * 2.1) * 0.25, { emissive: 0xfacc15, ei: 0.6 }); s.castShadow = false; } g.visible = false; return g; }
+const GESTURES = { wave: 'wave', pnt: 'point', thum: 'thumbs', shrg: 'shrug', clap: 'clap', nod: 'nod' };
 
+// store uniforms: brand-green polos with a name badge; white coat for the butcher, black polo at the deli
 const ROLE_UNIFORM = {
-  cashier: { shirt: 0x2563eb, cap: 0x1d4ed8 },
-  stocker: { shirt: 0x16a34a, apron: 0x166534, cap: 0x15803d },
-  cleaner: { shirt: 0x0891b2, cap: 0x0e7490 },
-  butcher: { shirt: 0xffffff, apron: 0xb91c1c, chef: true },
-  deli:    { shirt: 0xfef3c7, apron: 0xca8a04, hairnet: true },
+  cashier: { shirt: 0x1f5135, pants: 0x1a1a1a },
+  stocker: { shirt: 0x1f5135, apron: 0x2b2f33, pants: 0x2c3e5a },
+  cleaner: { shirt: 0x55595d, pants: 0x3a3a3a },
+  butcher: { shirt: 0xf2f2ef, apron: 0x2b2f33, chef: true, pants: 0x1a1a1a },
+  deli:    { shirt: 0x1a1a1a, apron: 0x6b4a2a, hairnet: true, pants: 0x1a1a1a },
 };
 const lerpAngle = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * t; };
 
@@ -47,21 +48,22 @@ export class Actors {
 
   updateTag(e, inf) {
     const role = PLAYER_ROLES[inf.role];
-    setSpriteText(e.tag, `${role ? role.icon + ' ' : ''}${inf.name}`, 0.3, { bg: inf.color, color: '#fff', size: 40 });
+    void role; setSpriteText(e.tag, inf.name, 0.17, { bg: 'rgba(17,20,24,0.72)', color: '#f4f6f2', size: 40, radius: 8, pad: 12, font: 'Barlow', weight: 600 });
   }
 
   makePlayer(id) {
     const inf = this.info.get(id) || { name: '?', color: '#888', role: 'manager' };
     const col = new THREE.Color(inf.color).getHex();
-    const look = { ...lookFromSeed(id * 7777 + 13), shirt: col, pants: 0x1e293b, cap: col, hat: null, scale: 1, glasses: false, badge: 0xfacc15 };
+    const muted = new THREE.Color(col).lerp(new THREE.Color(0x4a4d50), 0.45).getHex(); // player colour, toned down like a real shirt
+    const look = { ...lookFromSeed(id * 7777 + 13), shirt: muted, pants: 0x2c3e5a, cap: null, hat: null, scale: 1, glasses: false, badge: 0xe9e6df };
     const obj = makeCharacter(look);
-    const tag = makeSprite(inf.name, 0.3, { bg: inf.color, color: '#fff', size: 40 }); tag.position.y = 1.9; obj.add(tag);
-    const emote = makeSprite(' ', 0.5, { bg: null }); emote.position.y = 2.5; emote.visible = false; obj.add(emote);
+    const tag = makeSprite(inf.name, 0.17, { bg: 'rgba(17,20,24,0.72)', color: '#f4f6f2', size: 40, radius: 8, pad: 12, font: 'Barlow', weight: 600 }); tag.position.y = 1.85; obj.add(tag);
+    const emote = { visible: false, userData: { text: '' } }; // gestures are animations, not icons
     // ring marker under players
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7 })); ring.userData.owned = ring.userData.ownGeo = true;
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; obj.add(ring);
     const carry = new THREE.Group(); obj.add(carry);
-    const stars = makeStars(); stars.position.y = 1.72; obj.add(stars);
+    const stars = null;
     this.root.add(obj);
     const e = { obj, tag, emote, carry, stars, carryKey: '', x: 0, z: 0, rot: 0, tx: 0, tz: 0, trot: 0, moving: false, color: inf.color, first: true, floor: 0, kind: 'player', swingT: 0 };
     this.updateTag(e, inf);
@@ -71,8 +73,7 @@ export class Actors {
   makeCustomer(seed) {
     const look = lookFromSeed(seed);
     const obj = makeCharacter(look);
-    const bubble = makeSprite(' ', 0.42, { bg: '#ffffff', border: '#cbd5e1' }); bubble.position.y = 1.85 * look.scale + 0.1; bubble.visible = false; obj.add(bubble);
-    const stars = makeStars(); stars.position.y = 1.72 * look.scale; obj.add(stars);
+    const bubble = { visible: false, position: { y: 0 } }, stars = null; // mood shows in body language
     const basket = makeBasket([0xef4444, 0x2563eb, 0x16a34a][seed % 3]);
     obj.userData.parts.side.add(basket);
     const items = new THREE.Group(); basket.add(items);
@@ -82,12 +83,11 @@ export class Actors {
 
   makeStaff(role, seed) {
     const u = ROLE_UNIFORM[role] || {};
-    const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: u.apron, chef: u.chef, hairnet: u.hairnet, cap: u.cap, hat: null, badge: 0xfacc15, scale: 1 };
+    const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: u.apron, chef: u.chef, hairnet: u.hairnet, cap: null, hat: null, badge: 0xe9e6df, pants: u.pants ?? 0x1a1a1a, jacket: null, scale: 1 };
     const obj = makeCharacter(look);
-    const tag = makeSprite(ROLES[role].icon, 0.3, { bg: null }); tag.position.y = 1.95; obj.add(tag);
-    const bubble = makeSprite(' ', 0.36, { bg: '#ffffff', border: '#cbd5e1' }); bubble.position.y = 2.25; bubble.visible = false; obj.add(bubble);
+    const tag = { visible: false }, bubble = { visible: false, position: { y: 0 } };
     const carry = new THREE.Group(); obj.userData.parts.hold.add(carry);
-    const stars = makeStars(); stars.position.y = 1.72; obj.add(stars);
+    const stars = null;
     let mop = null;
     if (role === 'cleaner') {
       mop = new THREE.Group(); C(mop, 0.015, 0.015, 1.3, 0x92400e, 0, 0.65, 0); B(mop, 0.3, 0.06, 0.12, 0x7dd3fc, 0, 0.03, 0);
@@ -112,7 +112,7 @@ export class Actors {
       e.station = station;
       e.carryList = carry;
       this.setPlayerCarry(e, carry);
-      if (emote) { setSpriteText(e.emote, emote, 0.6, { bg: null, size: 64 }); e.emote.visible = true; } else e.emote.visible = false;
+      e.gesture = emote || '';
     }
     for (const [id, e] of this.players) if (!seenP.has(id)) { this.root.remove(e.obj); disposeOwned(e.obj); this.players.delete(id); }
     // customers
@@ -124,9 +124,8 @@ export class Actors {
       e.tx = x; e.tz = z; e.trot = rot; e.moving = !!moving; e.floor = floor || 0; e.stun = !!(flags & 16);
       if (e.first) { e.x = x; e.z = z; e.rot = rot; e.first = false; }
       e.flags = flags;
-      if (thought) { setSpriteText(e.bubble, thought, 0.42, { bg: '#ffffff', border: flags & 2 ? '#a855f7' : '#cbd5e1' }); e.bubble.visible = true; } else e.bubble.visible = false;
+      e.upset = !!thought; // annoyed shoppers shake their head
       // VIP sunglasses look: purple glow ring
-      if (flags & 2 && !e.vip) { e.vip = true; const s2 = makeSprite('🕶️ VIP', 0.26, { bg: '#7c3aed', color: '#fff', size: 36 }); s2.position.y = 1.85; e.obj.add(s2); }
       const wantCart = !!(flags & 1);
       if (wantCart && !e.cart) { e.cart = makeCart(); e.cart.position.set(0, 0, 0.75); e.obj.add(e.cart); e.basket.visible = false; e.items.parent && e.items.parent.remove(e.items); e.cart.add(e.items); e.items.position.copy(e.cart.userData.itemsAt); }
       const key = basket.join(',');
@@ -157,7 +156,7 @@ export class Actors {
         e.carryPid = carryPid; e.carry.clear();
         if (carryPid) { const b = carryModel(carryPid); b.position.set(0, -0.2, -0.05); e.carry.add(b); }
       }
-      if (thought) { setSpriteText(e.bubble, thought, 0.36, { bg: '#ffffff', border: '#cbd5e1' }); e.bubble.visible = true; } else e.bubble.visible = false;
+      e.upset = !!thought;
     }
     for (const [id, e] of this.staff) if (!seenS.has(id)) { this.root.remove(e.obj); disposeOwned(e.obj); this.staff.delete(id); }
     // pigeons
@@ -190,7 +189,8 @@ export class Actors {
     const y = heightAt(this.W || 12, this.floors || 1, e.floor || 0, e.x, e.z);
     e.obj.position.set(e.x, y, e.z); e.obj.rotation.y = e.rot;
     e.obj.visible = !(y > 1.9 && (this.viewFloor || 0) < 1) && !(e.local && this.hideLocal);
-    if (e.stars) { e.stars.visible = !!e.stun; if (e.stun) e.stars.rotation.y += 0.15; }
+    // a punched person staggers: the whole body sways for a moment
+    if (e.stun) { const t = performance.now() / 160; e.obj.rotation.z = Math.sin(t) * 0.12; e.obj.rotation.x = Math.cos(t * 0.7) * 0.06; } else if (e.obj.rotation.z) { e.obj.rotation.z = 0; e.obj.rotation.x = 0; }
   }
   swing(id) { const e = this.players.get(id); if (e) e.swingT = 0.3; }
   update(dt, local) {
@@ -200,17 +200,17 @@ export class Actors {
       else { e.x += (e.tx - e.x) * k; e.z += (e.tz - e.z) * k; e.rot = lerpAngle(e.rot, e.trot, k); }
       this.place(e);
       const carrying = e.carryList && e.carryList.length;
-      const pose = e.station ? 'work' : carrying ? 'carry' : (e.emote.visible && e.emote.userData.text === '👋') ? 'wave' : 'walk';
+      const pose = e.station ? 'work' : carrying ? 'carry' : (e.gesture && !e.moving) ? GESTURES[e.gesture] || 'walk' : 'walk';
       animateCharacter(e.obj, dt, e.moving, pose, 1.1);
       if (e.swingT > 0) { e.swingT -= dt; const P = e.obj.userData.parts; P.armR.rotation.x = -1.6 - Math.sin((0.3 - e.swingT) / 0.3 * Math.PI) * 0.6; P.armR.rotation.z = 0.2; }
-      if (e.stun) { const P = e.obj.userData.parts; P.head.rotation.z = Math.sin(performance.now() / 120) * 0.3; }
+      if (e.stun) { const P = e.obj.userData.parts; P.head.rotation.z = Math.sin(performance.now() / 150) * 0.15; }
       e.tag.visible = !e.local;
     }
     for (const e of this.customers.values()) {
       e.x += (e.tx - e.x) * k; e.z += (e.tz - e.z) * k; e.rot = lerpAngle(e.rot, e.trot, k);
       this.place(e);
       animateCharacter(e.obj, dt, e.moving, e.cart ? 'cart' : 'basket', 0.85);
-      if (e.bubble.visible) e.bubble.position.y = 1.8 * e.scale + 0.15 + Math.sin(performance.now() / 300 + e.x) * 0.04;
+      if (e.upset) { const P = e.obj.userData.parts; P.head.rotation.y = Math.sin(performance.now() / 110) * 0.35; }
     }
     for (const e of this.staff.values()) {
       e.x += (e.tx - e.x) * k; e.z += (e.tz - e.z) * k; e.rot = lerpAngle(e.rot, e.trot, k);

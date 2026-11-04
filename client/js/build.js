@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { FURNITURE, FIXTURE_UPGRADES, PRODUCT_MAP, FLOOR_H, fmtMoney, slotCap } from '/shared/data.js';
 import { footprint, frontTiles, backTiles, needsBack, center, dims } from '/shared/grid.js';
 import { makeFurniture, ghostify } from './models.js';
+import { svg, furnitureIcon } from './icons.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -151,29 +152,29 @@ export class BuildMode {
   render() {
     if (!this.active) return;
     const M = this.G.meta || {}, lvl = M.level || 1, cash = M.cash || 0;
-    let h = `<div class="bb-head"><h3>🛠️ ${this.placing ? 'Placing' : 'Arrange'} <button class="x" style="float:right" data-act="close">✕</button></h3><p>Floor ${this.floor + 1} · arrange your store however you like.</p></div>`;
+    let h = `<div class="bb-head"><h3>${this.placing ? 'Placing' : 'Arrange'} <button class="x" style="float:right" data-act="close">✕</button></h3><p>Floor ${this.floor + 1} · arrange your store however you like.</p></div>`;
     if (this.placing) {
       const def = FURNITURE[this.placing];
-      h += `<div class="sel-card"><h4>${def.icon} ${esc(def.name)}</h4><div>${esc(def.desc)}</div><div class="note" style="margin-top:6px">Click on the floor to place it. R rotates. Esc keeps it in your hands.</div></div>`;
+      h += `<div class="sel-card"><h4>${svg(furnitureIcon(this.placing), 18)} ${esc(def.name)}</h4><div>${esc(def.desc)}</div><div class="note" style="margin-top:6px">Click on the floor to place it. R rotates. Esc keeps it in your hands.</div></div>`;
     }
     const sel = this.selectedFixture();
     if (sel && !this.placing) {
       const def = FURNITURE[sel.type]; const up = FIXTURE_UPGRADES[def.kind];
-      h += `<div class="sel-card"><h4>${def.icon} ${esc(def.name)} ${sel.upg ? '⭐' : ''}</h4><div>${esc(def.desc)}</div>`;
+      h += `<div class="sel-card"><h4>${svg(furnitureIcon(sel.type), 18)} ${esc(def.name)} ${sel.upg ? '<span class="chip good">PRO</span>' : ''}</h4><div>${esc(def.desc)}</div>`;
       if (sel.slots) {
         h += `<div style="margin-top:6px">`;
         sel.slots.forEach((s, i) => {
           const p = s.pid ? PRODUCT_MAP[s.pid] : null;
-          h += `<div class="kv"><span>Slot ${i + 1}: ${p ? esc(p.name) : '<i>empty</i>'}${s.expired ? ' 🤢' : ''}</span><b>${s.qty}/${p ? slotCap(sel.type, p.id) : '–'}${p && s.qty === 0 ? ` <button class="btn small" data-act="clearLabel" data-v="${i}" title="Free this slot for any product">↺</button>` : ''}</b></div>`;
+          h += `<div class="kv"><span>Slot ${i + 1}: ${p ? esc(p.name) : '<i>empty</i>'}${s.expired ? ' ' : ''}</span><b>${s.qty}/${p ? slotCap(sel.type, p.id) : '–'}${p && s.qty === 0 ? ` <button class="btn small" data-act="clearLabel" data-v="${i}" title="Free this slot for any product">↺</button>` : ''}</b></div>`;
         });
         h += `</div>`;
       }
-      if (sel.temp !== undefined) h += `<div class="kv"><span>Temperature</span><b>${sel.temp}°C ${sel.broken ? '⚠️ broken' : '✅'}</b></div>`;
-      h += `<div class="btns"><button class="btn small" data-act="move">✋ Move (M)</button><button class="btn small" data-act="rotate">🔄 Rotate (R)</button><button class="btn small" data-act="pack">📦 Pack into box (P)</button>`;
-      if (up && !sel.upg) h += `<button class="btn small blue" data-act="upgrade" ${lvl < up.level || cash < up.cost ? 'disabled' : ''} title="${esc(up.desc)}">⬆️ ${esc(up.name)} ${fmtMoney(up.cost)}${lvl < up.level ? ` (Lv${up.level})` : ''}</button>`;
-      h += `<button class="btn small bad" data-act="sell">♻️ Sell +${fmtMoney(Math.round(def.cost * 0.5))}</button></div>`;
+      if (sel.temp !== undefined) h += `<div class="kv"><span>Temperature</span><b>${sel.temp}°C ${sel.broken ? 'broken' : ''}</b></div>`;
+      h += `<div class="btns"><button class="btn small" data-act="move">Move (M)</button><button class="btn small" data-act="rotate">Rotate (R)</button><button class="btn small" data-act="pack">Pack into box (P)</button>`;
+      if (up && !sel.upg) h += `<button class="btn small blue" data-act="upgrade" ${lvl < up.level || cash < up.cost ? 'disabled' : ''} title="${esc(up.desc)}">${esc(up.name)} ${fmtMoney(up.cost)}${lvl < up.level ? ` (Lv${up.level})` : ''}</button>`;
+      h += `<button class="btn small bad" data-act="sell">Sell +${fmtMoney(Math.round(def.cost * 0.5))}</button></div>`;
       h += `<p class="note">Pack it into a box to carry it somewhere else — even upstairs.</p></div>`;
-    } else if (!this.placing) h += `<div class="sel-card">Click any fixture on this floor to move, rotate, pack or sell it.<br><br>New shelves, fridges, decorations and plants are bought on the 🖥️ store computer and delivered in boxes.</div>`;
+    } else if (!this.placing) h += `<div class="sel-card">Click any fixture on this floor to move, rotate, pack or sell it.<br><br>New shelves, fridges, decorations and plants are bought on the  store computer and delivered in boxes.</div>`;
     if (h !== this.lastHtml) { this.el.innerHTML = h; this.lastHtml = h; }
   }
 }

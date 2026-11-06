@@ -1,0 +1,41 @@
+# Publishes the browser version of the game as a public website (GitHub Pages):
+#   https://omernegri-oss.github.io/-STEM/
+# One-time setup by the repository owner: make the repository public, then Settings > Pages >
+# Source: "GitHub Actions". After that, run this workflow (Actions > "Website (GitHub Pages)" > Run workflow);
+# it also runs on every push to main.
+name: Website (GitHub Pages)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['client/**', 'shared/**', 'server/room.js', 'server/game.js', 'server/customers.js', 'server/staff.js', 'tools/build-static.mjs']
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # skipped (not failed) while the repository is private
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: node tools/build-static.mjs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+      - id: deploy
+        uses: actions/deploy-pages@v4

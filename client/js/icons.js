@@ -49,6 +49,7 @@ const P = {
   bolt: 'M13 2 4 14h7l-1 8 9-12h-7z',
   calendar: 'M4 5h16v16H4zM4 10h16M9 3v4M15 3v4',
   expand: 'M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6',
+  download: 'M12 3v12M7 10l5 5 5-5M4 20h16',
 };
 export function svg(name, size = 18) {
   const d = P[name] || P.info;

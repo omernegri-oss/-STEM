@@ -95,7 +95,9 @@ or in a subfolder. `dist/artifact.html` is the same page without the document wr
 
 ## Download
 
-The newest build is on the Releases page: Windows, Mac and Linux / Steam Deck.
+The newest build is on the Releases page: Windows, Mac and Linux / Steam Deck. The browser version is published
+at https://omernegri-oss.github.io/-STEM/ by the "Website (GitHub Pages)" workflow once the repository is public and
+Pages is set to "GitHub Actions" (Settings > Pages).
 
 ## Tests
 

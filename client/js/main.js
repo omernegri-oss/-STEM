@@ -110,6 +110,15 @@ $('h-exit').onclick = async () => { if (await ui.ask('Leave this store? Your tea
 $('help-close').onclick = () => toggleHelp(false);
 // ----------------------------------------------------------------------------------- Steam (desktop app)
 const steam = window.steamDesk || null;
+// desktop downloads: the newest GitHub release (fixed file names, see .github/workflows/desktop.yml)
+const RELEASES = 'https://github.com/omernegri-oss/-STEM/releases/latest/download/';
+if (!steam) {
+  $('dl-win').href = RELEASES + 'Supermarket-windows.zip';
+  $('dl-mac').href = RELEASES + 'Supermarket-mac.zip';
+  $('dl-linux').href = RELEASES + 'Supermarket-linux.tar.gz';
+  for (const [id, ic] of [['dl-win', 'download'], ['dl-mac', 'download'], ['dl-linux', 'download']]) $(id).insertAdjacentHTML('afterbegin', svg(ic, 16));
+  $('m-download').hidden = false;
+}
 const steamOn = !!(steam && steam.info && steam.info.available);
 if (steam) {
   document.body.classList.add('desktop');

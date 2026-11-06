@@ -27,7 +27,8 @@ for (const f of fs.readdirSync(path.join(OUT, 'js'))) {
 fs.writeFileSync(path.join(OUT, 'index.html'), html);
 // artifact.html: the same page without the document wrapper (the artifact host adds its own)
 const head = html.match(/<head>([\s\S]*?)<\/head>/)[1].replace(/<meta [^>]*>\s*/g, '');
-const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/)[1];
+// the claude.ai viewer blocks <a download>: there, download buttons open the file in a new tab instead
+const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/)[1].replace(/(<a class="btn" id="dl-[a-z]+") download>/g, '$1 target="_blank" rel="noopener">');
 // the artifact host may only allow fonts from Google Fonts: ask for the same families there as a fallback
 const GF = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=Playfair+Display:wght@700;900&family=Archivo+Black&family=Pacifico&display=swap" />\n';
 fs.writeFileSync(path.join(OUT, 'artifact.html'), GF + head.trim() + '\n<style>html,body{height:100%;margin:0;padding:0;background:#10161d}:root{padding:0}</style>\n' + body.trim() + '\n');

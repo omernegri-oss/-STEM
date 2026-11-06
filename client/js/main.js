@@ -117,6 +117,8 @@ if (!steam) {
   $('dl-mac').href = RELEASES + 'Supermarket-mac.zip';
   $('dl-linux').href = RELEASES + 'Supermarket-linux.tar.gz';
   for (const [id, ic] of [['dl-win', 'download'], ['dl-mac', 'download'], ['dl-linux', 'download']]) $(id).insertAdjacentHTML('afterbegin', svg(ic, 16));
+  $('dl-page').href = 'https://github.com/omernegri-oss/-STEM/releases/latest';
+  for (const id of ['dl-win', 'dl-mac', 'dl-linux']) $(id).addEventListener('click', () => { $('dl-started').hidden = false; });
   $('m-download').hidden = false;
 }
 const steamOn = !!(steam && steam.info && steam.info.available);

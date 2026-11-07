@@ -142,6 +142,9 @@ for (let t = 0; t < 120 && game.s.ledger.served < 2; t++) {
 }
 console.log('belt clicks', clicks, 'payments', paid, 'served', game.s.ledger.served, 'revenue', game.s.ledger.revenue);
 assert.ok(game.s.ledger.served >= 1, 'Bob checked out a customer by clicking products');
+assert.ok(paid >= 1, 'Bob took a payment (cash drawer or card terminal)');
+// paying takes a while: keep the rest of the test inside the same day (no end-of-day report in the way)
+game.s.speed = 1; game.s.minute = Math.min(game.s.minute, 13 * 60);
 
 // --- punching: Alice punches Bob
 await p1.bringToFront();

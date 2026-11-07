@@ -77,7 +77,8 @@ await waitFor(() => window.__G.world.boxes.some(b => b.ftype === 'fridge'));
 await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
 console.log('pack into box ✓');
 
-// --- computer tabs
+// --- computer tabs (keep the clock at midday so the end-of-day report doesn't cover the screen)
+g.s.minute = Math.min(g.s.minute, 12 * 60);
 const comp = g.s.furniture.find(f => f.type === 'computer');
 await tp(comp.x + 1.5, comp.z + 1, -Math.PI / 2);
 await waitFor(() => window.__dbg.lastInter?.action?.a === '_computer');

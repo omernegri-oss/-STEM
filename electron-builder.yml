@@ -1,4 +1,4 @@
-# Desktop builds for Steam: plain folders (no installer). Steam installs and updates the files itself.
+# Desktop builds: plain folders (no installer), zipped by the CI workflow for download.
 appId: com.supermarket.game
 productName: Supermarket
 copyright: Copyright © 2026 Supermarket
@@ -13,13 +13,10 @@ files:
   - client/**
   - "!**/*.map"
   - node_modules/ws/**
-  - node_modules/steamworks.js/**
+  - node_modules/peerjs/dist/peerjs.min.js
   - vendor/three/**
   - "!node_modules/three/**"
   - "!node_modules/electron*/**"
-# the Steam library and its native module must sit next to the app, not inside app.asar
-asarUnpack:
-  - node_modules/steamworks.js/**
 npmRebuild: false
 win:
   target: [dir]

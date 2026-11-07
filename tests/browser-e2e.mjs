@@ -16,7 +16,7 @@ async function newPage(name) {
   const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
   page.on('console', m => { if (m.type() === 'error') errors.push(`[${name}] ${m.text()}`); });
   page.on('pageerror', e => errors.push(`[${name}] PAGEERROR ${e.message}\n${e.stack}`));
-  await page.addInitScript(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); });
+  await page.addInitScript(() => { window.ST_NO_ONLINE = true; localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); });
   await page.goto(`http://localhost:${port}/?low`);
   await sleep(700);
   return page;

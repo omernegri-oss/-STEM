@@ -1,13 +1,13 @@
-// Makes the Steam store images in steam/assets/: five 1920x1080 screenshots of a busy two-floor store,
-// and every capsule size Steam asks for (header, small, main, vertical, library capsule/hero/logo).
-// Usage: node tools/steam-assets.mjs   (needs Playwright + Chromium; takes a few minutes)
+// Makes the promo images in media/: five 1920x1080 screenshots of a busy two-floor store,
+// and capsule/banner images in several sizes (header, small, main, vertical, library capsule/hero/logo).
+// Usage: node tools/media-assets.mjs   (needs Playwright + Chromium; takes a few minutes)
 import { createRequire } from 'node:module';
 import os from 'node:os'; import fs from 'node:fs'; import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(ROOT, 'steam/assets');
+const OUT = path.join(ROOT, 'media');
 fs.mkdirSync(OUT, { recursive: true });
 const SRC = path.join(OUT, 'source'); fs.mkdirSync(SRC, { recursive: true });
 const CAPSULES_ONLY = process.argv.includes('--capsules');
@@ -18,12 +18,12 @@ const { spawnCustomer } = await import('../server/customers.js');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const browser = await chromium.launch();
-// the screenshots: a running game in a real browser (skipped with --capsules, which reuses steam/assets/source)
+// the screenshots: a running game in a real browser (skipped with --capsules, which reuses media/source)
 if (!CAPSULES_ONLY) {
   const srv = startServer(0, { host: '127.0.0.1', quiet: true });
   const port = await srv.ready;
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  await page.addInitScript(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); localStorage.setItem('st_gfx', 'high'); });
+  await page.addInitScript(() => { window.ST_NO_ONLINE = true; localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); localStorage.setItem('st_gfx', 'high'); });
   page.setDefaultTimeout(240000);
   await page.goto(`http://127.0.0.1:${port}/`); await sleep(1500);
   // (software rendering in CI is slow at 1080p, so the menus are driven by script, not by mouse clicks)
@@ -109,5 +109,5 @@ const heroPage = await browser.newPage({ viewport: { width: 3840, height: 1240 }
 await heroPage.setContent(`<html><body style="margin:0"><img src="${hero}" style="width:3840px;height:1240px;display:block;image-rendering:auto"></body></html>`);
 await heroPage.screenshot({ path: path.join(OUT, 'library-hero-3840x1240.png') }); console.log('  library-hero-3840x1240.png');
 await browser.close();
-console.log('done: steam/assets');
+console.log('done: media');
 process.exit(0);

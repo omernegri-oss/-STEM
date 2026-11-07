@@ -1,19 +1,10 @@
-# Builds the Steam (desktop) version for Windows, macOS and Linux, and can upload it to Steam.
-# Run it from GitHub: Actions > "Desktop builds (Steam)" > Run workflow.
+# Builds the downloadable desktop version for Windows, macOS and Linux and publishes it on the Releases page.
+# Run it from GitHub: Actions > "Desktop builds" > Run workflow.
 # Downloads: the Releases page (latest build), or each run's page under "Artifacts".
-name: Desktop builds (Steam)
+name: Desktop builds
 
 on:
   workflow_dispatch:
-    inputs:
-      upload_to_steam:
-        description: Upload this build to Steam (needs the STEAM_* secrets, see STEAM.md)
-        type: boolean
-        default: false
-      steam_branch:
-        description: Steam branch to set the build live on (empty = upload only)
-        type: string
-        default: ''
   push:
     tags: ['v*']
 
@@ -91,35 +82,11 @@ jobs:
             Download the version for your computer:
             - **Windows**: Supermarket-windows.zip. Extract it and run Supermarket.exe (Windows may warn about an unknown app: More info, Run anyway).
             - **Mac**: Supermarket-mac.zip. Open it, right-click Supermarket.app and choose Open the first time (Intel app, runs on Apple Silicon with Rosetta).
-            - **Linux / Steam Deck**: Supermarket-linux.tar.gz. Extract it and run ./supermarket.
-            Play with friends through Steam invites (Steam must be running), or solo without Steam.
+            - **Linux**: Supermarket-linux.tar.gz. Extract it and run ./supermarket.
+            Play together online: one player builds a store and sends the 5-letter store code; friends type it and press Join with code.
+            Works between the downloaded game and the website (https://omernegri-oss.github.io/-STEM/), in any mix.
           files: |
             builds/Supermarket-windows.zip
             builds/Supermarket-mac.zip
             builds/Supermarket-linux.tar.gz
 
-  steam:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_to_steam }}
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with: { path: builds }
-      - name: Unpack the macOS and Linux archives
-        run: |
-          cd builds
-          mkdir mac linux windows
-          unzip -q Supermarket-windows/Supermarket-windows.zip -d windows
-          unzip -q Supermarket-mac/Supermarket-mac.zip -d mac
-          tar -xzf Supermarket-linux/Supermarket-linux.tar.gz -C linux
-      - uses: game-ci/steam-deploy@v3
-        with:
-          username: ${{ secrets.STEAM_USERNAME }}
-          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
-          appId: ${{ secrets.STEAM_APP_ID }}
-          buildDescription: ${{ github.sha }}
-          rootPath: builds
-          depot1Path: windows
-          depot2Path: mac
-          depot3Path: linux
-          releaseBranch: ${{ inputs.steam_branch }}

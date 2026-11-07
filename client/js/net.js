@@ -1,11 +1,10 @@
 // Thin WebSocket client with auto-reconnect-free simple semantics.
 export class Net {
-  // path: '' for the game server, '/steam-relay' in the desktop app when playing in a friend's store
-  constructor(path = '') { this.ws = null; this.handlers = {}; this.open = false; this.queue = []; this.path = path; }
+  constructor() { this.ws = null; this.handlers = {}; this.open = false; this.queue = []; }
   connect() {
     return new Promise((resolve, reject) => {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      this.ws = new WebSocket(`${proto}://${location.host}${this.path}`);
+      this.ws = new WebSocket(`${proto}://${location.host}`);
       this.ws.onopen = () => { this.open = true; for (const m of this.queue) this.ws.send(m); this.queue = []; resolve(); };
       this.ws.onerror = (e) => { if (!this.open) reject(e); };
       this.ws.onclose = () => { this.open = false; this.emit('close', {}); };

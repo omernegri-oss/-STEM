@@ -1,7 +1,8 @@
 // In-browser game server for the static web version: runs the same authoritative Room/Game code
 // that the Node server uses, but inside the page. Saves go to localStorage. Same interface as Net.
+// Friends who join online (client/js/online.js) are added to this page's store through openRemote().
 import { Room } from '/server/room.js';
-import { TICK_RATE } from '/shared/data.js';
+import { TICK_RATE, MAX_PLAYERS } from '/shared/data.js';
 
 const SAVE_KEY = 'st_local_saves';
 const readSaves = () => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { return {}; } };
@@ -22,7 +23,8 @@ export class LocalNet {
     this.open = true;
     const dt = 1 / TICK_RATE; let last = performance.now(), acc = 0;
     setInterval(() => {
-      const now = performance.now(); acc += Math.min(0.25, (now - last) / 1000); last = now;
+      // a hidden tab only runs timers about once a second: catch up then, so friends' game keeps going
+      const now = performance.now(); acc += Math.min(document.hidden ? 1.5 : 0.25, (now - last) / 1000); last = now;
       while (acc >= dt) { acc -= dt; if (this.room) { try { this.room.tick(dt); } catch (e) { console.error(e); } } }
     }, 1000 / TICK_RATE);
     setInterval(() => { if (this.room && this.room.started && this.room.game.s.phase === 'prep') this.room.save(); }, 30000);
@@ -49,10 +51,31 @@ export class LocalNet {
         this.player = this.room.addPlayer(this.socket(), msg.name, msg.color);
         return;
       }
-      if (msg.t === 'join') { setTimeout(() => this.emit('err', { t: 'err', text: 'Joining friends needs the multiplayer server (see the main menu).' }), 0); return; }
       return;
     }
     if (msg.t === 'leave') { this.room.save(); this.room = null; this.player = null; return; }
     try { this.room.handle(this.player, msg); } catch (e) { console.error(e); }
+  }
+  // a friend's connection into this store: { send(str), onmessage(str), onclose(), close() }
+  openRemote() {
+    let player = null, room = null;
+    const link = { onmessage: null, onclose: null };
+    const ws = { readyState: 1, send: (str) => setTimeout(() => link.onmessage && link.onmessage(str), 0) };
+    const reply = (obj) => ws.send(JSON.stringify(obj));
+    link.send = (str) => {
+      let m; try { m = JSON.parse(str); } catch { return; }
+      if (!m || typeof m.t !== 'string') return;
+      if (!player) {
+        if (m.t !== 'join') return;
+        if (!this.room) return reply({ t: 'err', text: 'That store is closed.' });
+        if (this.room.players.size >= MAX_PLAYERS) return reply({ t: 'err', text: 'That store is full (4 players).' });
+        room = this.room; player = room.addPlayer(ws, m.name, m.color);
+        return;
+      }
+      if (m.t === 'leave') { room.removePlayer(player); player = null; return; }
+      try { room.handle(player, m); } catch (e) { console.error(e); }
+    };
+    link.close = () => { ws.readyState = 3; if (player) room.removePlayer(player); player = null; };
+    return link;
   }
 }

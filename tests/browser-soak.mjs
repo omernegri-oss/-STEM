@@ -26,6 +26,7 @@ page.on('crash', () => errors.push('PAGE CRASHED'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const E = (fn, a) => page.evaluate(fn, a);
 const waitFor = async (fn, ms = 30000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await E(fn)) return; await sleep(250); } throw new Error('timeout ' + fn); };
+await page.addInitScript(() => { window.ST_NO_ONLINE = true; }); // online play has its own test (browser-online)
 if (process.env.LOW) await page.addInitScript(() => { try { localStorage.setItem('st_gfx', 'low'); } catch {} });
 await page.goto('http://localhost:3160/art/x/'); await sleep(3000);
 await page.fill('#m-name', 'Omer'); await page.click('#m-create');

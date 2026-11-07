@@ -1,6 +1,6 @@
 // Desktop app smoke test: launches the real Electron app (in a virtual display on Linux CI),
 // plays the opening (create store, name it, open the computer), checks the save folder,
-// the Steam bridge API in the page, offline mode without Steam, and a clean quit.
+// the app bridge in the page, online hosting by store code, and a clean quit.
 import { createRequire } from 'node:module';
 import os from 'node:os'; import fs from 'node:fs'; import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -18,20 +18,23 @@ async function run(label, args) {
   const out = []; app.process().stdout.on('data', d => out.push(String(d))); app.process().stderr.on('data', d => out.push(String(d)));
   const page = await app.firstWindow();
   const errors = [];
-  page.on('pageerror', e => errors.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.waitForFunction(() => window.__dbg && window.steamDesk, null, { timeout: 90000 }); // __dbg is set once the menu is fully built
-  const info = await page.evaluate(() => window.steamDesk.info);
-  console.log(`[${label}] steam`, JSON.stringify(info));
+  page.on('pageerror', e => errors.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error' && !/peerjs/i.test(m.text())) errors.push(m.text()); }); // the online service may be unreachable (sandboxed CI)
+  await page.waitForFunction(() => window.__dbg && window.desktopApp, null, { timeout: 90000 }); // __dbg is set once the menu is fully built
+  const info = await page.evaluate(() => window.desktopApp.info);
+  console.log(`[${label}] app`, JSON.stringify(info));
   assert.ok(info.port > 0);
-  const deskUi = await page.evaluate(() => ({ quit: !document.getElementById('m-quit').closest('[hidden]'), note: document.getElementById('m-steam-note').textContent }));
+  const deskUi = await page.evaluate(() => ({ quit: !document.getElementById('m-quit').closest('[hidden]'), join: !document.querySelector('.join-row').closest('.hidden,[hidden]'), dl: document.getElementById('m-download').hidden }));
   assert.ok(deskUi.quit, 'quit button shown in the desktop app');
+  assert.ok(deskUi.join, 'join with code shown in the desktop app');
+  assert.ok(deskUi.dl, 'no download box inside the desktop app');
   await page.evaluate(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); localStorage.setItem('st_gfx', 'low'); });
   await page.reload(); await page.waitForFunction(() => window.__dbg, null, { timeout: 90000 });
   const click = (sel) => page.evaluate((sel) => document.querySelector(sel).click(), sel); // CI machines without a GPU render slowly
   await page.fill('#m-name', 'Desk'); await click('#m-create');
   await page.waitForFunction(() => !document.getElementById('lobby').classList.contains('hidden'), null, { timeout: 90000 });
-  const inviteShown = await page.evaluate(() => !document.getElementById('l-invite').hidden);
-  assert.equal(inviteShown, !!info.available, 'invite button only with Steam');
+  // the lobby says whether friends can join online (the CI machine may have no internet: any status is fine, but it must show)
+  await page.waitForFunction(() => document.getElementById('l-online').textContent.length > 0, null, { timeout: 30000 });
+  console.log(`[${label}] online:`, await page.evaluate(() => document.getElementById('l-online').textContent));
   await click('#l-start');
   await page.waitForFunction(() => window.__G.meta && window.__G.meta.phase === 'naming', null, { timeout: 90000 });
   await page.fill('#n-input', 'Desk Mart'); await sleep(300); await click('#n-vote');
@@ -51,10 +54,5 @@ async function run(label, args) {
 }
 
 fs.mkdirSync(OUT, { recursive: true });
-const offline = await run('offline', ['--no-steam']);
-assert.equal(offline.info.available, false); assert.equal(offline.info.offline, 'disabled');
-// with Steam enabled but no Steam client running, the game must still start and play offline
-const noClient = await run('steam-not-running', []);
-assert.equal(noClient.info.available, false);
-assert.match(noClient.info.offline, /Steam not available/);
+await run('desktop', []);
 console.log('✅ desktop smoke test passed');

@@ -4,6 +4,7 @@ import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, FLOOR_H, f
 import { heightAt } from '/shared/grid.js';
 import { slotCap } from '/shared/data.js';
 import { Net } from './net.js';
+import { OnlineHost, OnlineNet, localServerSocket, onlineAvailable } from './online.js';
 import { createScene } from './scene.js';
 import { World } from './world.js';
 import { Actors, carryModel } from './actors.js';
@@ -22,7 +23,6 @@ window.__G = G; // handy for debugging & automated tests
 const prefs = { name: '', color: PLAYER_COLORS[0], role: 'manager' };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem('st_prefs') || '{}')); } catch {}
 const savePrefs = () => { try { localStorage.setItem('st_prefs', JSON.stringify(prefs)); } catch {} };
-if (!prefs.name && window.steamDesk?.info?.available) prefs.name = String(window.steamDesk.info.name || '').slice(0, 16);
 if (!prefs.name) prefs.name = ['Alex', 'Sam', 'Robin', 'Jules', 'Kai', 'Noa', 'Charlie'][Math.floor(Math.random() * 7)];
 
 // ----------------------------------------------------------------------------------- 3D setup
@@ -61,15 +61,17 @@ function syncViewModel() {
 }
 function setCamMode(fpsOn) { rig.fps = fpsOn; try { localStorage.setItem('st_cam', fpsOn ? 'fps' : 'tps'); } catch {} if (!fpsOn && document.pointerLockElement) document.exitPointerLock(); viewKey = ''; }
 canvas.addEventListener('click', () => { if (G.started && rig.fps && !build.active && !ui.panel && !document.pointerLockElement && $('hud') && !$('hud').classList.contains('hidden')) canvas.requestPointerLock?.(); });
-// The static web version (no game server) runs the authoritative server inside the page.
-const net = window.ST_STATIC ? new (await import('./localserver.js')).LocalNet() : new Net();
-if (window.ST_STATIC) {
-  document.querySelector('.join-row')?.classList.add('hidden');
-  document.querySelector('label.check')?.classList.add('hidden');
-  const note = document.createElement('p'); note.className = 'help';
-  note.innerHTML = window.ST_MP_URL ? `Web version: you play in your browser (saved on this device). <b>Play with friends</b> on the <a href="${window.ST_MP_URL}">multiplayer server</a>.` : 'Web version: you play in your browser and your store is saved on this device.';
-  document.querySelector('.menu-actions')?.appendChild(note);
-}
+// Where the store runs: the static web version runs the authoritative server inside the page; the desktop app
+// (and `npm start`) talk to a game server over a WebSocket. A player who joins a friend online by store code
+// reloads into OnlineNet, which talks to the friend's computer over WebRTC (client/js/online.js).
+let onlineJoin = null;
+try { onlineJoin = JSON.parse(sessionStorage.getItem('st_online_join') || 'null'); sessionStorage.removeItem('st_online_join'); } catch {}
+const net = onlineJoin ? new OnlineNet(onlineJoin.code) : window.ST_STATIC ? new (await import('./localserver.js')).LocalNet() : new Net();
+// the host side: while you are in your own store, friends can join it online with its code
+const host = new OnlineHost(window.ST_STATIC ? () => net.openRemote() : localServerSocket);
+const ownServer = window.ST_STATIC || window.desktopApp; // the store runs on this computer (no shared server)
+if (ownServer) document.querySelector('label.check')?.classList.add('hidden');
+if (!onlineAvailable()) $('m-online-note').textContent = 'Online play is not available in this browser.';
 let envKey = '';
 S.buildEnvironment(12, 9);
 world.set({ name: 'Supermarket', w: 12, d: 9, doorX: 5, floor: 'checker', wall: 'cream', furniture: demoFurniture(), boxes: [], dirt: [], prices: {} });
@@ -106,57 +108,56 @@ gfxBtn.onclick = () => { lowGfx = !lowGfx; gfxChoice = lowGfx ? 'low' : 'high'; 
 syncGfx();
 const toggleHelp = (on) => $('help').classList.toggle('hidden', on === undefined ? undefined : !on);
 $('h-help').onclick = () => toggleHelp();
-$('h-exit').onclick = async () => { if (await ui.ask('Leave this store? Your team keeps playing and progress is saved.', 'Leave')) { net.send({ t: 'leave' }); G.code = ''; steam?.leave(); setTimeout(() => location.reload(), 150); } };
+$('h-exit').onclick = async () => { if (await ui.ask('Leave this store? Your team keeps playing and progress is saved.', 'Leave')) { net.send({ t: 'leave' }); G.code = ''; host.stop(); setTimeout(() => location.reload(), 150); } };
 $('help-close').onclick = () => toggleHelp(false);
-// ----------------------------------------------------------------------------------- Steam (desktop app)
-const steam = window.steamDesk || null;
+// ----------------------------------------------------------------------------------- desktop app / downloads
+const desk = window.desktopApp || null;
 // desktop downloads: the newest GitHub release (fixed file names, see .github/workflows/desktop.yml)
 const RELEASES = 'https://github.com/omernegri-oss/-STEM/releases/latest/download/';
-if (!steam) {
+if (!desk) {
   $('dl-win').href = RELEASES + 'Supermarket-windows.zip';
   $('dl-mac').href = RELEASES + 'Supermarket-mac.zip';
   $('dl-linux').href = RELEASES + 'Supermarket-linux.tar.gz';
-  for (const [id, ic] of [['dl-win', 'download'], ['dl-mac', 'download'], ['dl-linux', 'download']]) $(id).insertAdjacentHTML('afterbegin', svg(ic, 16));
+  for (const id of ['dl-win', 'dl-mac', 'dl-linux']) $(id).insertAdjacentHTML('afterbegin', svg('download', 16));
   $('dl-page').href = 'https://github.com/omernegri-oss/-STEM/releases/latest';
   for (const id of ['dl-win', 'dl-mac', 'dl-linux']) $(id).addEventListener('click', () => { $('dl-started').hidden = false; });
   $('m-download').hidden = false;
-}
-const steamOn = !!(steam && steam.info && steam.info.available);
-if (steam) {
+} else {
   document.body.classList.add('desktop');
   document.querySelectorAll('.desk-only').forEach(el => { el.hidden = false; });
-  if (!steamOn) $('m-steam-note').textContent = 'Steam is not running, so inviting friends is off. Start Steam to play together.';
-  $('m-quit').onclick = () => steam.quit();
-  $('m-fullscreen').onclick = () => steam.fullscreen();
-  // accepting an invite: reload into the friend's store through the local Steam relay
-  steam.onJoin((d) => {
-    try { if (G.code) net.send({ t: 'leave' }); } catch {}
-    try { sessionStorage.setItem('st_steam_join', JSON.stringify(d)); } catch {}
-    location.reload();
-  });
+  $('m-quit').onclick = () => desk.quit();
+  $('m-fullscreen').onclick = () => desk.fullscreen();
 }
-const invite = async () => { if (!(await steam.invite())) ui.error('Open a store first, then invite friends.'); };
-if (steamOn) { $('l-invite').hidden = false; $('h-invite').hidden = false; $('l-invite').onclick = invite; $('h-invite').onclick = invite; }
-let steamLobbyFor = '', steamStoreName = '';
-const reportedAch = new Set();
-function steamSync() {
-  if (!steamOn) return;
-  // the host's store gets a friends-only Steam lobby so friends can join from invites or the friends list
-  if (G.host && G.code && steamLobbyFor !== G.code && !net.path) { steamLobbyFor = G.code; steam.host(G.code, G.meta?.name || ''); }
-  const name = G.meta?.name; if (G.host && name && name !== steamStoreName) { steamStoreName = name; steam.storeName(name); }
-  // store achievements count for everyone playing in the store
-  for (const id of Object.keys(G.meta?.achievements || {})) if (!reportedAch.has(id)) { reportedAch.add(id); steam.achievement(id); }
+// ----------------------------------------------------------------------------------- online play by store code
+const ONLINE_TEXT = {
+  connecting: () => 'Opening your store to friends online…',
+  online: () => host.friends ? `Online: ${host.friends} friend${host.friends > 1 ? 's' : ''} connected through the internet.` : 'Online: friends join from anywhere by typing this code and pressing Join with code.',
+  error: (d) => `Online play is off: ${d || 'could not reach the online service.'} Friends can't join right now.`,
+};
+host.onStatus = (st, detail) => {
+  const el = $('l-online'); if (!el) return;
+  if (net.online) { el.textContent = 'Connected to your friend\'s store over the internet.'; el.className = 'online-status ok'; return; }
+  el.textContent = ONLINE_TEXT[st] ? ONLINE_TEXT[st](detail) : ''; el.className = `online-status${st === 'online' ? ' ok' : st === 'error' ? ' bad' : ''}`;
+};
+// open your store for online friends once you are its host (the guest who joined online never hosts)
+function onlineSync() {
+  if (net.online) { host.onStatus('online'); return; }
+  if (G.host && G.code) host.start(G.code);
 }
-let steamJoin = null; try { steamJoin = JSON.parse(sessionStorage.getItem('st_steam_join') || 'null'); sessionStorage.removeItem('st_steam_join'); } catch {}
-if (steamJoin) setTimeout(async () => {
-  net.path = '/steam-relay';
-  loading(true, `Joining ${steamJoin.hostName}'s store…`);
-  try { await net.connect(); } catch { loading(true, 'Could not reach your friend. Returning to the menu…'); setTimeout(() => location.reload(), 2500); return; }
+// joining a friend online: reload the page into OnlineNet with the code
+function joinOnline(code) {
+  if (!onlineAvailable()) return ui.error('Online play is not available in this browser.');
+  try { sessionStorage.setItem('st_online_join', JSON.stringify({ code })); } catch {}
+  location.reload();
+}
+if (onlineJoin) setTimeout(async () => {
+  loading(true, `Connecting to store ${onlineJoin.code}…`);
+  try { await net.connect(); } catch (e) { loading(true, `${e.message || 'Could not connect.'} Returning to the menu…`); setTimeout(() => location.reload(), 4000); return; }
   loading(false); initAudio();
-  net.send({ t: 'join', code: steamJoin.code, name: prefs.name, color: prefs.color });
+  net.send({ t: 'join', code: onlineJoin.code, name: prefs.name || 'Player', color: prefs.color });
 }, 0);
 // line icons on the top bar, dock and menu buttons
-for (const [id, ic] of [['h-sfx', 'speaker'], ['h-music', 'music'], ['h-invite', 'userplus'], ['h-help', 'help'], ['h-exit', 'exit']]) setIcon($(id), ic, 16);
+for (const [id, ic] of [['h-sfx', 'speaker'], ['h-music', 'music'], ['h-help', 'help'], ['h-exit', 'exit']]) setIcon($(id), ic, 16);
 setIcon(document.querySelector('[data-speed="0"]'), 'pause', 14);
 for (const [p, ic] of [['build', 'layout'], ['inventory', 'box'], ['finance', 'chart'], ['stats', 'award']]) setIcon(document.querySelector(`#dock [data-panel="${p}"] i`), ic, 22);
 window.__dbg = { net, me, rig, ui, world, S, fx };
@@ -186,14 +187,21 @@ function showScreen(id) { for (const s of ['menu', 'lobby']) $(s).classList.togg
 function loading(on, text = 'Connecting…') { $('loading').classList.toggle('hidden', !on); $('loading').querySelector('p').textContent = text; }
 
 async function ensureNet() {
-  if (net.open) return;
+  if (net.open || net.online) return;
   loading(true);
   try { await net.connect(); } catch { loading(true, 'Could not reach the server. Is it running?'); throw new Error('no server'); }
   loading(false);
 }
-async function refreshLists() { try { await ensureNet(); net.send({ t: 'list' }); } catch {} }
+async function refreshLists() { if (net.online) return; try { await ensureNet(); net.send({ t: 'list' }); } catch {} }
 $('m-create').onclick = async () => { initAudio(); await ensureNet(); net.send({ t: 'create', name: prefs.name || 'Player', color: prefs.color, isPublic: $('m-public').checked }); };
-$('m-join').onclick = async () => { initAudio(); const code = $('m-code').value.trim().toUpperCase(); if (code.length < 4) return ui.error('Enter a 5-letter code'); await ensureNet(); net.send({ t: 'join', code, name: prefs.name || 'Player', color: prefs.color }); };
+$('m-join').onclick = async () => {
+  initAudio(); const code = $('m-code').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 5) return ui.error('Enter the 5-letter store code');
+  // your own computer has no friends' stores: go online. A shared game server first looks for the store itself.
+  if (ownServer) return joinOnline(code);
+  pendingJoin = code; await ensureNet(); net.send({ t: 'join', code, name: prefs.name || 'Player', color: prefs.color });
+};
+let pendingJoin = '';
 $('m-code').addEventListener('keydown', e => { if (e.key === 'Enter') $('m-join').click(); });
 $('m-rooms').onclick = async (e) => { const b = e.target.closest('[data-join]'); if (!b) return; initAudio(); await ensureNet(); net.send({ t: 'join', code: b.dataset.join, name: prefs.name, color: prefs.color }); };
 $('m-saves').onclick = async (e) => { const b = e.target.closest('[data-load]'); if (!b) return; initAudio(); await ensureNet(); net.send({ t: 'create', load: b.dataset.load, name: prefs.name, color: prefs.color, isPublic: $('m-public').checked }); };
@@ -201,8 +209,8 @@ setInterval(() => { if (!$('menu').classList.contains('hidden')) refreshLists();
 refreshLists();
 
 // lobby
-$('l-copy').onclick = () => { navigator.clipboard?.writeText(G.code); ui.toast('Invite code copied!', 'info', ''); };
-$('l-leave').onclick = () => { net.send({ t: 'leave' }); G.code = ''; steam?.leave(); if (net.path) { location.reload(); return; } showScreen('menu'); refreshLists(); };
+$('l-copy').onclick = () => { navigator.clipboard?.writeText(G.code); ui.toast('Store code copied. Send it to your friends.', 'info', ''); };
+$('l-leave').onclick = () => { net.send({ t: 'leave' }); G.code = ''; host.stop(); if (net.online) { location.reload(); return; } showScreen('menu'); refreshLists(); };
 $('l-start').onclick = () => net.send({ t: 'start' });
 $('l-roles').innerHTML = Object.entries(PLAYER_ROLES).map(([k, r]) => `<button data-role="${k}" title="${esc(r.desc)}">${svg(ROLE_ICON[k] || 'users', 16)} ${esc(r.name)}</button>`).join('');
 $('l-roles').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; prefs.role = b.dataset.role; savePrefs(); net.send({ t: 'lobby', role: prefs.role }); };
@@ -212,9 +220,15 @@ net.on('rooms', (m) => {
   $('m-rooms').innerHTML = m.rooms.length ? m.rooms.map(r => `<div class="item"><span><b>${esc(r.name)}</b><small>${r.players}/${r.max} players · ${r.started ? 'Day ' + r.day : 'in lobby'}</small></span><button class="btn small primary" data-join="${r.code}">Join</button></div>`).join('') : '<i>No open stores — create one!</i>';
   $('m-saves').innerHTML = m.saves.length ? m.saves.map(s => `<div class="item"><span><b>${esc(s.name)}</b><small>Day ${s.day} · Lv ${s.level} · ${fmtMoney(s.cash)}</small></span><button class="btn small" data-load="${s.code}">Continue</button></div>`).join('') : '<i>None yet</i>';
 });
-net.on('err', (m) => { ui.error(m.text); if (net.path && !G.code) { loading(true, m.text + ' Returning to the menu…'); setTimeout(() => location.reload(), 2500); } });
+net.on('err', (m) => {
+  // not a store on this game server: try a friend's store online
+  if (pendingJoin && !G.code && /No store with that code/.test(m.text) && onlineAvailable()) { const c = pendingJoin; pendingJoin = ''; joinOnline(c); return; }
+  pendingJoin = '';
+  ui.error(m.text);
+  if (net.online && !G.code) { loading(true, m.text + ' Returning to the menu…'); setTimeout(() => location.reload(), 2500); }
+});
 net.on('joined', (m) => {
-  G.me = m.id; G.code = m.code; G.started = m.started;
+  pendingJoin = ''; G.me = m.id; G.code = m.code; G.started = m.started;
   net.send({ t: 'lobby', role: prefs.role });
   if (!m.started) showScreen('lobby');
 });
@@ -232,7 +246,7 @@ net.on('lobby', (m) => {
   $('l-wait').textContent = G.host ? 'You are the host. Start when your team is ready (others can also join later).' : 'Waiting for the host to start…';
   if (m.started && !G.started) { G.started = true; }
   if (m.started && $('hud').classList.contains('hidden') && G.code) enterGame();
-  steamSync();
+  onlineSync();
 });
 net.on('pl', (m) => { G.players = m.players; actors.setPlayersInfo(m.players); });
 net.on('w', (m) => {
@@ -244,7 +258,7 @@ net.on('w', (m) => {
   if (!G.started) { G.started = true; enterGame(); }
 });
 net.on('m', (m) => {
-  const prev = G.meta; G.meta = m.meta; ui.markDirty(); maybeFirstHelp(); steamSync();
+  const prev = G.meta; G.meta = m.meta; ui.markDirty(); maybeFirstHelp();
   if (build.active && (!prev || prev.cash !== m.meta.cash || prev.level !== m.meta.level)) build.render();
   ui.updateHud();
 });
@@ -263,7 +277,7 @@ net.on('s', (s) => {
 });
 net.on('chat', (m) => { ui.chat(m.from, m.color, m.text); play('pop'); });
 net.on('close', () => {
-  if (net.path) { loading(true, 'The host closed the store or the connection was lost. Returning to the menu…'); setTimeout(() => location.reload(), 3000); return; }
+  if (net.online) { loading(true, 'Your friend closed the store or the internet connection was lost. Returning to the menu…'); setTimeout(() => location.reload(), 3000); return; }
   if (G.code) { loading(true, 'Disconnected from server. Refresh the page to reconnect.'); }
 });
 

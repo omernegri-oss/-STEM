@@ -21,6 +21,7 @@ const HAS_VENDOR = fs.existsSync(path.join(VENDOR, 'build', 'three.module.js'));
 const STATIC = [
   ['/shared/', path.join(ROOT, 'shared')],
   ['/vendor/', HAS_VENDOR ? path.join(VENDOR, 'build') : path.join(ROOT, 'node_modules', 'three', 'build')],
+  ['/lib/', path.join(ROOT, 'node_modules', 'peerjs', 'dist')],
   ['/addons/', HAS_VENDOR ? path.join(VENDOR, 'addons') : path.join(ROOT, 'node_modules', 'three', 'examples', 'jsm')],
   ['/', path.join(ROOT, 'client')],
 ];
@@ -64,9 +65,9 @@ function lobbyList() {
   };
 }
 
-// One player connection. `ws` is anything socket-like: a real WebSocket, or a virtual socket for a player who
-// reaches this server over Steam networking ({ readyState, send(str), on('message' | 'close' | 'error', fn) }).
-export function attachSocket(ws) {
+// One player connection (a WebSocket). Friends who join a desktop host online arrive here too: the host's page
+// opens one local WebSocket per friend and pipes the WebRTC data channel into it (see client/js/online.js).
+function attachSocket(ws) {
   let room = null, player = null;
   ws.on('message', (data) => {
     let msg; try { msg = JSON.parse(data); } catch { return; }
@@ -112,15 +113,11 @@ export function attachSocket(ws) {
   ws.on('error', () => {});
 }
 
-// opts.host: interface to listen on (the desktop app uses 127.0.0.1); opts.routes: { '/path': (ws) => {} } sends
-// WebSocket connections on that path somewhere else (the desktop app relays '/steam-relay' to a Steam host).
+// opts.host: interface to listen on (the desktop app uses 127.0.0.1); opts.quiet: no startup message
 export function startServer(port = PORT, opts = {}) {
   const server = http.createServer(serveStatic);
   const wss = new WebSocketServer({ server });
-  wss.on('connection', (ws, req) => {
-    const route = opts.routes && opts.routes[(req.url || '/').split('?')[0]];
-    if (route) route(ws); else attachSocket(ws);
-  });
+  wss.on('connection', (ws) => attachSocket(ws));
 
   // Fixed-rate simulation loop
   const dt = 1 / TICK_RATE;

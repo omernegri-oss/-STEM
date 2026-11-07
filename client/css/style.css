@@ -352,7 +352,10 @@ canvas.chart { width: 100%; height: 190px; display: block; }
 .ask { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 22px 22px 18px; max-width: 380px; width: 100%; box-shadow: var(--shadow); display: grid; gap: 16px; font-weight: 500; }
 .ask p { margin: 0; font-size: 16px; line-height: 1.4; }
 .ask .row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-#m-steam-note { margin: 0; }
+#m-online-note { margin: 0; }
+.online-status { margin: 6px 0 0; font-size: 13px; color: var(--muted); min-height: 1.2em; }
+.online-status.ok { color: var(--good); }
+.online-status.bad { color: var(--bad); }
 
 /* download box on the browser version's main menu */
 .download-box { margin: 4px 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); display: grid; gap: 8px; }

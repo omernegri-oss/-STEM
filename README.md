@@ -13,8 +13,9 @@ npm install
 npm start            # → http://localhost:3000
 ```
 
-Open the URL, click **Build a New Store**, and share the 5-letter invite code. Friends on the same network
-open `http://<your-ip>:3000` and **Join with code**. Everyone shares the same money, inventory and store.
+Open the URL, click **Build a New Store**, and share the 5-letter store code. Friends type it and press
+**Join with code**, from anywhere (see [Playing together online](#playing-together-online)). Everyone shares the
+same money, inventory and store.
 
 Requires Node.js 18+. No build step: the client is plain ES modules plus Three.js served by the game server.
 
@@ -70,41 +71,52 @@ server/        Node.js authoritative simulation (20 Hz) + WebSocket rooms
   customers.js   customer AI      staff.js   employee AI     persistence.js   JSON saves
 shared/        data.js (all game content & balance) · grid.js (placement rules, A*, collision)
 client/        Three.js renderer, procedural models, actors, build mode, UI panels, WebAudio
-desktop/       main.mjs (Electron app) · steam.mjs (Steamworks: lobbies, invites, achievements) · p2p.mjs (P2P bridge)
-steam/         SteamPipe build scripts, achievements.csv, store images
-tests/         sim · multiplayer · soak · p2p · steam-service (unit) · browser-* · desktop-smoke (Playwright)
+  online.js      online play by store code (WebRTC through PeerJS)
+desktop/       main.mjs (Electron app: runs the game server inside the app) · preload.cjs
+media/         promo images and screenshots (tools/media-assets.mjs)
+tests/         sim · multiplayer · soak (unit) · browser-* · browser-online · desktop-smoke (Playwright)
 ```
 
 The server owns all game state. Clients send intents (`place`, `order`, `pickup`, `stock`, `work`…) and their
 own position (client-predicted movement with shared collision code). They receive world/meta updates when
 something changes, plus 10 Hz snapshots of moving actors, which they interpolate.
 
-## Steam / desktop version
+## Playing together online
 
-`npm run desktop` starts the desktop app (Electron). It runs the game server inside the app, uses Steam for
-invites, friends-only lobbies, P2P multiplayer and achievements when Steam is running, and plays offline
-otherwise. Builds for Windows, macOS and Linux come from `npm run dist:win|dist:mac|dist:linux` or from the
-**Desktop builds (Steam)** GitHub Actions workflow. See **[STEAM.md](STEAM.md)** for the whole Steam setup
-(App ID, depots, achievements, store images, upload).
+The player who builds the store is its host: the store runs on their computer. The lobby shows the 5-letter
+store code (also in the top bar during the game). Friends type it in the main menu and press **Join with code**.
+This works on the website and in the downloaded game, in any mix, over the internet. No accounts are needed.
+
+The free public PeerJS service (0.peerjs.com) only introduces the two computers; the game itself then runs over a
+direct WebRTC connection (or PeerJS's free relay when a direct route isn't possible). The host must keep the
+game open; friends see a message and return to the menu when the host leaves. To use your own PeerServer, set
+`window.ST_PEER = { host, port, path, secure }` before the game loads.
+
+## Desktop version
+
+`npm run desktop` starts the desktop app (Electron). It runs the game server inside the app and keeps saves in
+the app data folder. Builds for Windows, macOS and Linux come from `npm run dist:win|dist:mac|dist:linux` or from
+the **Desktop builds** GitHub Actions workflow, which publishes them on the Releases page.
 
 ## Web version (no server)
 
-`npm run build:static` creates `dist/`, a static single-player build. The same game server code runs inside
-the browser and stores are saved in the browser. All paths are relative, so you can host `dist/` on any static web host
+`npm run build:static` creates `dist/`, a static build. The same game server code runs inside the browser and
+stores are saved in the browser; friends join online with the store code. All paths are relative, so you can host `dist/` on any static web host
 or in a subfolder. `dist/artifact.html` is the same page without the document wrapper, for hosts that add their own.
 
 ## Download
 
-The newest build is on the Releases page: Windows, Mac and Linux / Steam Deck. The browser version is published
+The newest build is on the Releases page: Windows, Mac and Linux. The browser version is published
 at https://omernegri-oss.github.io/-STEM/ by the "Website (GitHub Pages)" workflow once the repository is public and
 Pages is set to "GitHub Actions" (Settings > Pages).
 
 ## Tests
 
 ```bash
-npm test                    # simulation, multiplayer, Steam P2P bridge, Steam service, 8-day soak
+npm test                    # simulation, multiplayer, 8-day soak
 npm run test:desktop        # starts the Electron app and plays the opening (Linux: xvfb-run -a npm run test:desktop)
 npm run test:browser        # 2-player browser playthrough (needs Playwright + Chromium)
+npm run test:online         # online play by code: website and game-server hosts and friends (local PeerServer)
 node tests/browser-ui.mjs   # UI flows: butcher counter, build card, panels, events, report
 npm run showcase            # builds a level-10 store and saves screenshots (SHOTS=dir)
 ```

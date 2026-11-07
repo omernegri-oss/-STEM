@@ -12,7 +12,7 @@ const ctx = await browser.newContext({ viewport: { width: 1000, height: 640 }, i
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', e => errors.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-await page.addInitScript(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); });
+await page.addInitScript(() => { window.ST_NO_ONLINE = true; localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const E = (fn, a) => page.evaluate(fn, a);
 const waitFor = async (fn, ms = 20000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await E(fn)) return; await sleep(200); } throw new Error('timeout ' + fn); };

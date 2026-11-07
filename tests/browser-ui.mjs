@@ -16,7 +16,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const page = await browser.newPage({ viewport: { width: 1000, height: 640 } });
 page.on('pageerror', e => errors.push(`PAGEERROR ${e.message}\n${e.stack}`));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-await page.addInitScript(() => { localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); });
+await page.addInitScript(() => { window.ST_NO_ONLINE = true; localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); });
 await page.goto(`http://localhost:${port}/?low`); await sleep(600);
 await page.click('#m-create'); await sleep(400); await page.click('#l-start'); await sleep(600);
 const code = await page.evaluate(() => window.__G.code);

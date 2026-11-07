@@ -1,5 +1,5 @@
-// Builds dist/: a static, single-player web version of the game (the game server runs in the browser).
-// Usage: node tools/build-static.mjs [multiplayerUrl]
+// Builds dist/: a static web version of the game. The game server runs in the browser; friends join online
+// by store code over WebRTC (client/js/online.js). Usage: node tools/build-static.mjs
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,9 +15,10 @@ for (const f of ['room.js', 'game.js', 'customers.js', 'staff.js']) copy(path.jo
 // bundle three.js and the add-ons the game uses, so the site is fully self-contained
 copy(path.join(ROOT, 'node_modules/three/build/three.module.min.js'), path.join(OUT, 'vendor/three.module.js'));
 for (const d of ['utils', 'environments', 'postprocessing', 'shaders', 'math']) copyDir(path.join(ROOT, 'node_modules/three/examples/jsm', d), path.join(OUT, 'addons', d));
+// the WebRTC helper used for online play
+copy(path.join(ROOT, 'node_modules/peerjs/dist/peerjs.min.js'), path.join(OUT, 'lib/peerjs.min.js'));
 let html = fs.readFileSync(path.join(OUT, 'index.html'), 'utf8');
-const mp = process.argv[2] || '';
-html = html.replace('<script type="importmap">', `<script>window.ST_STATIC = true;${mp ? ` window.ST_MP_URL = ${JSON.stringify(mp)};` : ''}</script>\n  <script type="importmap">`);
+html = html.replace('<script type="importmap">', '<script>window.ST_STATIC = true;</script>\n  <script type="importmap">');
 // relative paths so the build works from any folder or host (also as a claude.ai artifact)
 html = html.replace(/(href|src)="\/(css|js)\//g, '$1="./$2/').replace('"/vendor/three.module.js"', '"./vendor/three.module.js"').replace('"/addons/"', '"./addons/"');
 for (const f of fs.readdirSync(path.join(OUT, 'js'))) {
@@ -34,4 +35,4 @@ const GF = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?famil
 fs.writeFileSync(path.join(OUT, 'artifact.html'), GF + head.trim() + '\n<style>html,body{height:100%;margin:0;padding:0;background:#10161d}:root{padding:0}</style>\n' + body.trim() + '\n');
 fs.writeFileSync(path.join(OUT, 'vercel.json'), JSON.stringify({ cleanUrls: false, headers: [{ source: '/(.*)', headers: [{ key: 'Cache-Control', value: 'public, max-age=300' }] }] }, null, 2));
 const files = []; (function walk(d) { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); f.isDirectory() ? walk(p) : files.push(path.relative(OUT, p)); } })(OUT);
-console.log(`dist/ built: ${files.length} files, three@${THREE_V} bundled${mp ? ', multiplayer link ' + mp : ''}`);
+console.log(`dist/ built: ${files.length} files, three@${THREE_V} bundled`);

@@ -223,8 +223,11 @@ export function updateCustomers(game, dt, dMin) {
     }
     const waitingStates = c.state === 'queue' || c.state === 'register' || c.state === 'counterQueue' || c.state === 'counterServe';
     if (c.state !== 'leaving' && c.state !== 'arrive') {
-      // at the register patience runs slower, and barely while paying (waiting for change or the card terminal)
-      c.patience -= dMin * (waitingStates ? (c.state === 'register' ? (c.due != null ? 0.1 : 0.5) : 1) : 0.12);
+      // at the register patience runs slower, and not at all while a player takes their payment
+      // (counting change or typing on the card terminal); if nobody is at the register it keeps running out
+      const regF = c.state === 'register' && c.due != null ? game.fixture(c.target) : null;
+      const beingPaid = !!regF && game.operatorOf(regF)?.type === 'player';
+      c.patience -= dMin * (waitingStates ? (c.state === 'register' ? (beingPaid ? 0 : 0.5) : 1) : 0.12);
       if (waitingStates) {
         c.waited += dMin;
         if (c.waited > 25) c.mood -= dMin * 0.25;

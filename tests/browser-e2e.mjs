@@ -129,7 +129,13 @@ for (let t = 0; t < 120 && game.s.ledger.served < 2; t++) {
       if (!payShots.card) { payShots.card = true; await shot(p2, '57-card-terminal'); }
       await p2.keyboard.press('Enter');
     }
-    await p2.waitForFunction(() => !document.querySelector('.pay-wrap'), null, { timeout: 15000 });
+    try { await p2.waitForFunction(() => !document.querySelector('.pay-wrap'), null, { timeout: 15000 }); }
+    catch (e) {
+      const c = game.customers.find(c => c.id === pay.cid);
+      console.log('payment window still open', JSON.stringify({ pay, msg: await G(p2, () => document.querySelector('.pay-msg')?.textContent), sum: await G(p2, () => document.querySelector('.pay-sum')?.textContent),
+        K: await G(p2, () => window.__G.snap.K), station: await G(p2, () => window.__G.station), customer: c && { state: c.state, due: c.due, tendered: c.tendered, payBy: c.payBy, scanned: c.scanned, n: c.basket.length } }));
+      await shot(p2, '57-payment-stuck'); throw e;
+    }
     paid++;
   } else if (item) { const [x, y] = await screenOf(p2, item); await p2.mouse.click(x, y); clicks++; if (clicks === 2) await shot(p2, '56-scanning'); await sleep(250); }
   else await sleep(400);

@@ -283,7 +283,7 @@ export class UI {
     };
     wrap.onclick = (e) => {
       const b = e.target.closest('button');
-      if (e.target === wrap || (b && (b.hasAttribute('data-close') || b.hasAttribute('data-cancel')))) return this.closePayment();
+      if (e.target === wrap || (b && (b.hasAttribute('data-close') || b.hasAttribute('data-cancel')))) return this.closePayment(e.target === wrap ? 'clicked outside' : 'close button');
       if (!b) return;
       if (b.dataset.v) { change.push(+b.dataset.v); play('coin'); }
       else if (b.dataset.take) { const i = change.lastIndexOf(+b.dataset.take); if (i >= 0) change.splice(i, 1); }
@@ -295,7 +295,7 @@ export class UI {
     };
     this.payKey = (e) => {
       e.stopPropagation();
-      if (e.key === 'Escape') { e.preventDefault(); this.closePayment(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); this.closePayment('escape'); return; }
       if (e.key === 'Enter') { e.preventDefault(); give(); return; }
       if (!cash && /^[0-9]$/.test(e.key)) { if (digits.length < 7) digits = (digits + e.key).replace(/^0+/, ''); play('click'); }
       else if (e.key === 'Backspace') { if (cash) change.pop(); else digits = digits.slice(0, -1); }
@@ -305,8 +305,9 @@ export class UI {
     if (document.pointerLockElement) document.exitPointerLock();
     document.body.appendChild(wrap); this.payEl = wrap; show();
   }
-  closePayment() {
+  closePayment(why = 'closed') {
     if (!this.payEl) return;
+    this.lastPayClose = { why, cid: this.payFor, at: Date.now() };
     this.payEl.remove(); this.payEl = null; this.payFor = null; this.payMsg = null;
     document.removeEventListener('keydown', this.payKey, true);
   }

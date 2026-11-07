@@ -414,7 +414,7 @@ function frame(now) {
     } else pr.classList.add('hidden');
     ui.stationBar(currentInter);
     // the payment window closes by itself when that customer is done (or leaves)
-    if (ui.payFor) { const k = (G.snap?.K || []).find(k => k[0] === G.station); if (!k || k[1] !== ui.payFor) { payGoneT ||= now; if (now - payGoneT > 800) ui.closePayment(); } else payGoneT = 0; } else payGoneT = 0;
+    if (ui.payFor) { const k = (G.snap?.K || []).find(k => k[0] === G.station); if (!k || k[1] !== ui.payFor) { payGoneT ||= now; if (now - payGoneT > 800) ui.closePayment(k ? `customer ${k[1]} at the register now` : `no register (station ${G.station})`); } else payGoneT = 0; } else payGoneT = 0;
     const carry = G.carry || [];
     const ce = $('carry');
     const nameOf = (c) => c.startsWith('f:') ? FURNITURE[c.slice(2)].name + ' (box)' : c.includes(':') ? `${c.startsWith('raw') ? 'Raw' : 'Wrapped'} ${PRODUCT_MAP[c.split(':')[1]]?.name}` : PRODUCT_MAP[c]?.name;

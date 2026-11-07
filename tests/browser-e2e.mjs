@@ -121,7 +121,13 @@ for (let t = 0; t < 120 && game.s.ledger.served < 2; t++) {
     await p2.keyboard.press('e'); await p2.waitForSelector('.pay-wrap', { timeout: 10000 });
     if (pay.payBy === 'cash') {
       let c = Math.round((pay.tendered - pay.due) * 100);
-      for (const d of [5000, 2000, 1000, 500, 100, 25, 10, 5, 1]) while (c >= d) { await p2.click(`.drawer [data-v="${d / 100}"]`); c -= d; }
+      try { for (const d of [5000, 2000, 1000, 500, 100, 25, 10, 5, 1]) while (c >= d) { await p2.click(`.drawer [data-v="${d / 100}"]`, { timeout: 10000 }); c -= d; } }
+      catch (e) {
+        const cu = game.customers.find(x => x.id === pay.cid);
+        console.log('drawer closed early', JSON.stringify({ pay, why: await G(p2, () => window.__dbg.ui.lastPayClose), K: await G(p2, () => window.__G.snap.K), station: await G(p2, () => window.__G.station),
+          bobStation: [...game.players.values()].map(p => [p.name, p.station]), customer: cu && { state: cu.state, due: cu.due, patience: cu.patience, paid: cu.paid } }));
+        throw e;
+      }
       if (!payShots.cash) { payShots.cash = true; await shot(p2, '57-cash-drawer'); }
       await p2.click('[data-give]');
     } else {

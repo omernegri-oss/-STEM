@@ -112,7 +112,8 @@ await p2.keyboard.press('e');
 await waitFor(p2, () => !!window.__G.station);
 await p1.click('#h-open');
 game.s.speed = 2;
-let clicks = 0, paid = 0; const payShots = {};
+let clicks = 0, paid = 0; const payShots = {}, navs = [], p2errs = [];
+p2.on('framenavigated', (f) => { if (f === p2.mainFrame()) navs.push(f.url()); }); p2.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') p2errs.push(m.text().slice(0, 200)); });
 for (let t = 0; t < 120 && game.s.ledger.served < 2; t++) {
   const item = await G(p2, () => { const it = window.__dbg.world.beltItems.find(m => m.visible); if (!it) return null; const v = it.getWorldPosition(it.position.clone()); return [v.x, v.y, v.z]; });
   const pay = await G(p2, () => window.__dbg.lastInter?.station?.pay ? window.__dbg.lastInter.station : null);
@@ -124,7 +125,8 @@ for (let t = 0; t < 120 && game.s.ledger.served < 2; t++) {
       try { for (const d of [5000, 2000, 1000, 500, 100, 25, 10, 5, 1]) while (c >= d) { await p2.click(`.drawer [data-v="${d / 100}"]`, { timeout: 10000 }); c -= d; } }
       catch (e) {
         const cu = game.customers.find(x => x.id === pay.cid);
-        console.log('drawer closed early', JSON.stringify({ pay, why: await G(p2, () => window.__dbg.ui.lastPayClose), K: await G(p2, () => window.__G.snap.K), station: await G(p2, () => window.__G.station),
+        console.log('drawer closed early', JSON.stringify({ pay, why: await G(p2, () => window.__dbg.ui.lastPayClose || null), wraps: await G(p2, () => document.querySelectorAll('.pay-wrap').length),
+          coins: await G(p2, () => document.querySelectorAll('.drawer [data-v]').length), payEl: await G(p2, () => !!window.__dbg.ui.payEl), lost: await G(p2, () => !!document.getElementById('gfx-lost')), nav: navs, perr: p2errs.slice(-5), K: await G(p2, () => window.__G.snap.K), station: await G(p2, () => window.__G.station),
           bobStation: [...game.players.values()].map(p => [p.name, p.station]), customer: cu && { state: cu.state, due: cu.due, patience: cu.patience, paid: cu.paid } }));
         throw e;
       }

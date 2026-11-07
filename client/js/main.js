@@ -115,7 +115,7 @@ const desk = window.desktopApp || null;
 // desktop downloads: the newest GitHub release (fixed file names, see .github/workflows/desktop.yml)
 const RELEASES = 'https://github.com/omernegri-oss/-STEM/releases/latest/download/';
 if (!desk) {
-  $('dl-win').href = RELEASES + 'Supermarket-windows.zip';
+  $('dl-win').href = RELEASES + 'Supermarket-windows-setup.exe';
   $('dl-mac').href = RELEASES + 'Supermarket-mac.zip';
   $('dl-linux').href = RELEASES + 'Supermarket-linux.tar.gz';
   for (const id of ['dl-win', 'dl-mac', 'dl-linux']) $(id).insertAdjacentHTML('afterbegin', svg('download', 16));
@@ -128,6 +128,14 @@ if (!desk) {
   $('m-quit').onclick = () => desk.quit();
   $('m-fullscreen').onclick = () => desk.fullscreen();
 }
+// the website goes fullscreen when you start playing (browsers only allow it right after a click); Esc leaves it
+function goFullscreen() {
+  if (desk || navigator.webdriver || document.fullscreenElement || !document.documentElement.requestFullscreen || /[?&]windowed/.test(location.search)) return;
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+}
+for (const id of ['m-create', 'm-join', 'm-rooms', 'm-saves']) $(id).addEventListener('click', (e) => { if (e.target.closest('button')) goFullscreen(); }, true);
+// after joining a friend (the page reloads) the first click in the store goes fullscreen
+let fsAsked = false; canvas.addEventListener('click', () => { if (!fsAsked && onlineJoin) { fsAsked = true; goFullscreen(); } });
 // ----------------------------------------------------------------------------------- online play by store code
 const ONLINE_TEXT = {
   connecting: () => 'Opening your store to friends online…',
@@ -381,6 +389,15 @@ function frame(now) {
     // interaction
     const fpsView = rig.fps && !build.active;
     currentInter = build.active ? null : findInteraction(G, world, me, G.carry || [], G.station, fpsView);
+    // aiming at a shelf price label (empty hands): E or click opens the price calculator
+    aimedTag = null;
+    if (!build.active && !G.station && !(G.carry || []).length && G.meta?.phase !== 'naming' && !ui.panel && (fpsView ? input.mouse.locked : true)) {
+      aimedTag = aimTag(fpsView ? { x: 0, y: 0 } : { x: input.mouse.nx, y: input.mouse.ny }, fpsView);
+      if (aimedTag) {
+        const p = PRODUCT_MAP[aimedTag.pid], price = (G.world.prices[p.id] ?? p.price) * (G.world.saleActive ? 0.85 : 1);
+        currentInter = { label: `${p.name}  $${price.toFixed(2)}  ·  ${fpsView ? 'E or click' : 'E or click the label'}: price calculator`, action: { a: '_price', pid: p.id } };
+      }
+    }
     actors.hideLocal = fpsView; world.setCeilingVisible(fpsView);
     syncViewModel();
     if (punchT > 0) { punchT -= dt; fist.visible = fpsView && !(G.carry || []).length; fist.position.z = 0.1 - Math.sin((0.3 - punchT) / 0.3 * Math.PI) * 0.35; } else fist.visible = false;
@@ -396,12 +413,16 @@ function frame(now) {
       pr.classList.remove('hidden');
     } else pr.classList.add('hidden');
     ui.stationBar(currentInter);
+    // the payment window closes by itself when that customer is done (or leaves)
+    if (ui.payFor) { const k = (G.snap?.K || []).find(k => k[0] === G.station); if (!k || k[1] !== ui.payFor) ui.closePayment(); }
     const carry = G.carry || [];
     const ce = $('carry');
     const nameOf = (c) => c.startsWith('f:') ? FURNITURE[c.slice(2)].name + ' (box)' : c.includes(':') ? `${c.startsWith('raw') ? 'Raw' : 'Wrapped'} ${PRODUCT_MAP[c.split(':')[1]]?.name}` : PRODUCT_MAP[c]?.name;
     if (carry.length && !build.active) { const t = `Carrying: ${carry.map(nameOf).join(', ')}  ·  Q drop`; if (ce.textContent !== t) ce.textContent = t; ce.classList.remove('hidden'); } else ce.classList.add('hidden');
     me.cutting = !!(currentInter && currentInter.cutting && input.down('e'));
     const doAct = (a) => {
+      if (a.a === '_pay') { if (document.pointerLockElement) document.exitPointerLock(); ui.payment(a); return; }
+      if (a.a === '_price') { if (document.pointerLockElement) document.exitPointerLock(); ui.priceCalc(a.pid); return; }
       if (a.a === '_computer') { if (document.pointerLockElement) document.exitPointerLock(); ui.openComputer(); return; }
       if (a.a === '_place') { const top = (G.carry || []).at(-1); if (top && top.startsWith('f:')) { build.enter(me, top.slice(2)); syncDock(); } return; }
       if (a.a === 'deptCut') G.deptProgress = (G.deptProgress || 0) + 1;
@@ -418,10 +439,11 @@ function frame(now) {
         if (click.button === 0 && currentInter && currentInter.action) doAct(currentInter.action);
         if (click.button === 2) net.act('drop');
       }
+      if (click && click.button === 0 && !fpsView && aimedTag) doAct({ a: '_price', pid: aimedTag.pid });
       if (click && click.button === 0 && G.station && world.beltItems.length) {
         const ray = new THREE.Raycaster(); ray.setFromCamera({ x: input.mouse.nx, y: input.mouse.ny }, S.camera);
-        const hit = ray.intersectObjects(world.beltItems, false)[0];
-        if (hit) { net.act('work'); hit.object.position.x += 0.4; }
+        const hit = ray.intersectObjects(world.beltItems.filter(m => m.visible), false)[0];
+        if (hit) { net.act('work'); hit.object.visible = false; } // it moves to the bagging area once the scan comes back
       }
       if (currentInter && currentInter.alt && input.hit('x')) net.act(currentInter.alt.a, currentInter.alt);
       if (input.hit('q')) net.act('drop');
@@ -446,6 +468,20 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// which shelf price label is under the crosshair (first person) or the mouse (third person)
+let aimedTag = null;
+const tagRay = new THREE.Raycaster(), tagPos = new THREE.Vector3();
+const shown = (o) => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
+function aimTag(ndc, fps) {
+  const tags = world.tagMeshes(); if (!tags.length) return null;
+  tagRay.setFromCamera(ndc, S.camera); tagRay.far = fps ? 2.6 : 40;
+  const hit = tagRay.intersectObjects(tags, false).find(h => shown(h.object));
+  if (!hit) return null;
+  hit.object.getWorldPosition(tagPos);
+  if (!fps && Math.hypot(tagPos.x - me.x, tagPos.z - me.z) > 3.2) return null;
+  return hit.object.userData.tag;
+}
 
 // A pretty little store for the main-menu background.
 function demoFurniture() {

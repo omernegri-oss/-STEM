@@ -17,6 +17,7 @@ export function spawnCustomer(game, opts = {}) {
     list: [], basket: [], counterReq: null, counterDone: false,
     patience: rnd(100, 160) * (s.upgrades.music ? 1.2 : 1), mood: 70, timer: 0, thought: '', thoughtT: 0,
     sens: rnd(0.6, 1.4), vip: opts.vip || null, vipHappy: false, scanned: 0, paid: false, waited: 0,
+    payBy: Math.random() < 0.5 ? 'cash' : 'card', due: null, tendered: 0, // how they pay at a staffed register
     exitSide: Math.random() < 0.5 ? -13 : s.w + 13, wanted: 0, missed: 0,
   };
   // initial mood: store appeal & cleanliness
@@ -221,7 +222,8 @@ export function updateCustomers(game, dt, dMin) {
     }
     const waitingStates = c.state === 'queue' || c.state === 'register' || c.state === 'counterQueue' || c.state === 'counterServe';
     if (c.state !== 'leaving' && c.state !== 'arrive') {
-      c.patience -= dMin * (waitingStates ? (c.state === 'register' ? 0.5 : 1) : 0.12);
+      // at the register patience runs slower, and barely while paying (waiting for change or the card terminal)
+      c.patience -= dMin * (waitingStates ? (c.state === 'register' ? (c.due != null ? 0.1 : 0.5) : 1) : 0.12);
       if (waitingStates) {
         c.waited += dMin;
         if (c.waited > 25) c.mood -= dMin * 0.25;

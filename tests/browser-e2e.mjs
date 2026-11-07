@@ -112,14 +112,29 @@ await p2.keyboard.press('e');
 await waitFor(p2, () => !!window.__G.station);
 await p1.click('#h-open');
 game.s.speed = 2;
-let clicks = 0;
+let clicks = 0, paid = 0; const payShots = {};
 for (let t = 0; t < 120 && game.s.ledger.served < 2; t++) {
-  const item = await G(p2, () => { const it = window.__dbg.world.beltItems[0]; return it ? [it.position.x, it.position.y, it.position.z] : null; });
-  if (item) { const [x, y] = await screenOf(p2, item); await p2.mouse.click(x, y); clicks++; if (clicks === 2) await shot(p2, '56-scanning'); await sleep(250); }
-  else if (await G(p2, () => window.__dbg.lastInter?.station?.pay)) await p2.keyboard.press('e');
+  const item = await G(p2, () => { const it = window.__dbg.world.beltItems.find(m => m.visible); if (!it) return null; const v = it.getWorldPosition(it.position.clone()); return [v.x, v.y, v.z]; });
+  const pay = await G(p2, () => window.__dbg.lastInter?.station?.pay ? window.__dbg.lastInter.station : null);
+  if (pay) {
+    // take the payment like a cashier: count change from the drawer, or type the total on the card terminal
+    await p2.keyboard.press('e'); await p2.waitForSelector('.pay-wrap', { timeout: 10000 });
+    if (pay.payBy === 'cash') {
+      let c = Math.round((pay.tendered - pay.due) * 100);
+      for (const d of [5000, 2000, 1000, 500, 100, 25, 10, 5, 1]) while (c >= d) { await p2.click(`.drawer [data-v="${d / 100}"]`); c -= d; }
+      if (!payShots.cash) { payShots.cash = true; await shot(p2, '57-cash-drawer'); }
+      await p2.click('[data-give]');
+    } else {
+      for (const ch of String(Math.round(pay.due * 100))) await p2.keyboard.press(ch);
+      if (!payShots.card) { payShots.card = true; await shot(p2, '57-card-terminal'); }
+      await p2.keyboard.press('Enter');
+    }
+    await p2.waitForFunction(() => !document.querySelector('.pay-wrap'), null, { timeout: 15000 });
+    paid++;
+  } else if (item) { const [x, y] = await screenOf(p2, item); await p2.mouse.click(x, y); clicks++; if (clicks === 2) await shot(p2, '56-scanning'); await sleep(250); }
   else await sleep(400);
 }
-console.log('belt clicks', clicks, 'served', game.s.ledger.served, 'revenue', game.s.ledger.revenue);
+console.log('belt clicks', clicks, 'payments', paid, 'served', game.s.ledger.served, 'revenue', game.s.ledger.revenue);
 assert.ok(game.s.ledger.served >= 1, 'Bob checked out a customer by clicking products');
 
 // --- punching: Alice punches Bob

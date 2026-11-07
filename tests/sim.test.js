@@ -62,12 +62,40 @@ at(chk._back[0] + 0.5, chk._back[1] + 0.5);
 assert.ok(act({ a: 'station', id: chk.id }));
 assert.ok(act({ a: 'open' }));
 act({ a: 'speed', v: 3 });
-let maxC = 0;
+let maxC = 0; const payChecks = {};
 for (let i = 0; i < 20 * 260 && g.s.phase !== 'report'; i++) {
   g.tick(0.05);
   maxC = Math.max(maxC, g.customers.length);
-  if (g.customerAtRegister(chk)) act({ a: 'work' });
+  const c = g.customerAtRegister(chk);
+  if (c) {
+    if (c.scanned < c.basket.length) { act({ a: 'work' }); continue; }
+    const owed = Math.round((c.tendered - c.due) * 100) / 100;
+    if (c.payBy === 'cash') {
+      assert.ok(c.tendered >= c.due, 'cash covers the total');
+      if (!payChecks.cashShort && owed > 0) {
+        payChecks.cashShort = true;
+        assert.equal(act({ a: 'payCash', change: owed - 0.01 }), false, 'too little change is refused'); assert.match(lastErr(), /not enough change/);
+        assert.equal(act({ a: 'payCard', amount: c.due }), false, 'a cash customer does not pay by card');
+      }
+      if (!payChecks.cashOver && owed > 0 && payChecks.cashShort) {
+        payChecks.cashOver = true; const before = g.s.cash;
+        assert.ok(act({ a: 'payCash', change: owed + 1 }), 'too much change is accepted');
+        assert.ok(Math.abs(g.s.cash - before - (c.due - 1)) < 0.011, 'the extra change is lost');
+        continue;
+      }
+      act({ a: 'payCash', change: owed });
+    } else {
+      if (!payChecks.card) {
+        payChecks.card = true;
+        assert.equal(act({ a: 'payCard', amount: c.due + 1 }), false, 'wrong card amount is refused'); assert.match(lastErr(), /not paying/);
+        assert.equal(act({ a: 'payCash', change: 0 }), false, 'a card customer does not pay cash');
+      }
+      assert.ok(act({ a: 'payCard', amount: c.due }), 'right card amount accepted ' + lastErr());
+    }
+  }
 }
+console.log('payment checks', payChecks);
+assert.ok(payChecks.card && payChecks.cashShort && payChecks.cashOver, 'cash and card customers both came to the register');
 const r = g.s.report;
 console.log('day 1', { served: r.served, revenue: r.revenue, profit: r.profit, sat: r.avgSat, bill: r.bill, maxC, inbox: g.s.inbox.length });
 assert.equal(g.s.phase, 'report');

@@ -43,14 +43,20 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
   - order stock from suppliers;
   - buy a **license** for each new product ($50–$200 each);
   - buy furniture and plants;
-  - set prices (each product has a minimum and maximum price);
+  - set prices (each product has a minimum and maximum price). Prices can also be changed at the shelf: look at a
+    price label and press `E` to open the price calculator (cost, selling price, profit per item, margin);
   - hire staff (from store level 3; each hire costs a one-time fee of one day's wage), buy upgrades and expansions;
   - pay your **bills**;
   - read **messages**.
 - Deliveries arrive as boxes at the loading area. Furniture comes in a box too: carry it inside, press `E`
   and place it wherever you like. Nobody tells you how to lay out your store.
 - **Fridges and freezers have doors**: open them before stocking.
-- **At the register**, click each product on the belt to pass it over the scanner, then take the payment.
+- **At the register**, shoppers unload their basket onto the belt (side by side, stacked, some lying down). Click each
+  product to pass it over the scanner, then take the payment:
+  - **cash**: the customer hands you notes; count the change from the cash drawer. Too little and they complain
+    (try again); too much and the extra is lost;
+  - **card**: type the total on the card terminal and press OK. A wrong amount is refused.
+  Staff cashiers and self-checkouts take payments on their own.
 - **Butcher and deli departments** have a big fridge and a prep station (cleaver block or cheese slicer) behind
   the counter. To serve an order, take it from the fridge, cut and wrap it at the station, then hand it over at the counter.
 - Customers don't show their wishes above their heads. If they can't find a product, they tell you in the

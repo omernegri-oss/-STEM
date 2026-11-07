@@ -154,10 +154,12 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
     if (f && f.type === 'checkout') {
       const k = (G.snap?.K || []).find(k => k[0] === f.id);
       if (k && k[1]) {
-        const [, , scanned, total, pids] = k;
-        if (scanned < total) return { label: `Scan the products (click them or E) ${scanned}/${total}`, action: { a: 'work' }, repeat: true, station: { kind: 'checkout', scanned, total, pids } };
-        const sum = pids.reduce((a, pid) => a + (W.prices[pid] || PRODUCT_MAP[pid].price) * (W.saleActive ? 0.85 : 1), 0);
-        return { label: `Take payment ($${sum.toFixed(2)})`, action: { a: 'work' }, station: { kind: 'checkout', scanned, total, pids, pay: true } };
+        const [, cid, scanned, total, pids, , , payBy, tendered, due] = k;
+        if (scanned < total || !payBy) return { label: `Scan the products (click them or E) ${scanned}/${total}`, action: { a: 'work' }, repeat: true, station: { kind: 'checkout', scanned, total, pids } };
+        const pay = { kind: 'checkout', scanned, total, pids, pay: true, cid, payBy, tendered, due };
+        return payBy === 'cash'
+          ? { label: `Total $${due.toFixed(2)} · the customer hands you $${tendered.toFixed(2)} cash · E: open the cash drawer`, action: { a: '_pay', ...pay }, station: pay }
+          : { label: `Total $${due.toFixed(2)} · the customer pays by card · E: card terminal`, action: { a: '_pay', ...pay }, station: pay };
       }
       return { label: 'Waiting for customers… (walk away to leave)', action: null, station: { kind: 'checkout', idle: true, queue: k ? k[5] : 0 } };
     }

@@ -2,8 +2,13 @@
 import * as THREE from 'three';
 import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap } from '/shared/data.js';
 import { Grid, center, dims } from '/shared/grid.js';
-import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
+import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, makePriceTag, TAG_W, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
 import { pbr, surfaceMaps } from './textures.js';
+
+// small repeatable random numbers (the same customer's items always land the same way)
+function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const PAY_GEO = { note: new THREE.BoxGeometry(0.155, 0.002, 0.066), card: new THREE.BoxGeometry(0.086, 0.003, 0.054), chip: new THREE.BoxGeometry(0.012, 0.001, 0.009) };
+const PAY_MAT = { note: new THREE.MeshStandardMaterial({ color: 0x9fc79a, roughness: 0.8 }), card: new THREE.MeshStandardMaterial({ color: 0x1d3f8f, roughness: 0.35, metalness: 0.2 }), chip: new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.3, metalness: 0.8 }) };
 
 // store look: neutral painted block walls, a dark green brand band, aluminium storefront
 const BRAND = 0x1f5135, BRAND_CSS = '#1f5135';
@@ -231,7 +236,7 @@ export class World {
       e.broken = f.broken;
       this.priceTags(e, f, w);
     }
-    for (const [id, e] of this.furn) if (!seen.has(id)) { e.group.removeFromParent(); disposeOwned(e.group); this.furn.delete(id); }
+    for (const [id, e] of this.furn) if (!seen.has(id)) { e.group.removeFromParent(); disposeOwned(e.group); this.furn.delete(id); this.tagsDirty = true; }
     this.aisleSigns(w);
   }
 
@@ -264,21 +269,31 @@ export class World {
     });
   }
 
-  // small shelf-edge tags with the product name and price under each section
+  // shelf-edge labels with the product name and price under each section (look at one and press E to change the price)
   priceTags(e, f, w) {
     if (!f.slots) return;
     const key = f.slots.map(s => s.pid ? `${s.pid}:${w.prices[s.pid]}` : '-').join(',') + (w.saleActive ? 's' : '');
     if (key === e.tagKey) return;
-    e.tagKey = key; disposeOwned(e.tags); e.tags.clear();
-    const layout = slotLayout(f.type);
+    e.tagKey = key; disposeOwned(e.tags); e.tags.clear(); this.tagsDirty = true;
+    const layout = slotLayout(f.type), rail = ['shelf', 'shelf_large', 'endcap'].includes(f.type);
     f.slots.forEach((sl, i) => {
       const L = layout[i]; if (!L || !sl.pid) return;
       const p = PRODUCT_MAP[sl.pid]; if (!p) return;
-      const price = (w.prices[p.id] ?? p.price) * (w.saleActive ? 0.85 : 1);
-      const tag = makeLabel(p.name + '  $' + price.toFixed(2), 0.042, { bg: w.saleActive ? '#fde047' : '#ffffff', color: '#111827', size: 30, pad: 8, radius: 2 }, 0.42);
-      tag.position.set(L.x0 + 0.24, Math.max(0.03, L.y - 0.022), L.zf + 0.022);
+      const price = Math.round((w.prices[p.id] ?? p.price) * (w.saleActive ? 0.85 : 1) * 100) / 100;
+      const tag = makePriceTag(p.name, price, !!w.saleActive);
+      // on gondola shelves the label clips onto the front of the price rail
+      tag.position.set(L.x0 + TAG_W / 2 + 0.02, rail ? L.y - 0.03 : Math.max(0.04, L.y - 0.03), L.zf + (rail ? 0.034 : 0.03));
+      tag.userData.tag = { pid: p.id, fid: f.id };
       e.tags.add(tag);
     });
+  }
+  // every price label in the store (for aiming at them)
+  tagMeshes() {
+    if (this.tagsDirty || !this.tagList) {
+      this.tagsDirty = false; this.tagList = [];
+      for (const e of this.furn.values()) for (const t of e.tags.children) this.tagList.push(t);
+    }
+    return this.tagList;
   }
 
   // one InstancedMesh per (floor, product) so every package shows its printed label.
@@ -392,32 +407,64 @@ export class World {
     for (const [id, m] of this.dirtMeshes) if (!seen.has(id)) { m.removeFromParent(); this.dirtMeshes.delete(id); }
   }
 
-  // items on checkout belts (from snapshot K entries); unscanned ones are clickable
+  // items on checkout belts (from snapshot K entries); unscanned ones are clickable.
+  // Shoppers unload their basket the way people do: side by side, rotated, some lying down, some piled on others.
   setCheckouts(K) {
     if (!this.state) return;
-    const key = K.map(k => `${k[0]}:${k[1]}:${k[2]}:${k[4].length}`).join(',');
+    const key = K.map(k => `${k[0]}:${k[1]}:${k[2]}:${k[4].length}:${k[7] || ''}`).join(',');
     if (key === this.beltKey) return;
     this.beltKey = key;
     this.beltRoot.clear(); this.beltItems = [];
-    for (const [fid, cid, scanned, total, pids] of K) {
+    for (const [fid, cid, scanned, , pids, , , payBy] of K) {
       if (!cid) continue;
       const e = this.furn.get(fid); if (!e) continue;
       const f = e.data; if (f.type !== 'checkout') continue;
       const [cx, cz] = center(f.type, f.x, f.z, f.rot);
       const ang = f.rot * Math.PI / 2, cos = Math.cos(ang), sin = Math.sin(ang);
       const yb = (f.floor || 0) * FLOOR_H;
+      const rng = seeded(cid * 7919 + 13);
+      const place = (obj, lx, y, lz) => obj.position.set(cx + lx * cos + lz * sin, yb + y, cz - lx * sin + lz * cos);
+      // footprints already placed: a new item that overlaps one goes on top of it
+      const piles = { belt: [], bag: [] };
+      const drop = (list, x, z, r, h, base) => {
+        let y = base;
+        for (const q of list) if (Math.abs(q.x - x) < (q.r + r) * 0.75 && Math.abs(q.z - z) < (q.r + r) * 0.75) y = Math.max(y, q.top);
+        list.push({ x, z, r, top: y + h }); return y;
+      };
+      let cursor = -0.88;
       pids.forEach((pid, i) => {
         const p = PRODUCT_MAP[pid]; if (!p) return;
+        const d = SHAPE_DIMS[p.shape] || SHAPE_DIMS.box;
         const done = i < scanned;
-        const lx = done ? 0.62 + (i % 3) * 0.12 - 0.12 : -0.8 + (i - scanned) * 0.2;
-        const lz = done ? -0.05 + Math.floor(i / 3) % 2 * 0.1 - 0.1 : 0.05;
-        if (!done && lx > 0.35) return;
+        const tall = d.h > d.w * 1.5;
+        const lie = rng() < (tall ? 0.5 : 0.15);
+        const h = lie ? d.w : d.h, r = Math.max(d.w, d.d, lie ? d.h : 0) / 2;
+        const yaw = (rng() - 0.5) * (lie ? 1.0 : 2.6);
+        let lx, lz, y;
+        if (done) {
+          // scanned: dropped in the bagging area
+          lx = 0.52 + rng() * 0.38; lz = -0.12 + rng() * 0.26;
+          y = drop(piles.bag, lx, lz, r, h, 0.88); if (y > 1.3) return;
+        } else {
+          if (cursor > 0.05) cursor = -0.88 + rng() * 0.3; // no room left on the belt: pile on top
+          lx = cursor + r; cursor += r * 2 * (0.5 + rng() * 0.6);
+          const zr = Math.min(r, 0.12); lz = -0.13 + zr + rng() * Math.max(0, 0.38 - zr * 2);
+          y = drop(piles.belt, lx, lz, r, h, 0.903); if (y > 1.25) return;
+        }
         const m = new THREE.Mesh(UNIT_GEOS[p.shape], productMaterial(p));
-        m.position.set(cx + lx * cos + lz * sin, yb + 0.92 + (done ? Math.floor(i / 6) * 0.1 : 0), cz - lx * sin + lz * cos);
-        m.rotation.y = ang; m.castShadow = true;
-        m.userData = { fid, belt: !done };
-        this.beltRoot.add(m); if (!done) this.beltItems.push(m);
+        if (lie) { m.rotation.z = Math.PI / 2; m.position.set(d.h / 2, d.w / 2, 0); }
+        const g = new THREE.Group(); g.rotation.y = ang + yaw; g.add(m); place(g, lx, y, lz);
+        m.castShadow = true; m.userData = { fid, belt: !done };
+        this.beltRoot.add(g); if (!done) this.beltItems.push(m);
       });
+      // paying: the shopper's cash or card is on the counter by the register
+      if (payBy) {
+        const g = new THREE.Group(); g.rotation.y = ang + 0.3;
+        if (payBy === 'cash') for (let i = 0; i < 3; i++) { const n = new THREE.Mesh(PAY_GEO.note, PAY_MAT.note); n.position.set(i * 0.012, i * 0.0025, i * 0.01); n.rotation.y = (i - 1) * 0.15; g.add(n); }
+        else { const c = new THREE.Mesh(PAY_GEO.card, PAY_MAT.card); const chip = new THREE.Mesh(PAY_GEO.chip, PAY_MAT.chip); chip.position.set(-0.02, 0.002, 0); g.add(c, chip); }
+        place(g, 0.42, 0.885, 0.22);
+        this.beltRoot.add(g);
+      }
     }
   }
 

@@ -112,6 +112,47 @@ export function setSpriteText(s, text, height = 0.4, opts = {}) {
   s.material.map = tex; s.material.needsUpdate = true; s.scale.set(height * aspect, height, 1);
 }
 
+// ------------------------------------------------------------------ shelf-edge price labels
+// a printed label: product name on the left, the price large on the right, and a small calculator button
+const tagTexCache = new Map();
+export const TAG_W = 0.3, TAG_H = 0.075;
+function tagTexture(name, price, sale) {
+  const key = `${name}|${price}|${sale}`;
+  if (tagTexCache.has(key)) return tagTexCache.get(key);
+  const W = 512, H = 128, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = sale ? '#fde047' : '#fbfbf8'; g.fillRect(0, 0, W, H);
+  g.fillStyle = sale ? '#b91c1c' : '#2f8a5b'; g.fillRect(0, 0, W, 10); // coloured top strip like a real shelf label
+  g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 3; g.strokeRect(1.5, 1.5, W - 3, H - 3);
+  // name (up to two lines)
+  g.fillStyle = '#111827'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  g.font = `700 34px Barlow, "Segoe UI", Arial, sans-serif`;
+  const maxW = 260, words = name.split(' '), lines = [''];
+  for (const w of words) { const t = lines.at(-1) ? lines.at(-1) + ' ' + w : w; if (g.measureText(t).width > maxW && lines.at(-1)) lines.push(w); else lines[lines.length - 1] = t; }
+  if (lines.length > 2) { lines.length = 2; lines[1] += '…'; }
+  lines.forEach((l, i) => g.fillText(l, 16, (lines.length === 1 ? 64 : 50) + i * 34, maxW));
+  g.font = '500 20px Barlow, Arial, sans-serif'; g.fillStyle = '#4b5563'; g.fillText(sale ? 'SALE  per item' : 'per item', 16, 112);
+  // price
+  const [d, cents] = price.toFixed(2).split('.');
+  g.fillStyle = sale ? '#b91c1c' : '#111827'; g.textAlign = 'right';
+  g.font = '700 30px "Barlow Condensed", Barlow, Arial, sans-serif'; const cw = g.measureText(cents).width;
+  g.fillText(cents, 420, 62);
+  g.font = '700 74px "Barlow Condensed", Barlow, Arial, sans-serif'; g.fillText('$' + d + '.', 420 - cw - 2, 100);
+  // calculator button
+  g.fillStyle = '#1f2937'; g.beginPath(); g.roundRect ? g.roundRect(436, 24, 64, 80, 10) : g.rect(436, 24, 64, 80); g.fill();
+  g.fillStyle = '#9ca3af'; g.fillRect(446, 34, 44, 16);
+  g.fillStyle = '#e5e7eb'; for (let r = 0; r < 3; r++) for (let q = 0; q < 3; q++) g.fillRect(446 + q * 16, 58 + r * 14, 11, 9);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  tagTexCache.set(key, t);
+  if (tagTexCache.size > 300) { const [k0, old] = tagTexCache.entries().next().value; tagTexCache.delete(k0); old.dispose(); }
+  return t;
+}
+export function makePriceTag(name, price, sale) {
+  const m = new THREE.Mesh(cachedGeo('plane1', () => new THREE.PlaneGeometry(1, 1)), new THREE.MeshBasicMaterial({ map: tagTexture(name, price, sale), toneMapped: false }));
+  m.scale.set(TAG_W, TAG_H, 1); m.userData.owned = true;
+  return m;
+}
+
 // ------------------------------------------------------------------ furniture
 const STEEL = 0xcbd5e1, DARK = 0x334155, WHITE = 0xf8fafc, WOOD = 0xb7834f, WOOD2 = 0x8b5a2b;
 export function catColor(cat) { return new THREE.Color(CATEGORIES[cat]?.color || '#94a3b8').getHex(); }

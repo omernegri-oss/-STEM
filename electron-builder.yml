@@ -1,4 +1,4 @@
-# Desktop builds: plain folders (no installer), zipped by the CI workflow for download.
+# Desktop builds: plain folders (zipped by the CI workflow) and, for Windows, a one-click installer.
 appId: com.supermarket.game
 productName: Supermarket
 copyright: Copyright © 2026 Supermarket
@@ -19,9 +19,19 @@ files:
   - "!node_modules/electron*/**"
 npmRebuild: false
 win:
-  target: [dir]
+  target: [dir, nsis]
   icon: build/icon.png
   signAndEditExecutable: false
+# one click: installs for this user only (no admin rights), adds desktop + Start menu shortcuts, then starts the game
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Supermarket
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  artifactName: Supermarket-windows-setup.exe
 mac:
   target: [dir]
   icon: build/icon.png

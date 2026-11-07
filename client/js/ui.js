@@ -17,6 +17,13 @@ const BUY_GROUPS = [['Shelving & coolers', ['shelf', 'shelf_large', 'endcap', 'p
   ['Service', ['checkout', 'selfcheckout', 'butcher', 'deli', 'rack', 'bin', 'computer']],
   ['Plants & decor', ['plant', 'flowerpot', 'cactus', 'plant_tall', 'lamp', 'sign', 'bench', 'balloons', 'vending', 'flowers', 'fountain', 'neon', 'statue']]];
 
+// the notes and coins making up a cash amount (largest first), as small pictures
+function cashNotes(v) {
+  let c = Math.round(v * 100); const out = [];
+  for (const d of [10000, 5000, 2000, 1000, 500, 100, 25, 10, 5, 1]) while (c >= d) { out.push(d); c -= d; }
+  return out.map(d => `<span class="den ${d >= 100 ? 'bill' : 'coin'} small">${d >= 100 ? '$' + d / 100 : d + '¢'}</span>`).join(' ');
+}
+
 export class UI {
   constructor({ G, net, onPanel }) {
     this.G = G; this.net = net; this.onPanel = onPanel;
@@ -138,7 +145,173 @@ export class UI {
       document.body.appendChild(wrap); wrap.querySelector('[data-yes]').focus();
     });
   }
+  // price calculator for one product (opened from its shelf label): what you pay, what you charge, what you make
+  priceCalc(pid) {
+    const p = PRODUCT_MAP[pid]; if (!p || document.querySelector('.pc-wrap')) return;
+    const [lo, hi] = priceLimits(p);
+    const sups = SUPPLIERS.filter(s => s.cats.includes(p.cat));
+    const cost = Math.round(p.cost * Math.min(...sups.map(s => s.markup || 1), 1) * 100) / 100;
+    const cur = () => this.G.world.prices[pid] ?? p.price;
+    let typed = cur().toFixed(2), fresh = true; // the first key typed replaces the shown price, like a calculator
+    const wrap = document.createElement('div'); wrap.className = 'ask-wrap pc-wrap';
+    const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', 'del'];
+    wrap.innerHTML = `<div class="pc" role="dialog" aria-modal="true" aria-label="Price calculator">
+      <div class="pc-head">${productImg(pid, 40)}<div><b>${esc(p.name)}</b><small>${esc(CATEGORIES[p.cat]?.name || '')}</small></div><button class="pc-x" data-close aria-label="Close">${svg('close', 16)}</button></div>
+      <div class="pc-screen"><small>Selling price</small><div class="pc-val"></div></div>
+      <div class="pc-body">
+        <div class="pc-pad">${keys.map(k => `<button data-k="${k}">${k === 'del' ? '⌫' : k}</button>`).join('')}
+          <button data-step="-0.10">−0.10</button><button data-k="clear">C</button><button data-step="0.10">+0.10</button></div>
+        <div class="pc-info">
+          <div class="kv"><span>You buy for</span><b>${fmtMoney(cost)}</b></div>
+          <div class="kv"><span>You sell for</span><b class="pc-sell"></b></div>
+          <div class="kv pc-profit-row"><span>Profit per item</span><b class="pc-profit"></b></div>
+          <div class="kv"><span>Margin</span><b class="pc-margin"></b></div>
+          <div class="pc-verdict"></div>
+          <div class="note">Allowed ${fmtMoney(lo)} – ${fmtMoney(hi)} · usual price ${fmtMoney(p.price)}${this.G.world.saleActive ? '<br>Sale running: shoppers pay 15% less' : ''}</div>
+          <button class="btn small" data-usual>Use usual price</button>
+        </div>
+      </div>
+      <div class="row"><button class="btn" data-close>Cancel</button><button class="btn primary" data-set>Set price</button></div>
+    </div>`;
+    const val = () => { const v = parseFloat(typed); return isNaN(v) ? 0 : v; };
+    const show = () => {
+      const v = val(), sell = v * (this.G.world.saleActive ? 0.85 : 1), profit = sell - cost, ratio = v / p.price;
+      wrap.querySelector('.pc-val').textContent = '$' + (typed || '0');
+      wrap.querySelector('.pc-sell').textContent = fmtMoney(sell);
+      const pe = wrap.querySelector('.pc-profit'); pe.textContent = fmtMoney(profit); pe.className = 'pc-profit ' + (profit > 0 ? 'pos' : 'neg');
+      wrap.querySelector('.pc-margin').textContent = sell > 0 ? Math.round(profit / sell * 100) + '%' : '—';
+      const out = v < lo || v > hi;
+      const [cls, text] = out ? ['bad', `Not allowed: choose between ${fmtMoney(lo)} and ${fmtMoney(hi)}`]
+        : profit <= 0 ? ['bad', 'You lose money on every sale']
+        : ratio < 0.85 ? ['good', 'Cheap: shoppers love it, small profit']
+        : ratio <= 1.05 ? ['good', 'Fair price: everyone buys it']
+        : ratio <= 1.25 ? ['warn', 'A bit expensive: some shoppers skip it']
+        : ['bad', 'Expensive: many shoppers will not buy it'];
+      const vd = wrap.querySelector('.pc-verdict'); vd.textContent = text; vd.className = 'pc-verdict ' + cls;
+      wrap.querySelector('[data-set]').disabled = out;
+    };
+    const press = (k) => {
+      if (k === 'del') { typed = fresh ? '' : typed.slice(0, -1); fresh = false; }
+      else if (k === 'clear') { typed = ''; fresh = false; }
+      else {
+        if (fresh) { typed = ''; fresh = false; }
+        if (k === '.' && typed.includes('.')) return;
+        if (typed.includes('.') && typed.split('.')[1].length >= 2) return;
+        if (typed.replace('.', '').length >= 6) return;
+        typed = (typed === '0' && k !== '.' ? '' : typed) + k;
+        if (typed === '.') typed = '0.';
+      }
+      play('click'); show();
+    };
+    const step = (d) => { typed = Math.max(0, Math.round((val() + d) * 100) / 100).toFixed(2); fresh = true; play('click'); show(); };
+    const done = (setIt) => {
+      if (setIt) {
+        const v = Math.round(val() * 100) / 100;
+        if (v < lo || v > hi) { this.error(`Price must be between ${fmtMoney(lo)} and ${fmtMoney(hi)}`); return; }
+        this.G.world.prices[pid] = v; this.net.act('setPrice', { pid, price: v }); this.markDirty();
+        this.system(`${p.name} now sells for ${fmtMoney(v)}.`);
+      }
+      wrap.remove(); document.removeEventListener('keydown', onKey, true);
+    };
+    const onKey = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); done(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); done(true); }
+      else if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === ',') press(e.key === ',' ? '.' : e.key);
+      else if (e.key === 'Backspace') press('del');
+      else if (e.key === 'ArrowUp' || e.key === '+') step(0.1);
+      else if (e.key === 'ArrowDown' || e.key === '-') step(-0.1);
+    };
+    wrap.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (e.target === wrap || (b && b.hasAttribute('data-close'))) return done(false);
+      if (!b) return;
+      if (b.dataset.k) press(b.dataset.k);
+      else if (b.dataset.step) step(+b.dataset.step);
+      else if (b.hasAttribute('data-usual')) { typed = p.price.toFixed(2); fresh = true; show(); }
+      else if (b.hasAttribute('data-set')) done(true);
+    };
+    document.addEventListener('keydown', onKey, true);
+    if (document.pointerLockElement) document.exitPointerLock();
+    document.body.appendChild(wrap); show();
+  }
+  // taking the payment at a staffed register: count change from the cash drawer, or type the total on the card terminal
+  payment(k) {
+    if (this.payEl) return;
+    this.payFor = k.cid;
+    const wrap = document.createElement('div'); wrap.className = 'ask-wrap pay-wrap';
+    const due = k.due, cash = k.payBy === 'cash';
+    const screen = `<div class="pos-screen"><div><span>TOTAL</span><b>${fmtMoney(due)}</b></div>${cash ? `<div><span>CASH GIVEN</span><b>${fmtMoney(k.tendered)}</b></div><div class="hl"><span>CHANGE DUE</span><b>${fmtMoney(k.tendered - due)}</b></div>` : '<div><span>PAYMENT</span><b>CARD</b></div>'}</div>`;
+    const DEN = [[50, 'bill'], [20, 'bill'], [10, 'bill'], [5, 'bill'], [1, 'bill'], [0.25, 'coin'], [0.1, 'coin'], [0.05, 'coin'], [0.01, 'coin']];
+    const label = (v) => v >= 1 ? '$' + v : Math.round(v * 100) + '¢';
+    wrap.innerHTML = cash
+      ? `<div class="pay" role="dialog" aria-modal="true" aria-label="Cash payment">
+          <div class="pay-head"><b>Cash payment</b><button class="pc-x" data-close aria-label="Close">${svg('close', 16)}</button></div>
+          ${screen}
+          <div class="customer-cash">The customer hands you ${cashNotes(k.tendered)}</div>
+          <div class="tray"><div class="tray-items"></div><div class="tray-sum"><small>Your change</small><b class="pay-sum">$0.00</b></div></div>
+          <div class="drawer">${DEN.map(([v, kind]) => `<button class="den ${kind}" data-v="${v}">${label(v)}</button>`).join('')}</div>
+          <div class="pay-msg"></div>
+          <div class="row"><button class="btn" data-clear>Clear</button><button class="btn primary" data-give>Give change</button></div>
+        </div>`
+      : `<div class="pay" role="dialog" aria-modal="true" aria-label="Card payment">
+          <div class="pay-head"><b>Card payment</b><button class="pc-x" data-close aria-label="Close">${svg('close', 16)}</button></div>
+          ${screen}
+          <div class="terminal">
+            <div class="term-screen"><small>The customer's card is in. Enter the amount</small><b class="term-amt">$0.00</b></div>
+            <div class="term-keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => `<button data-d="${d}">${d}</button>`).join('')}
+              <button class="red" data-cancel>Cancel</button><button data-d="0">0</button><button class="yellow" data-back>Clear</button>
+              <button class="green ok" data-ok>OK</button></div>
+          </div>
+          <div class="pay-msg"></div>
+        </div>`;
+    let change = [], digits = '';
+    const sum = () => Math.round(change.reduce((a, v) => a + v, 0) * 100) / 100;
+    const show = () => {
+      if (cash) {
+        const counts = new Map(); for (const v of change) counts.set(v, (counts.get(v) || 0) + 1);
+        wrap.querySelector('.tray-items').innerHTML = change.length ? [...counts].sort((a, b) => b[0] - a[0]).map(([v, n]) => `<button class="den small ${v >= 1 ? 'bill' : 'coin'}" data-take="${v}" title="Take one back">${label(v)}${n > 1 ? ` <i>×${n}</i>` : ''}</button>`).join('') : '<span class="tray-empty">Click notes and coins in the drawer</span>';
+        wrap.querySelector('.pay-sum').textContent = fmtMoney(sum());
+      } else wrap.querySelector('.term-amt').textContent = fmtMoney((+digits || 0) / 100);
+    };
+    const msg = (t) => { const m = wrap.querySelector('.pay-msg'); m.textContent = t; m.classList.toggle('on', !!t); };
+    this.payMsg = msg;
+    const give = () => {
+      if (cash) this.net.act('payCash', { change: sum() });
+      else this.net.act('payCard', { amount: (+digits || 0) / 100 });
+      msg('');
+    };
+    wrap.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (e.target === wrap || (b && (b.hasAttribute('data-close') || b.hasAttribute('data-cancel')))) return this.closePayment();
+      if (!b) return;
+      if (b.dataset.v) { change.push(+b.dataset.v); play('coin'); }
+      else if (b.dataset.take) { const i = change.lastIndexOf(+b.dataset.take); if (i >= 0) change.splice(i, 1); }
+      else if (b.hasAttribute('data-clear')) change = [];
+      else if (b.hasAttribute('data-give') || b.hasAttribute('data-ok')) return give();
+      else if (b.dataset.d) { if (digits.length < 7) digits = (digits + b.dataset.d).replace(/^0+/, ''); play('click'); }
+      else if (b.hasAttribute('data-back')) digits = digits.slice(0, -1);
+      show();
+    };
+    this.payKey = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); this.closePayment(); return; }
+      if (e.key === 'Enter') { e.preventDefault(); give(); return; }
+      if (!cash && /^[0-9]$/.test(e.key)) { if (digits.length < 7) digits = (digits + e.key).replace(/^0+/, ''); play('click'); }
+      else if (e.key === 'Backspace') { if (cash) change.pop(); else digits = digits.slice(0, -1); }
+      show();
+    };
+    document.addEventListener('keydown', this.payKey, true);
+    if (document.pointerLockElement) document.exitPointerLock();
+    document.body.appendChild(wrap); this.payEl = wrap; show();
+  }
+  closePayment() {
+    if (!this.payEl) return;
+    this.payEl.remove(); this.payEl = null; this.payFor = null; this.payMsg = null;
+    document.removeEventListener('keydown', this.payKey, true);
+  }
   error(text) {
+    if (this.payMsg) this.payMsg(noEmoji(text));
     const el = document.createElement('div'); el.className = 'e'; el.textContent = noEmoji(text);
     const box = $('toast-err'); box.prepend(el); while (box.children.length > 2) box.lastChild.remove();
     setTimeout(() => el.remove(), 2200); play('error');
@@ -489,10 +662,10 @@ export class UI {
     el.classList.remove('hidden');
     const s = inter.station;
     if (s.kind === 'checkout') {
-      $('sb-title').textContent = s.idle ? `Register open — ${s.queue || 0} in line` : s.pay ? 'All scanned! Press E to take payment' : `Scanning ${s.scanned}/${s.total}`;
+      $('sb-title').textContent = s.idle ? `Register open — ${s.queue || 0} in line` : s.pay ? (s.payBy === 'cash' ? `Cash: $${s.tendered.toFixed(2)} for $${s.due.toFixed(2)} · press E to give change` : `Card · total $${s.due.toFixed(2)} · press E for the card terminal`) : `Scanning ${s.scanned}/${s.total}`;
       $('sb-items').innerHTML = s.idle ? '' : s.pids.map((pid, i) => `<span class="sbi ${i < s.scanned ? 'done' : ''}" title="${esc(PRODUCT_MAP[pid].name)}">${productImg(pid, 30)}</span>`).join('');
       $('sb-fill').style.width = s.idle ? '0%' : (s.scanned / Math.max(1, s.total) * 100) + '%';
-      $('sb-hint').textContent = s.idle ? 'Customers will line up here. Walk away to leave.' : 'Click each product on the belt to pass it over the scanner (or press E)';
+      $('sb-hint').textContent = s.idle ? 'Customers will line up here. Walk away to leave.' : s.pay ? (s.payBy === 'cash' ? 'Count the change from the drawer and hand it over' : 'Type the total on the card terminal and press OK') : 'Click each product on the belt to pass it over the scanner (or press E)';
     } else {
       const p = s.req ? PRODUCT_MAP[s.req.pid] : null;
       $('sb-title').textContent = p ? `Order: ${s.req.qty}× ${p.name} (${p.unit})` : `${s.meat ? 'Butcher' : 'Deli'} — no orders waiting`;

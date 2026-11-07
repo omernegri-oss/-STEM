@@ -178,7 +178,10 @@ export class Room {
       if (kind === 'k') {
         const c = g.customerAtRegister(f);
         const op = g.operatorOf(f);
-        K.push([f.id, c ? c.id : 0, c ? c.scanned : 0, c ? c.basket.length : 0, c ? c.basket.map(b => b.pid) : [], rt ? rt.queue.length : 0, op ? (op.type === 'player' ? op.p.id : -op.st.id) : 0]);
+        const paying = c && c.due != null;
+        // [id, customer, scanned, items, pids, queue, operator, payBy, cash handed over, total due]
+        K.push([f.id, c ? c.id : 0, c ? c.scanned : 0, c ? c.basket.length : 0, c ? c.basket.map(b => b.pid) : [], rt ? rt.queue.length : 0, op ? (op.type === 'player' ? op.p.id : -op.st.id) : 0,
+          paying ? c.payBy : '', paying ? c.tendered : 0, paying ? c.due : 0]);
       } else {
         const c = g.customerAtCounter(f);
         const op = g.operatorOf(f);

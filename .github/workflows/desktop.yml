@@ -57,10 +57,15 @@ jobs:
       - if: matrix.name == 'windows'
         shell: bash
         run: cd release/win-unpacked && 7z a -tzip -bso0 ../../Supermarket-windows.zip .
+      - if: matrix.name == 'windows'
+        shell: bash
+        run: cp release/Supermarket-windows-setup.exe .
       - uses: actions/upload-artifact@v4
         with:
           name: Supermarket-${{ matrix.name }}
-          path: ${{ matrix.name == 'mac' && 'Supermarket-mac.zip' || matrix.name == 'linux' && 'Supermarket-linux.tar.gz' || 'Supermarket-windows.zip' }}
+          path: |
+            ${{ matrix.name == 'mac' && 'Supermarket-mac.zip' || matrix.name == 'linux' && 'Supermarket-linux.tar.gz' || 'Supermarket-windows.zip' }}
+            ${{ matrix.name == 'windows' && 'Supermarket-windows-setup.exe' || '' }}
           if-no-files-found: error
 
   # Publishes the three downloads on the repository's Releases page. Fixed addresses for the newest version:
@@ -80,12 +85,13 @@ jobs:
           make_latest: true
           body: |
             Download the version for your computer:
-            - **Windows**: Supermarket-windows.zip. Extract it and run Supermarket.exe (Windows may warn about an unknown app: More info, Run anyway).
+            - **Windows**: Supermarket-windows-setup.exe. Run it: it installs the game and adds a desktop shortcut (Windows may warn about an unknown app: More info, Run anyway). Or Supermarket-windows.zip: extract all, then run Supermarket.exe inside the folder.
             - **Mac**: Supermarket-mac.zip. Open it, right-click Supermarket.app and choose Open the first time (Intel app, runs on Apple Silicon with Rosetta).
             - **Linux**: Supermarket-linux.tar.gz. Extract it and run ./supermarket.
             Play together online: one player builds a store and sends the 5-letter store code; friends type it and press Join with code.
             Works between the downloaded game and the website (https://omernegri-oss.github.io/-STEM/), in any mix.
           files: |
+            builds/Supermarket-windows-setup.exe
             builds/Supermarket-windows.zip
             builds/Supermarket-mac.zip
             builds/Supermarket-linux.tar.gz

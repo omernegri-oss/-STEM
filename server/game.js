@@ -15,9 +15,17 @@ export const rndi = (a, b) => Math.floor(rnd(a, b + 1));
 export const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const round2 = v => Math.round(v * 100) / 100;
+// the cash a shopper hands over: sometimes exact, usually the next round note above the total
+export function tenderFor(due) {
+  const cents = Math.round(due * 100);
+  if (Math.random() < 0.1) return cents / 100;
+  const ups = [...new Set([100, 500, 1000, 2000, 5000, 10000].map(st => Math.ceil(cents / st) * st).filter(v => v > cents))];
+  return pick(ups.slice(0, 3)) / 100;
+}
+const money = v => '$' + v.toFixed(2);
 export const DOOR_TYPES = new Set(['fridge', 'freezer_upright', 'freezer']);
 const COMPUTER_ACTIONS = new Set(['order', 'license', 'buyFurniture', 'hire', 'fire', 'shift', 'raise', 'buyUpgrade',
-  'setPrice', 'priceAll', 'expand', 'payBill', 'sale']);
+  'priceAll', 'expand', 'payBill', 'sale']); // setPrice also works at a shelf label
 
 function newLedger() {
   return { revenue: 0, cogs: 0, salaries: 0, rent: 0, power: 0, maint: 0, other: 0, bonus: 0, tips: 0,
@@ -496,6 +504,7 @@ export class Game {
       }
       case 'leaveStation': player.station = null; return true;
       case 'work': return this.playerWork(player, fail);
+      case 'payCash': case 'payCard': return this.takePayment(player, m, fail);
 
       // ---------------- butcher / deli: take from the big fridge -> cut at the station -> hand over
       case 'deptTake': {
@@ -762,7 +771,41 @@ export class Game {
       const per = f.upg ? 2 : 1;
       for (let i = 0; i < per && c.scanned < c.basket.length; i++) c.scanned++;
       this.sound('beep', f.x, f.z);
-    } else this.completeCheckout(c, f, player);
+    }
+    if (c.scanned >= c.basket.length) this.readyToPay(c);
+    return true;
+  }
+  // everything scanned: the total is fixed and the shopper takes out cash or a card
+  readyToPay(c) {
+    if (c.due != null) return;
+    c.due = round2(c.basket.reduce((a, b) => a + b.price, 0));
+    if (!c.payBy) c.payBy = 'card';
+    if (c.payBy === 'cash') c.tendered = tenderFor(c.due);
+  }
+  // the player at the register takes the payment: change counted from the drawer, or the amount typed on the card terminal
+  takePayment(player, m, fail) {
+    const f = this.fixture(player.station);
+    if (!f || f.type !== 'checkout') return fail('Stand behind a register first.');
+    const c = this.customerAtRegister(f);
+    if (!c) return fail('No customer at the register.');
+    if (c.scanned < c.basket.length) return fail('Scan all the products first.');
+    this.readyToPay(c);
+    const complain = (text) => { c.mood -= 3; c.thought = '😠'; c.thoughtT = 2.5; return fail(text); };
+    if (c.payBy === 'cash') {
+      if (m.a !== 'payCash') return complain(`${c.name} is paying cash, not by card.`);
+      const owed = round2(c.tendered - c.due), given = round2(Math.max(0, +m.change || 0));
+      if (given < owed - 0.004) return complain(`${c.name}: "That's not enough change. I gave you ${money(c.tendered)} for ${money(c.due)}, I should get ${money(owed)} back."`);
+      const extra = round2(given - owed);
+      this.completeCheckout(c, f, player, extra);
+      if (extra > 0.004) this.fx({ k: 'err', text: `You gave ${money(extra)} too much change. That money is gone.`, to: player.id });
+      return true;
+    }
+    if (m.a !== 'payCard') return complain(`${c.name} is paying by card. Use the card terminal.`);
+    const amount = round2(+m.amount || 0);
+    if (Math.abs(amount - c.due) > 0.004) return complain(amount > c.due
+      ? `${c.name}: "${money(amount)}? My total is ${money(c.due)}. I'm not paying that."`
+      : `${c.name}: "The terminal says ${money(amount)}, but my total is ${money(c.due)}. Please fix it."`);
+    this.completeCheckout(c, f, player);
     return true;
   }
 
@@ -785,9 +828,9 @@ export class Game {
     return st ? { type: 'staff', st } : null;
   }
 
-  completeCheckout(c, f, who) {
+  completeCheckout(c, f, who, lostChange = 0) {
     const s = this.s;
-    const total = round2(c.basket.reduce((a, b) => a + b.price, 0));
+    const total = round2(c.basket.reduce((a, b) => a + b.price, 0) - lostChange);
     this.earn(total, 'revenue');
     s.stats.revenue = round2(s.stats.revenue + total);
     for (const it of c.basket) {

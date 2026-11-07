@@ -49,27 +49,26 @@ jobs:
           npm i --no-save playwright@1.56.1
           ELECTRON_PATH=$PWD/release/linux-unpacked/supermarket SHOTS=shots xvfb-run -a node tests/desktop-smoke.mjs
       # GitHub artifacts drop file permissions and symlinks, which breaks the Mac app and the Linux executable:
-      # pack them in archives that keep both (zip for macOS, tar.gz for Linux). Windows is uploaded as a folder.
+      # pack them in archives that keep both (zip for macOS, tar.gz for Linux). Everything to upload goes in out/.
       - if: matrix.name == 'mac'
-        run: cd release/mac && zip -qry ../../Supermarket-mac.zip Supermarket.app
+        run: mkdir -p out && cd release/mac && zip -qry ../../out/Supermarket-mac.zip Supermarket.app
       - if: matrix.name == 'linux'
-        run: tar -C release/linux-unpacked -czf Supermarket-linux.tar.gz .
+        run: mkdir -p out && tar -C release/linux-unpacked -czf out/Supermarket-linux.tar.gz .
+      # Windows: the one-click installer, plus the plain folder as a zip
       - if: matrix.name == 'windows'
         shell: bash
-        run: cd release/win-unpacked && 7z a -tzip -bso0 ../../Supermarket-windows.zip .
-      - if: matrix.name == 'windows'
-        shell: bash
-        run: cp release/Supermarket-windows-setup.exe .
+        run: |
+          mkdir -p out
+          cp release/Supermarket-windows-setup.exe out/
+          cd release/win-unpacked && 7z a -tzip -bso0 ../../out/Supermarket-windows.zip .
       - uses: actions/upload-artifact@v4
         with:
           name: Supermarket-${{ matrix.name }}
-          path: |
-            ${{ matrix.name == 'mac' && 'Supermarket-mac.zip' || matrix.name == 'linux' && 'Supermarket-linux.tar.gz' || 'Supermarket-windows.zip' }}
-            ${{ matrix.name == 'windows' && 'Supermarket-windows-setup.exe' || '' }}
+          path: out/
           if-no-files-found: error
 
   # Publishes the three downloads on the repository's Releases page. Fixed addresses for the newest version:
-  #   https://github.com/<owner>/<repo>/releases/latest/download/Supermarket-windows.zip   (and -mac.zip, -linux.tar.gz)
+  #   https://github.com/<owner>/<repo>/releases/latest/download/Supermarket-windows-setup.exe   (and -windows.zip, -mac.zip, -linux.tar.gz)
   release:
     needs: build
     runs-on: ubuntu-latest

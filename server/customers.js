@@ -210,7 +210,8 @@ export function updateCustomers(game, dt, dMin) {
   for (const c of game.customers) {
     if (c.thoughtT > 0) { c.thoughtT -= dt; if (c.thoughtT <= 0) c.thought = ''; }
     // repath if the layout changed underneath us
-    if (c.path && c.path.length && c.pathVer !== game.gridVersion && c.goal) {
+    // (a shopper standing at the register stays there: they are being served)
+    if (c.path && c.path.length && c.pathVer !== game.gridVersion && c.goal && c.state !== 'register') {
       if (!goTo(game, c, c.goal[0], c.goal[1], c.goal[2] || 0)) { c.path = null; c.reroute = true; }
     }
     if (c.reroute) {
@@ -380,7 +381,7 @@ export function updateCustomers(game, dt, dMin) {
         if (walk(game, c, dt)) {
           face(c, f);
           if (idx === 0 && c.goal && c.goal[0] === f._front[0] && c.goal[1] === f._front[1]) {
-            c.state = 'register'; c.scanned = 0; c.selfT = 0;
+            c.state = 'register'; c.scanned = 0; c.selfT = 0; c.due = null; c.tendered = 0;
           }
         }
         break;

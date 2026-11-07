@@ -359,7 +359,7 @@ addEventListener('mousedown', () => initAudio());
 
 // ----------------------------------------------------------------------------------- main loop
 let last = performance.now(), sendT = 0, holdT = 0, tasksT = 0, lastInter = null, stepT = 0;
-let currentInter = null;
+let currentInter = null, payGoneT = 0;
 function frame(now) {
   window.__frames = (window.__frames || 0) + 1;
   const rawDt = (now - last) / 1000;
@@ -414,7 +414,7 @@ function frame(now) {
     } else pr.classList.add('hidden');
     ui.stationBar(currentInter);
     // the payment window closes by itself when that customer is done (or leaves)
-    if (ui.payFor) { const k = (G.snap?.K || []).find(k => k[0] === G.station); if (!k || k[1] !== ui.payFor) ui.closePayment(); }
+    if (ui.payFor) { const k = (G.snap?.K || []).find(k => k[0] === G.station); if (!k || k[1] !== ui.payFor) { payGoneT += dt; if (payGoneT > 1) ui.closePayment(); } else payGoneT = 0; } else payGoneT = 0;
     const carry = G.carry || [];
     const ce = $('carry');
     const nameOf = (c) => c.startsWith('f:') ? FURNITURE[c.slice(2)].name + ' (box)' : c.includes(':') ? `${c.startsWith('raw') ? 'Raw' : 'Wrapped'} ${PRODUCT_MAP[c.split(':')[1]]?.name}` : PRODUCT_MAP[c]?.name;

@@ -18,6 +18,8 @@ files:
   - "!node_modules/three/**"
   - "!node_modules/electron*/**"
 npmRebuild: false
+# the CI workflow publishes the downloads itself (release job); electron-builder must not try to
+publish: null
 win:
   target: [dir, nsis]
   icon: build/icon.png

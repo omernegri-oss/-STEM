@@ -1,7 +1,10 @@
-// Online play by store code (WebRTC through PeerJS), with a local PeerServer standing in for the free public one.
-//  1. website host  + website friend
+// Online play by store code, with a local PeerServer and a local MQTT broker standing in for the free public ones.
+//  1. website host  + website friend (direct WebRTC route)
 //  2. game-server host (what the desktop app runs) + website friend
 //  3. website host  + game-server page friend (no such store on that server, so it goes online)
+//  4. website host  + website friend whose network blocks the direct route: through the relay
+//  5. game-server host + relay friend
+//  6. host that can only use the relay + ordinary friend: the direct route finds nothing, the relay does
 // Usage: node tools/build-static.mjs && node tests/browser-online.mjs
 import { createRequire } from 'node:module';
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
@@ -9,6 +12,8 @@ import assert from 'node:assert/strict';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const { PeerServer } = require('peer');
+const aedes = require('aedes');
+const { WebSocketServer, createWebSocketStream } = require('ws');
 import os from 'node:os';
 process.env.SAVES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'st-online-')); // fresh saves: store names must be unique
 const { startServer } = await import('../server/index.js');
@@ -21,20 +26,26 @@ const peerServer = PeerServer({ port: PEER_PORT, host: '127.0.0.1', path: '/' })
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const site = http.createServer((req, res) => { let f = path.join(DIST, decodeURIComponent(req.url.split('?')[0])); if (f.endsWith('/')) f += 'index.html'; fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }); res.end(d); }); }).listen(3170);
 const game = startServer(3172, { quiet: true }); await game.ready;
+// MQTT over WebSocket on 3173 (the relay route)
+let broker = aedes.createBroker ? aedes.createBroker() : aedes(); if (broker.then) broker = await broker;
+const relayWss = new WebSocketServer({ host: '127.0.0.1', port: 3173, handleProtocols: (ps) => (ps.has('mqtt') ? 'mqtt' : false) });
+relayWss.on('connection', (ws) => broker.handle(createWebSocketStream(ws)));
+const RELAY = 'ws://127.0.0.1:3173/mqtt';
 const SITE = 'http://localhost:3170/?low', SERVER = 'http://localhost:3172/?low';
 
 // local network only: plain host candidates (no mDNS names), no STUN/TURN
 const browser = await chromium.launch({ args: ['--disable-features=WebRtcHideLocalIpsWithMdns', '--use-fake-ui-for-media-stream'] });
 const errors = [];
-async function player(name) {
+async function player(name, opts = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 640 } });
   const page = await ctx.newPage();
   page.on('pageerror', e => errors.push(`${name}: PAGEERROR ${e.message}`));
   page.on('console', m => { if (m.type() === 'error' && !/favicon|404/.test(m.text())) errors.push(`${name}: ${m.text()}`); });
-  await page.addInitScript((port) => {
+  await page.addInitScript(([port, relay, relayOnly]) => {
     window.ST_PEER = { host: '127.0.0.1', port, path: '/', secure: false, config: { iceServers: [] } };
+    window.ST_RELAYS = [relay]; if (relayOnly) window.ST_RELAY_ONLY = true;
     localStorage.setItem('st_seen_help', '1'); localStorage.setItem('st_cam', 'tps'); localStorage.setItem('st_gfx', 'low');
-  }, PEER_PORT);
+  }, [PEER_PORT, RELAY, !!opts.relayOnly]);
   const E = (fn, a) => page.evaluate(fn, a);
   const waitFor = async (fn, ms = 30000, a) => { const t0 = Date.now(); for (;;) { try { if (await page.evaluate(fn, a)) return; } catch {} if (Date.now() - t0 > ms) throw new Error(`${name}: timeout ${fn}`); await sleep(200); } };
   return { name, ctx, page, E, waitFor };
@@ -123,17 +134,65 @@ async function joinStore(f, url, code) {
   await h.ctx.close(); await f.ctx.close();
 }
 
+// ------------------------------------------------------------------ 4. website host + relay friend: a whole session
+{
+  const h = await player('WebHost4'), f = await player('RelayFriend', { relayOnly: true });
+  const code = await hostStore(h, SITE);
+  console.log('4. store code', code);
+  await joinStore(f, SITE, code);
+  assert.equal(await f.E(() => window.__dbg.net.via), 'relay');
+  await h.waitFor(() => /1 friend connected/.test(document.getElementById('l-online').textContent));
+  await h.page.click('#l-start');
+  await f.waitFor(() => window.__G.meta && window.__G.meta.phase === 'naming');
+  await h.page.fill('#n-input', 'Relay Mart'); await sleep(300); await h.page.click('#n-vote');
+  await f.waitFor(() => window.__G.meta.nameDraft === 'Relay Mart' && window.__G.meta.nameVotes.length === 1); await f.E(() => window.__dbg.net.act('nameVote'));
+  // the first world message is big: it crosses the broker in pieces
+  await f.waitFor(() => window.__G.meta.phase === 'prep' && window.__G.world && window.__G.world.furniture.length > 0);
+  const x0 = await h.E(() => window.__G.snap.P.find(p => p[0] !== window.__G.me)[1]);
+  await f.E(() => { const m = window.__dbg.me; m.x += 2; });
+  await h.waitFor((x0) => { const fr = window.__G.snap.P.find(p => p[0] !== window.__G.me); return fr && fr[1] > x0 + 1.5; }, 15000, x0);
+  await f.E(() => window.__dbg.net.send({ t: 'chat', text: 'hello through the relay' }));
+  await h.waitFor(() => document.body.textContent.includes('hello through the relay'));
+  await f.page.screenshot({ path: `${OUT}/92-online-relay-friend.png` });
+  await h.page.close();
+  await f.waitFor(() => /closed the store|connection was lost/.test(document.getElementById('loading').textContent), 30000);
+  console.log('4. website host + relay friend: ok');
+  await h.ctx.close(); await f.ctx.close();
+}
+
+// ------------------------------------------------------------------ 5. game-server host + relay friend
+{
+  const h = await player('DeskHost5'), f = await player('RelayFriend5', { relayOnly: true });
+  const code = await hostStore(h, SERVER);
+  await joinStore(f, SITE, code);
+  await h.waitFor(() => document.querySelectorAll('#l-players .lp:not(.empty)').length === 2);
+  assert.equal(await f.E(() => window.__dbg.net.via), 'relay');
+  console.log('5. game-server host + relay friend: ok');
+  await h.ctx.close(); await f.ctx.close();
+}
+
+// ------------------------------------------------------------------ 6. relay-only host + ordinary friend
+{
+  const h = await player('RelayHost6', { relayOnly: true }), f = await player('Friend6');
+  const code = await hostStore(h, SITE);
+  await joinStore(f, SITE, code);
+  await h.waitFor(() => document.querySelectorAll('#l-players .lp:not(.empty)').length === 2);
+  assert.equal(await f.E(() => window.__dbg.net.via), 'relay');
+  console.log('6. relay-only host + ordinary friend (direct finds nothing, relay does): ok');
+  await h.ctx.close(); await f.ctx.close();
+}
+
 // ------------------------------------------------------------------ wrong code: a clear message, back to the menu
 {
   const f = await player('Lost');
   await f.page.goto(SITE); await inMenu(f);
   await f.page.fill('#m-code', 'ZZZZZ'); await f.page.click('#m-join');
-  await f.waitFor(() => /No store with code ZZZZZ/.test(document.getElementById('loading').textContent), 30000);
+  await f.waitFor(() => /No store with code ZZZZZ/.test(document.getElementById('loading').textContent), 60000);
   console.log('wrong code message:', await f.E(() => document.getElementById('loading').textContent.trim()));
   await f.ctx.close();
 }
 
-await browser.close(); site.close(); game.close(); peerServer.close?.();
+await browser.close(); site.close(); game.close(); peerServer.close?.(); relayWss.close();
 console.log('errors:', errors.length ? errors : 'none');
 assert.deepEqual(errors, []);
 console.log('✅ online play test passed');

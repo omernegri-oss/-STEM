@@ -9,7 +9,7 @@ import { createScene } from './scene.js';
 import { World } from './world.js';
 import { Actors, carryModel } from './actors.js';
 import { FX } from './fx.js';
-import { Input, LocalPlayer, CameraRig, findInteraction } from './player.js';
+import { Input, LocalPlayer, CameraRig, findInteraction, keyName } from './player.js';
 import { BuildMode } from './build.js';
 import { UI, esc } from './ui.js';
 import { initAudio, play, audio } from './audio.js';
@@ -139,7 +139,7 @@ let fsAsked = false; canvas.addEventListener('click', () => { if (!fsAsked && on
 // ----------------------------------------------------------------------------------- online play by store code
 const ONLINE_TEXT = {
   connecting: () => 'Opening your store to friends online…',
-  online: () => host.friends ? `Online: ${host.friends} friend${host.friends > 1 ? 's' : ''} connected through the internet.` : 'Online: friends join from anywhere by typing this code and pressing Join with code.',
+  online: () => host.friends ? `Online: ${host.friends} friend${host.friends > 1 ? 's' : ''} connected through the internet.` : 'Online: friends join from anywhere by typing this code and pressing Join with code. Keep this game open while they play.',
   error: (d) => `Online play is off: ${d || 'could not reach the online service.'} Friends can't join right now.`,
 };
 host.onStatus = (st, detail) => {
@@ -160,7 +160,8 @@ function joinOnline(code) {
 }
 if (onlineJoin) setTimeout(async () => {
   loading(true, `Connecting to store ${onlineJoin.code}…`);
-  try { await net.connect(); } catch (e) { loading(true, `${e.message || 'Could not connect.'} Returning to the menu…`); setTimeout(() => location.reload(), 4000); return; }
+  net.onStage = (text) => loading(true, text); // each step of the connection, so a slow one doesn't look stuck
+  try { await net.connect(); } catch (e) { loading(true, `${e.message || 'Could not connect.'} Returning to the menu…`); setTimeout(() => location.reload(), 6000); return; }
   loading(false); initAudio();
   net.send({ t: 'join', code: onlineJoin.code, name: prefs.name || 'Player', color: prefs.color });
 }, 0);
@@ -337,7 +338,7 @@ addEventListener('keydown', (e) => {
   initAudio();
   if (!G.started || $('hud').classList.contains('hidden')) return;
   if (input.typing()) return;
-  const k = e.key.toLowerCase();
+  const k = keyName(e);
   if (k === 'enter') { $('chat-input').focus(); e.preventDefault(); return; }
   if (k === '?' || k === 'f1') { toggleHelp(); e.preventDefault(); return; }
   if (k === 'escape') {

@@ -93,15 +93,27 @@ The player who builds the store is its host: the store runs on their computer. T
 store code (also in the top bar during the game). Friends type it in the main menu and press **Join with code**.
 This works on the website and in the downloaded game, in any mix, over the internet. No accounts are needed.
 
-The free public PeerJS service (0.peerjs.com) only introduces the two computers; the game itself then runs over a
-direct WebRTC connection (or PeerJS's free relay when a direct route isn't possible). The host must keep the
-game open; friends see a message and return to the menu when the host leaves. To use your own PeerServer, set
-`window.ST_PEER = { host, port, path, secure }` before the game loads.
+There are two routes, tried in order:
+
+1. **Direct**: the free public PeerJS service (0.peerjs.com) introduces the two computers, and the game runs over
+   a direct WebRTC connection (STUN/TURN help with routers).
+2. **Relay**: when two home networks can't connect directly (strict routers, carrier-grade NAT), messages go
+   through free public MQTT brokers over a secure WebSocket (EMQX, HiveMQ, Mosquitto test servers). The host
+   listens on all of them; the friend uses the first one that reaches the store.
+
+The friend's loading screen shows each step. The host must keep the game open; friends see a message and return
+to the menu when the host leaves. Self-hosting: `window.ST_PEER = { host, port, path, secure }` and
+`window.ST_RELAYS = ['wss://…']` before the game loads.
+
+Keys work by their place on the keyboard, so WASD and all shortcuts work with any keyboard layout (for example
+Hebrew).
 
 ## Desktop version
 
 `npm run desktop` starts the desktop app (Electron). It runs the game server inside the app and keeps saves in
-the app data folder. Builds for Windows, macOS and Linux come from `npm run dist:win|dist:mac|dist:linux` or from
+the app data folder. It starts fullscreen (F11 toggles). If a copy is stuck in the background it offers to
+close it and start again; after a graphics-driver crash it restarts with software graphics. Each start writes
+`startup-log.txt` (and errors `error-log.txt`) in the app data folder (`%APPDATA%\\Supermarket` on Windows). Builds for Windows, macOS and Linux come from `npm run dist:win|dist:mac|dist:linux` or from
 the **Desktop builds** GitHub Actions workflow, which publishes them on the Releases page.
 
 ## Web version (no server)

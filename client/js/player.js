@@ -3,6 +3,17 @@ import * as THREE from 'three';
 import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo, slotCap } from '/shared/data.js';
 import { resolveCollision, dims, center, heightAt, deptSpots } from '/shared/grid.js';
 
+// The key by its place on the keyboard, so WASD and every shortcut work with any layout (Hebrew, Russian,
+// French AZERTY...): on a Hebrew keyboard the W key types a Hebrew letter, but its code is still 'KeyW'.
+export function keyName(e) {
+  const c = e.code || '';
+  if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(c)) return c.slice(5);
+  if (c === 'Space') return ' ';
+  if (c === 'Slash' && e.shiftKey) return '?';
+  return (e.key || '').toLowerCase();
+}
+
 export class Input {
   constructor(canvas) {
     this.keys = new Set(); this.pressed = new Set();
@@ -13,12 +24,12 @@ export class Input {
     this.typing = typing;
     addEventListener('keydown', (e) => {
       if (typing()) return;
-      const k = e.key.toLowerCase();
+      const k = keyName(e);
       if (!this.keys.has(k)) this.pressed.add(k);
       this.keys.add(k);
       if (['tab', ' ', 'arrowup', 'arrowdown'].includes(k)) e.preventDefault();
     });
-    addEventListener('keyup', (e) => { this.keys.delete(e.key.toLowerCase()); });
+    addEventListener('keyup', (e) => { this.keys.delete(keyName(e)); this.keys.delete((e.key || '').toLowerCase()); });
     addEventListener('blur', () => this.keys.clear());
     canvas.addEventListener('mousedown', (e) => {
       if (this.mouse.locked) { this.mouse.clicked = { button: e.button, x: innerWidth / 2, y: innerHeight / 2 }; return; }

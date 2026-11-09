@@ -31,6 +31,7 @@
     "ws": "8.18.0"
   },
   "devDependencies": {
+    "aedes": "^0.51.3",
     "electron": "^38.4.0",
     "electron-builder": "^26.0.12",
     "peer": "^1.0.2"

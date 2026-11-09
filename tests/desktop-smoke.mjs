@@ -18,7 +18,7 @@ async function run(label, args) {
   const out = []; app.process().stdout.on('data', d => out.push(String(d))); app.process().stderr.on('data', d => out.push(String(d)));
   const page = await app.firstWindow();
   const errors = [];
-  page.on('pageerror', e => errors.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error' && !/peerjs/i.test(m.text())) errors.push(m.text()); }); // the online service may be unreachable (sandboxed CI)
+  page.on('pageerror', e => errors.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error' && !/peerjs|mqtt|emqx|hivemq|mosquitto/i.test(m.text())) errors.push(m.text()); }); // the online services may be unreachable (sandboxed CI)
   await page.waitForFunction(() => window.__dbg && window.desktopApp, null, { timeout: 90000 }); // __dbg is set once the menu is fully built
   const info = await page.evaluate(() => window.desktopApp.info);
   console.log(`[${label}] app`, JSON.stringify(info));

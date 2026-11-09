@@ -386,7 +386,8 @@ function frame(now) {
   if (inGame) {
     if (!build.active) {
       const blockMove = G.meta?.phase === 'naming';
-      if (!blockMove) me.update(dt, input, rig.yaw, world, (G.carry || []).length);
+      // walk by real elapsed time, so a slow computer doesn't make you crawl; collisions in small steps
+      if (!blockMove) { let left = Math.min(rawDt, 0.25); while (left > 1e-4) { const step = Math.min(left, 0.04); me.update(step, input, rig.yaw, world, (G.carry || []).length); left -= step; } }
       me.y = heightAt(G.world.w, G.world.floors || 1, me.floor, me.x, me.z);
       me.fpsReady = true;
       rig.update(dt, input, me);

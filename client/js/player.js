@@ -20,7 +20,9 @@ export class Input {
     this.mouse = { x: 0, y: 0, nx: 0, ny: 0, down: false, button: -1, dragging: false, dx: 0, dy: 0, lx: 0, ly: 0, wheel: 0, clicked: null, locked: false };
     document.addEventListener('pointerlockchange', () => { this.mouse.locked = document.pointerLockElement === canvas; });
     this.canvas = canvas;
-    const typing = () => { const a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'); };
+    // typing in a visible text box (chat, a price): the game ignores keys. A hidden box (the store-name field after
+    // naming, a menu field) must not swallow WASD
+    const typing = () => { const a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT') && a.offsetParent !== null; };
     this.typing = typing;
     addEventListener('keydown', (e) => {
       if (typing()) return;
@@ -32,6 +34,7 @@ export class Input {
     addEventListener('keyup', (e) => { this.keys.delete(keyName(e)); this.keys.delete((e.key || '').toLowerCase()); });
     addEventListener('blur', () => this.keys.clear());
     canvas.addEventListener('mousedown', (e) => {
+      const a = document.activeElement; if (a && a !== canvas && a.blur) a.blur(); // clicking the game takes the keys back from any text box
       if (this.mouse.locked) { this.mouse.clicked = { button: e.button, x: innerWidth / 2, y: innerHeight / 2 }; return; }
       this.mouse.down = true; this.mouse.button = e.button; this.mouse.sx = e.clientX; this.mouse.sy = e.clientY; this.mouse.dragging = false;
       canvas.focus();

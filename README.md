@@ -51,6 +51,8 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
   - read **messages**.
 - Deliveries arrive as boxes at the loading area. Furniture comes in a box too: carry it inside, press `E`
   and place it wherever you like. Nobody tells you how to lay out your store.
+- **Household & toiletries** (toilet tissue, bleach, dish soap, shampoo, soap, washing powder, detergent) share the
+  gondola shelves with groceries; order them from CleanCo Supply (from level 2).
 - **Fridges and freezers have doors**: open them before stocking.
 - **At the register**, shoppers unload their basket onto the belt (side by side, stacked, some lying down). Click each
   product to pass it over the scanner, then take the payment:

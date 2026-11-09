@@ -71,6 +71,39 @@ function build() {
   SHAPE_MATS.slab = ['plain', 'tray'];
   G.wedge = based(parts([[new THREE.CylinderGeometry(D.wedge.w / 2, D.wedge.w / 2, D.wedge.h, 16, 1, false, 0, Math.PI * 0.5).translate(0, D.wedge.h / 2, 0), 0]]));
   SHAPE_MATS.wedge = ['plain'];
+  // toilet roll pack: plastic-wrapped block with soft, slightly bulged sides; the top shows the roll ends
+  const pk = new THREE.BoxGeometry(D.pack.w, D.pack.h, D.pack.d, 6, 6, 4), pp = pk.attributes.position;
+  for (let i = 0; i < pp.count; i++) {
+    const x = pp.getX(i) / (D.pack.w / 2), y = pp.getY(i) / (D.pack.h / 2), z = pp.getZ(i) / (D.pack.d / 2);
+    const soft = 1 - 0.06 * Math.pow(Math.max(Math.abs(x), Math.abs(z)), 6) * (Math.abs(y) > 0.9 ? 1 : 0.3);
+    pp.setX(i, pp.getX(i) * soft); pp.setZ(i, pp.getZ(i) * soft);
+  }
+  pk.computeVertexNormals();
+  G.pack = based(pk); SHAPE_MATS.pack = ['label', 'label', 'rolls', 'top', 'label', 'label'];
+  // handled jug (bleach, liquid detergent): rounded body, shoulder, cap, handle on the back corner
+  const gw = D.jug.w, gh = D.jug.h, gd = D.jug.d;
+  const jb = new THREE.BoxGeometry(gw, gh * 0.78, gd, 6, 6, 4), jp = jb.attributes.position;
+  for (let i = 0; i < jp.count; i++) { const x = jp.getX(i) / (gw / 2), z = jp.getZ(i) / (gd / 2); const k = 1 - 0.12 * Math.pow(Math.abs(x * z), 2); jp.setX(i, jp.getX(i) * k); jp.setZ(i, jp.getZ(i) * k); }
+  jb.computeVertexNormals();
+  G.jug = based(parts([[jb.translate(0, gh * 0.39, 0), 0],
+    [new THREE.CylinderGeometry(gw * 0.16, gw * 0.48, gh * 0.12, 16).scale(1, 1, gd / gw).translate(-gw * 0.18, gh * 0.84, 0), 2],
+    [new THREE.CylinderGeometry(gw * 0.17, gw * 0.17, gh * 0.08, 14).translate(-gw * 0.18, gh * 0.94, 0), 1],
+    [new THREE.TorusGeometry(gh * 0.12, 0.012, 6, 14, Math.PI).rotateZ(-Math.PI / 2).translate(gw * 0.36, gh * 0.7, 0), 2]]));
+  SHAPE_MATS.jug = ['label', 'cap', 'side'];
+  // squeeze bottle (shampoo, dish soap): flat oval body, flip cap
+  const sq = new THREE.CylinderGeometry(D.squeeze.w / 2, D.squeeze.w / 2 * 0.92, D.squeeze.h * 0.84, 20, 4).scale(1, 1, D.squeeze.d / D.squeeze.w);
+  G.squeeze = based(parts([[sq.translate(0, D.squeeze.h * 0.42, 0), 0],
+    [new THREE.CylinderGeometry(D.squeeze.w * 0.3, D.squeeze.w * 0.36, D.squeeze.h * 0.16, 14).scale(1, 1, 0.8).translate(0, D.squeeze.h * 0.92, 0), 1]]));
+  SHAPE_MATS.squeeze = ['label', 'cap'];
+  // big gusseted bag of washing powder: like the pillow bag, wider and with a flat base
+  const pb = new THREE.BoxGeometry(D.pouch.w, D.pouch.h, D.pouch.d, 6, 8, 2), ppb = pb.attributes.position;
+  for (let i = 0; i < ppb.count; i++) {
+    const x = ppb.getX(i) / (D.pouch.w / 2), y = ppb.getY(i) / (D.pouch.h / 2), z = ppb.getZ(i);
+    const bulge = (1 - x * x * 0.6) * (y > 0.6 ? 1 - (y - 0.6) * 1.6 : 1);
+    ppb.setZ(i, z * (0.45 + 0.55 * bulge));
+  }
+  pb.computeVertexNormals();
+  G.pouch = based(pb); SHAPE_MATS.pouch = ['side', 'side', 'top', 'top', 'label', 'label'];
   return G;
 }
 export const PRODUCT_GEOS = build();
@@ -96,13 +129,20 @@ const BRAND_STYLE = {
   'Valley Farms': { bg: '#fbfaf7', ink: '#22303a', accent: '#5b8c3a', brandFont: '700 24px "Playfair Display"', nameFont: 'Barlow', nameWeight: 700, layout: 'clean' },
   'Blue Harbor': { bg: '#172a45', ink: '#ffffff', accent: '#4fa3d9', brandFont: '700 22px "Barlow Condensed"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'dark' },
   'Maple & Co': { bg: '#141414', ink: '#efe7d3', accent: '#c9a45c', brandFont: '900 24px "Playfair Display"', nameFont: '"Playfair Display"', nameWeight: 700, layout: 'premium' },
+  // household brands (all invented)
+  'CloudSoft': { bg: '#e8f3fc', ink: '#173a63', accent: '#2b7bd0', brandFont: 'italic 700 30px "Playfair Display"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'wave' },
+  'Citrus Clean': { bg: '#ffffff', ink: '#1d2a12', accent: '#e8c21a', brandFont: '700 24px "Barlow Condensed"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'band' },
+  'Brightwave': { bg: '#0f8a4a', ink: '#ffffff', accent: '#ffd400', brandFont: '26px "Archivo Black"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'burst' },
+  'Silk & Shine': { bg: '#ffffff', ink: '#0d2a5c', accent: '#1d4ed8', brandFont: '700 24px Barlow', nameFont: 'Barlow', nameWeight: 700, layout: 'clean' },
+  'Rosewood': { bg: '#fbe9ef', ink: '#5a1f35', accent: '#c2416c', brandFont: '28px Pacifico', nameFont: 'Barlow', nameWeight: 600, layout: 'heritage' },
 };
 const BRANDS = Object.keys(BRAND_STYLE);
 const BRAND_FOR = { pasta: 'Casa Bella', tomsauce: 'Casa Bella', olives: 'Casa Bella', salami: 'Casa Bella', truffle: 'Maple & Co', wine: 'Maple & Co', wagyu: 'Maple & Co', honey: 'Golden Fields', flour: 'Golden Fields', cereal: 'Golden Fields',
-  sugar: 'Pantry Pride', rice: 'Pantry Pride', beans: 'Pantry Pride', toiletpaper: 'Pantry Pride', detergent: 'Nordic Choice', water: 'Nordic Choice', fishsticks: 'Blue Harbor', sushi: 'Blue Harbor', milk: 'Valley Farms', butter: 'Valley Farms', cream: 'Valley Farms', eggs: 'Sunny Farm', yogurt: 'Sunny Farm',
+  sugar: 'Pantry Pride', rice: 'Pantry Pride', beans: 'Pantry Pride', toiletpaper: 'CloudSoft', detergent: 'Brightwave', washpowder: 'Brightwave', bleach: 'Citrus Clean', dishsoap: 'Citrus Clean', shampoo: 'Silk & Shine', soap: 'Rosewood', water: 'Nordic Choice', fishsticks: 'Blue Harbor', sushi: 'Blue Harbor', milk: 'Valley Farms', butter: 'Valley Farms', cream: 'Valley Farms', eggs: 'Sunny Farm', yogurt: 'Sunny Farm',
   salad: 'Daily Fresh', hummus: 'Daily Fresh', potsalad: 'Daily Fresh', kombucha: 'Green Leaf', veggies: 'Green Leaf', coffee: 'Maple & Co', chocolate: 'Maple & Co' };
-const DESCRIPTOR = { grocery: 'CLASSIC', fridge: 'KEEP REFRIGERATED', frozen: 'KEEP FROZEN  −18°C', produce: 'FRESH', meat: 'FRESH · BUTCHER CUT', deli: 'DELI SELECTION' };
-const SIZES = { box: '500 g', flatbox: '400 g', bag: '1 kg', can: '400 g', bottle: '1.5 L', jar: '350 g', carton: '1 L', tub: '150 g', slab: '500 g', wedge: '250 g' };
+const DESCRIPTOR = { grocery: 'CLASSIC', fridge: 'KEEP REFRIGERATED', frozen: 'KEEP FROZEN  −18°C', produce: 'FRESH', meat: 'FRESH · BUTCHER CUT', deli: 'DELI SELECTION', household: 'HOME CARE' };
+const SIZES = { box: '500 g', flatbox: '400 g', bag: '1 kg', can: '400 g', bottle: '1.5 L', jar: '350 g', carton: '1 L', tub: '150 g', slab: '500 g', wedge: '250 g', pack: '12 ROLLS', jug: '2 L', squeeze: '500 ml', pouch: '3 kg' };
+const SIZE_FOR = { toiletpaper: '12 ROLLS', soap: '4 × 100 g', cereal: '750 g', milk: '1 L · 3%', water: '1.5 L', detergent: '1.5 L · 30 WASHES', washpowder: '3 kg · 40 WASHES' };
 
 // --- small painting helpers for the product images (soft shading so they read like photos)
 function ball(g, x, y, r, col, hi = 0.35) {
@@ -159,16 +199,28 @@ const MOTIFS = {
   olives(g, w, h, r) { for (let i = 0; i < 14; i++) ell(g, w * 0.22 + r() * w * 0.56, h * 0.42 + r() * h * 0.38, 15, 11, r() < 0.5 ? 0x4f5a1e : 0x2c2a20, r() * 3, 0.45); },
   hummus(g, w, h) { ell(g, w / 2, h * 0.64, 60, 26, 0xd9bf8c, 0, 0.1); g.strokeStyle = 'rgba(150,110,60,0.6)'; g.lineWidth = 2; g.beginPath(); g.ellipse(w / 2, h * 0.64, 36, 14, 0, 0, Math.PI * 2); g.stroke(); g.fillStyle = 'rgba(200,120,40,0.7)'; g.beginPath(); g.ellipse(w / 2, h * 0.64, 14, 5, 0, 0, Math.PI * 2); g.fill(); },
   roast(g, w, h) { shadow(g, w / 2, h * 0.8, 60); ell(g, w / 2, h * 0.62, 58, 40, 0xb8732e, 0, 0.35); ell(g, w * 0.3, h * 0.68, 18, 12, 0xa8652a, 0.6); ell(g, w * 0.7, h * 0.68, 18, 12, 0xa8652a, -0.6); },
+  bleach(g, w, h) { // a lemon half and a splash
+    g.fillStyle = 'rgba(120,190,255,0.55)'; for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; g.beginPath(); g.ellipse(w / 2 + Math.cos(a) * 52, h * 0.62 + Math.sin(a) * 30, 12, 5, a, 0, Math.PI * 2); g.fill(); }
+    ball(g, w / 2, h * 0.62, 40, 0xf2d21a, 0.3); g.fillStyle = '#fbeea0'; g.beginPath(); g.arc(w / 2, h * 0.62, 32, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#efd25a'; g.lineWidth = 2; for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; g.beginPath(); g.moveTo(w / 2, h * 0.62); g.lineTo(w / 2 + Math.cos(a) * 30, h * 0.62 + Math.sin(a) * 30); g.stroke(); } },
+  dishsoap(g, w, h, r) { MOTIFS.bleach(g, w, h); for (let i = 0; i < 10; i++) { const x = w * 0.15 + r() * w * 0.7, y = h * 0.35 + r() * h * 0.5, s = 5 + r() * 12; const gr = g.createRadialGradient(x - s / 3, y - s / 3, 1, x, y, s); gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(1, 'rgba(255,255,255,0.15)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, s, 0, Math.PI * 2); g.fill(); } },
+  shampoo(g, w, h, r) { // water drops on a blue swirl
+    g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 6; g.beginPath(); for (let a = 0; a < Math.PI * 3; a += 0.1) g.lineTo(w / 2 + Math.cos(a) * a * 9, h * 0.6 + Math.sin(a) * a * 6); g.stroke();
+    for (let i = 0; i < 7; i++) { const x = w * 0.2 + r() * w * 0.6, y = h * 0.38 + r() * h * 0.42, s = 6 + r() * 8; const gr = g.createRadialGradient(x - s / 3, y - s / 2, 1, x, y, s); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, 'rgba(120,180,255,0.4)'); g.fillStyle = gr; g.beginPath(); g.moveTo(x, y - s * 1.6); g.quadraticCurveTo(x + s, y, x, y + s); g.quadraticCurveTo(x - s, y, x, y - s * 1.6); g.fill(); } },
+  soap(g, w, h, r) { for (const [x, y, c] of [[0.38, 0.6, 0xf6c3d5], [0.6, 0.66, 0xf9d9e4]]) { g.save(); g.translate(w * x, h * y); g.rotate(-0.15); const gr = g.createLinearGradient(0, -24, 0, 24); gr.addColorStop(0, shade(c, 1.1)); gr.addColorStop(1, shade(c, 0.8)); g.fillStyle = gr; g.beginPath(); g.roundRect ? g.roundRect(-44, -24, 88, 48, 20) : g.rect(-44, -24, 88, 48); g.fill(); g.restore(); } MOTIFS.dishsoap.call(null, g, w, h * 0.7, r); },
+  washpowder(g, w, h, r) { // a white flower and fresh laundry swirl on a sunburst
+    g.fillStyle = 'rgba(255,212,0,0.85)'; for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; g.beginPath(); g.moveTo(w / 2, h * 0.6); g.lineTo(w / 2 + Math.cos(a) * 90, h * 0.6 + Math.sin(a) * 90); g.lineTo(w / 2 + Math.cos(a + 0.18) * 90, h * 0.6 + Math.sin(a + 0.18) * 90); g.fill(); }
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; ell(g, w / 2 + Math.cos(a) * 18, h * 0.6 + Math.sin(a) * 18, 16, 10, 0xffffff, a, 0.1); } ball(g, w / 2, h * 0.6, 9, 0xf2c21a); void r; },
   sushi(g, w, h) { for (let i = 0; i < 3; i++) { const x = w * 0.3 + i * 50, y = h * 0.64; ell(g, x, y, 22, 14, 0xf6f4ee, 0, 0.1); ell(g, x, y - 10, 22, 9, i === 1 ? 0xe8774a : 0xf08a6a, 0, 0.3); } },
 };
-const MOTIF_FOR = { cheese: 'gouda', groundbeef: 'steak', ribeye: 'steak', wagyu: 'steak', lamb: 'steak', ribs: 'steak', chicken: 'steak', ham: 'steak', salami: 'steak', sausages: 'frozenmeat', potsalad: 'salad', roastchicken: 'roast', strawberry: 'yogurt' };
+const MOTIF_FOR = { detergent: 'washpowder', cheese: 'gouda', groundbeef: 'steak', ribeye: 'steak', wagyu: 'steak', lamb: 'steak', ribs: 'steak', chicken: 'steak', ham: 'steak', salami: 'steak', sausages: 'frozenmeat', potsalad: 'salad', roastchicken: 'roast', strawberry: 'yogurt' };
 const MEAT_COL = { chicken: 0xe8b8a0, ham: 0xe8a0a0, lamb: 0xb04a3c, salami: 0x9a2a2a, wagyu: 0xc04a44 };
 
 const texCache = new Map();
 export function packagingTexture(p) {
   if (texCache.has(p.id)) return texCache.get(p.id);
-  const W = 256, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d');
+  const W = 256, H = 256, c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2;
+  const g = c.getContext('2d'); g.scale(2, 2); // drawn at 2x for sharp print
   const r = rnd(seedOf(p.id));
   const brand = BRAND_FOR[p.id] || BRANDS[seedOf(p.id) % BRANDS.length];
   const S = BRAND_STYLE[brand];
@@ -176,6 +228,10 @@ export function packagingTexture(p) {
   g.fillStyle = S.bg; g.fillRect(0, 0, W, H);
   if (S.layout === 'kraft') { for (let i = 0; i < 1400; i++) { g.fillStyle = `rgba(80,55,25,${r() * 0.12})`; g.fillRect(r() * W, r() * H, 1 + r() * 2, 1); } }
   if (S.layout === 'premium') { g.strokeStyle = S.accent; g.lineWidth = 2; g.strokeRect(8, 8, W - 16, H - 16); }
+  // dairy cartons: gingham print on the top half, like classic milk cartons
+  if (p.shape === 'carton') { const check = shade(p.id === 'milk' ? 0x2f5fb3 : p.id === 'cream' ? 0xc8272d : p.color === 0xffffff ? 0x2f5fb3 : p.color, p.id === 'milk' ? 1 : 0.8); g.fillStyle = check; for (let y = 0; y < 66; y += 12) for (let x = 0; x < W; x += 12) { g.globalAlpha = ((x + y) / 12) % 2 ? 0.85 : 0.35; g.fillRect(x, y, 12, 12); } g.globalAlpha = 1; }
+  if (S.layout === 'wave') { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#bcdcf6'); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.fillStyle = 'rgba(43,123,208,0.18)'; for (let k = 0; k < 3; k++) { g.beginPath(); g.moveTo(0, H * (0.75 + k * 0.08)); for (let x = 0; x <= W; x += 8) g.lineTo(x, H * (0.75 + k * 0.08) + Math.sin(x / 26 + k) * 8); g.lineTo(W, H); g.lineTo(0, H); g.fill(); } }
+  if (S.layout === 'burst') { const gr = g.createRadialGradient(W / 2, H * 0.5, 10, W / 2, H * 0.5, W * 0.8); gr.addColorStop(0, '#2cc46c'); gr.addColorStop(1, '#0a6a36'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
   // product colour field behind the image
   const fieldTop = 70, fieldH = 116;
   const fg = g.createLinearGradient(0, fieldTop, 0, fieldTop + fieldH);
@@ -208,12 +264,50 @@ export function packagingTexture(p) {
   // descriptor, size and barcode
   g.font = '600 12px Barlow, Arial, sans-serif'; g.fillStyle = S.layout === 'dark' || S.layout === 'premium' ? S.accent : S.accent;
   g.fillText(p.id === 'wine' ? 'RESERVE 2021' : DESCRIPTOR[p.cat] || '', W / 2, fieldTop - 9);
-  g.font = '600 15px "Barlow Condensed", Arial, sans-serif'; g.fillStyle = S.ink; g.textAlign = 'left'; g.fillText(SIZES[p.shape] || '', 12, H - 18);
+  g.font = '600 15px "Barlow Condensed", Arial, sans-serif'; g.fillStyle = S.ink; g.textAlign = 'left'; g.fillText(SIZE_FOR[p.id] || SIZES[p.shape] || '', 12, H - 18);
+  // weight / count badge in the corner (a starburst on boxes and bags, a roundel on bottles)
+  if (['box', 'bag', 'pouch', 'pack', 'flatbox'].includes(p.shape)) {
+    const bx = W - 34, by = 84, rr = 24; g.fillStyle = S.layout === 'burst' ? '#ffd400' : S.accent; g.beginPath();
+    for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2, rad = k % 2 ? rr : rr * 0.82; g.lineTo(bx + Math.cos(a) * rad, by + Math.sin(a) * rad); } g.closePath(); g.fill();
+    g.fillStyle = S.layout === 'burst' ? '#0a3a1e' : '#ffffff'; g.textAlign = 'center'; g.font = '700 11px "Barlow Condensed", Arial, sans-serif';
+    const t = (SIZE_FOR[p.id] || SIZES[p.shape] || '').split(' · ')[0].split(' '); t.slice(0, 2).forEach((s, i) => g.fillText(s, bx, by - (t.length > 1 ? 5 : 0) + i * 11));
+  }
   g.fillStyle = '#fff'; g.fillRect(W - 74, H - 36, 62, 28); g.fillStyle = '#111';
   for (let i = 0, x = W - 70; x < W - 16; i++) { const bw = 1 + ((i * 7 + p.id.length) % 3); g.fillRect(x, H - 33, bw, 20); x += bw + 1 + (i % 2); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   texCache.set(p.id, t);
   return t;
+}
+// the side of a carton or bag: brand colour stripe, product name and small print
+const sideCache = new Map();
+function sideTexture(p) {
+  if (sideCache.has(p.id)) return sideCache.get(p.id);
+  const brand = BRAND_FOR[p.id] || BRANDS[seedOf(p.id) % BRANDS.length], S = BRAND_STYLE[brand];
+  const W = 128, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = S.layout === 'burst' ? '#0f8a4a' : S.bg; g.fillRect(0, 0, W, H);
+  g.fillStyle = S.accent; g.fillRect(0, 0, W, 34);
+  g.fillStyle = '#ffffff'; g.font = '700 16px "Barlow Condensed", Arial, sans-serif'; g.textAlign = 'center'; g.fillText(brand.toUpperCase(), W / 2, 23, W - 10);
+  g.fillStyle = S.layout === 'burst' || S.layout === 'dark' || S.layout === 'premium' ? '#e8e8e8' : '#3a3a3a';
+  g.font = '700 12px Barlow, Arial, sans-serif'; g.fillText(p.cat === 'household' ? 'DIRECTIONS' : 'NUTRITION FACTS', W / 2, 54);
+  g.fillRect(10, 60, W - 20, 1.5);
+  g.font = '500 9px Barlow, Arial, sans-serif'; g.textAlign = 'left';
+  const r = rnd(seedOf(p.id) + 5);
+  for (let i = 0; i < 12; i++) { const y = 74 + i * 12; g.fillRect(10, y, 30 + r() * 50, 4); g.fillRect(W - 28, y, 18, 4); }
+  g.fillRect(10, 222, W - 20, 1.5);
+  g.font = '600 10px Barlow, Arial, sans-serif'; g.fillText('Best before: see top', 10, 240);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  sideCache.set(p.id, t); return t;
+}
+// the top of a toilet-roll pack: roll ends seen through the wrap
+let rollsTex = null;
+function rollsTexture() {
+  if (rollsTex) return rollsTex;
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#dfe8f0'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) { const x = 44 + i * 84, y = 64 + j * 128; ball(g, x, y, 40, 0xf7f7f4, 0.08); g.fillStyle = '#c9b48e'; g.beginPath(); g.arc(x, y, 13, 0, Math.PI * 2); g.fill(); g.fillStyle = '#8a7350'; g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2); g.fill(); }
+  g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(0, 0, 256, 256);
+  rollsTex = new THREE.CanvasTexture(c); rollsTex.colorSpace = THREE.SRGBColorSpace; return rollsTex;
 }
 // small product picture for the interface (data URL of the packaging art)
 export function productThumb(p) { const t = packagingTexture(p); return t.image.toDataURL ? t.image.toDataURL('image/png') : ''; }
@@ -230,12 +324,14 @@ const shared = {
 export function productMaterials(p) {
   let arr = matCache.get(p.id);
   if (arr) return arr;
-  const label = new THREE.MeshPhysicalMaterial({ map: packagingTexture(p), roughness: p.shape === 'bottle' ? 0.15 : 0.45, clearcoat: p.shape === 'bottle' || p.shape === 'jar' ? 0.8 : 0.2, clearcoatRoughness: 0.3 });
-  const side = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.5 });
+  const glossy = ['bottle', 'jar', 'squeeze', 'jug', 'pack'].includes(p.shape);
+  const label = new THREE.MeshPhysicalMaterial({ map: packagingTexture(p), roughness: glossy ? 0.2 : 0.45, clearcoat: glossy ? 0.8 : 0.2, clearcoatRoughness: 0.3 });
+  const side = ['box', 'flatbox', 'bag', 'pouch'].includes(p.shape) ? new THREE.MeshStandardMaterial({ map: sideTexture(p), roughness: 0.5 }) : new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.5 });
   const top = new THREE.MeshStandardMaterial({ color: new THREE.Color(p.color).multiplyScalar(0.85), roughness: 0.55 });
   const plain = new THREE.MeshPhysicalMaterial({ color: p.color, roughness: p.cat === 'meat' ? 0.55 : 0.35, clearcoat: p.cat === 'produce' ? 0.5 : 0.1 });
   const cap = new THREE.MeshStandardMaterial({ color: new THREE.Color(p.color).lerp(new THREE.Color(0xffffff), 0.3), roughness: 0.4 });
-  const roles = { label, side, top, plain, cap, ...shared };
+  const rolls = new THREE.MeshPhysicalMaterial({ map: rollsTexture(), roughness: 0.2, clearcoat: 0.6 });
+  const roles = { label, side, top, plain, cap, rolls, ...shared };
   arr = SHAPE_MATS[p.shape].map(r => roles[r]);
   matCache.set(p.id, arr);
   return arr;

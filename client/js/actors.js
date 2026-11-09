@@ -57,7 +57,7 @@ export class Actors {
     const muted = new THREE.Color(col).lerp(new THREE.Color(0x4a4d50), 0.45).getHex(); // player colour, toned down like a real shirt
     const look = { ...lookFromSeed(id * 7777 + 13), shirt: muted, pants: 0x2c3e5a, cap: null, hat: null, scale: 1, glasses: false, badge: 0xe9e6df };
     const obj = makeCharacter(look);
-    const tag = makeSprite(inf.name, 0.17, { bg: 'rgba(17,20,24,0.72)', color: '#f4f6f2', size: 40, radius: 8, pad: 12, font: 'Barlow', weight: 600 }); tag.position.y = 1.85; obj.add(tag);
+    const tag = makeSprite(inf.name, 0.17, { bg: 'rgba(17,20,24,0.72)', color: '#f4f6f2', size: 40, radius: 8, pad: 12, font: 'Barlow', weight: 600 }); tag.position.y = 2.08; obj.add(tag);
     const emote = { visible: false, userData: { text: '' } }; // gestures are animations, not icons
     // ring marker under players
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7 })); ring.userData.owned = ring.userData.ownGeo = true;
@@ -178,7 +178,7 @@ export class Actors {
     e.carry.clear();
     if (!carry.length) return;
     if (carry.length === 1) {
-      const b = carryModel(carry[0]); b.position.set(0, carry[0].startsWith('f:') ? 0.5 : carry[0].includes(':') ? 0.85 : 0.68, carry[0].startsWith('f:') ? 0.55 : 0.44); e.carry.add(b);
+      const b = carryModel(carry[0]); b.position.set(0, carry[0].startsWith('f:') ? 0.62 : carry[0].includes(':') ? 1.0 : 0.82, carry[0].startsWith('f:') ? 0.55 : 0.44); e.carry.add(b);
     } else {
       const ht = makeHandTruck(); ht.position.set(0, 0, 0.75); e.carry.add(ht);
       carry.forEach((pid, i) => { const b = carryModel(pid); b.position.set(0, 0.06 + i * 0.37, 0.88); b.scale.setScalar(0.95); e.carry.add(b); });
@@ -196,7 +196,7 @@ export class Actors {
   swing(id) { const e = this.players.get(id); if (e) e.swingT = 0.3; }
   // the baton sits in the right hand, pointing forward
   setBaton(e, on) {
-    if (on && !e.batonObj) { e.batonObj = makeBaton(); e.batonObj.position.set(0, -0.24, 0.03); e.obj.userData.parts.elbowR.add(e.batonObj); }
+    if (on && !e.batonObj) { e.batonObj = makeBaton(); e.batonObj.position.set(0, -0.28, 0.03); e.obj.userData.parts.elbowR.add(e.batonObj); }
     if (e.batonObj) e.batonObj.visible = on;
     e.baton = on;
   }

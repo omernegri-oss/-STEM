@@ -20,7 +20,13 @@ export const CATEGORIES = {
   produce: { name: 'Produce', icon: '🍎', color: '#22c55e', fixtures: ['produce'] },
   meat:    { name: 'Butcher', icon: '🥩', color: '#ef4444', fixtures: ['butcher'] },
   deli:    { name: 'Deli', icon: '🧀', color: '#eab308', fixtures: ['deli'] },
+  // cleaning & toiletries share the gondola shelves with groceries
+  household: { name: 'Household', icon: '🧴', color: '#06b6d4', fixtures: ['shelf', 'shelf_large', 'endcap'] },
 };
+// can this product go on that fixture?
+export function fitsFixture(pid, type) { const p = PRODUCT_MAP[pid]; return !!p && (CATEGORIES[p.cat]?.fixtures || []).includes(type); }
+// the departments a fixture can hold
+export function fixtureCats(type) { return Object.keys(CATEGORIES).filter(c => CATEGORIES[c].fixtures.includes(type)); }
 
 // shape: how a single unit is drawn on a shelf. color: main colour. cost: per unit from supplier.
 // price: suggested retail price. box: units per delivery box. life: shelf life in days.
@@ -43,9 +49,14 @@ export const PRODUCTS = [
   { id: 'pbutter',     name: 'Peanut Butter',      cat: 'grocery', cost: 1.50, price: 3.79, box: 12, shape: 'jar',     color: 0xd97706, life: 120, level: 3, icon: '🥜' },
   { id: 'honey',       name: 'Wildflower Honey',   cat: 'grocery', cost: 2.40, price: 5.49, box: 12, shape: 'jar',     color: 0xfbbf24, life: 200, level: 4, icon: '🍯' },
   { id: 'catfood',     name: 'Cat Food Chicken',     cat: 'grocery', cost: 0.60, price: 1.59, box: 12, shape: 'can',     color: 0xa855f7, life: 150, level: 4, icon: '🐱' },
-  { id: 'toiletpaper', name: 'Toilet Tissue 6 Rolls',   cat: 'grocery', cost: 2.20, price: 4.99, box: 8,  shape: 'box',     color: 0xf0f9ff, life: 400, level: 4, icon: '🧻' },
+  { id: 'toiletpaper', name: 'Toilet Tissue 12 Rolls',  cat: 'household', cost: 3.40, price: 7.49, box: 6, shape: 'pack',    color: 0xf0f9ff, life: 400, level: 2, icon: '🧻' },
   { id: 'energy',      name: 'Energy Drink',   cat: 'grocery', cost: 0.90, price: 2.49, box: 12, shape: 'can',     color: 0x22d3ee, life: 150, level: 5, icon: '⚡' },
-  { id: 'detergent',   name: 'Laundry Detergent',  cat: 'grocery', cost: 3.50, price: 8.49, box: 8,  shape: 'bottle',  color: 0x0ea5e9, life: 400, level: 6, icon: '🧴' },
+  { id: 'detergent',   name: 'Laundry Detergent',  cat: 'household', cost: 3.50, price: 8.49, box: 6,  shape: 'jug',     color: 0x0ea5e9, life: 400, level: 4, icon: '🧴' },
+  { id: 'bleach',      name: 'Lemon Bleach 2L',    cat: 'household', cost: 1.10, price: 2.79, box: 6,  shape: 'jug',     color: 0xf8fafc, life: 400, level: 2, icon: '🧴' },
+  { id: 'dishsoap',    name: 'Dish Soap Lemon',    cat: 'household', cost: 0.90, price: 2.29, box: 12, shape: 'squeeze', color: 0xfacc15, life: 400, level: 2, icon: '🧴' },
+  { id: 'shampoo',     name: 'Shampoo Classic Clean', cat: 'household', cost: 1.60, price: 4.29, box: 12, shape: 'squeeze', color: 0x1d4ed8, life: 400, level: 3, icon: '🧴' },
+  { id: 'soap',        name: 'Bath Soap 4 Pack',   cat: 'household', cost: 0.80, price: 2.19, box: 12, shape: 'flatbox', color: 0xf9a8d4, life: 400, level: 3, icon: '🧼' },
+  { id: 'washpowder',  name: 'Washing Powder 3kg', cat: 'household', cost: 3.20, price: 7.99, box: 6,  shape: 'pouch',   color: 0x16a34a, life: 400, level: 3, icon: '🧺' },
   { id: 'wine',        name: 'Cabernet Sauvignon',   cat: 'grocery', cost: 5.50, price: 13.99, box: 8, shape: 'bottle',  color: 0x7f1d1d, life: 400, level: 7, icon: '🍷' },
   { id: 'truffle',     name: 'Truffle Pasta',      cat: 'grocery', cost: 4.00, price: 9.99, box: 8,  shape: 'flatbox', color: 0x1c1917, life: 120, level: 8, icon: '✨' },
 
@@ -111,9 +122,10 @@ export const SUPPLIERS = [
   { id: 'green',   name: 'Green Valley Farms', icon: '🚜', cats: ['produce'], fee: 20, time: 30, minOrder: 2, markup: 1.0,  discounts: [[8, 6], [16, 12]], level: 2, desc: 'Farm-fresh fruit and vegetables.' },
   { id: 'polar',   name: 'Polar Frozen Foods', icon: '🐻‍❄️', cats: ['frozen'], fee: 30, time: 50, minOrder: 2, markup: 1.0,  discounts: [[6, 6], [12, 12]], level: 3, desc: 'Everything sub-zero.' },
   { id: 'prime',   name: 'Prime Cuts Meats',   icon: '🔪', cats: ['meat'],    fee: 35, time: 40, minOrder: 1, markup: 1.0,  discounts: [[5, 5], [10, 10]], level: 4, desc: 'Quality butcher supply.' },
+  { id: 'cleanco', name: 'CleanCo Supply',     icon: '🧴', cats: ['household'], fee: 20, time: 45, minOrder: 2, markup: 1.0, discounts: [[6, 5], [12, 10]], level: 2, desc: 'Cleaning products and toiletries.' },
   { id: 'bella',   name: 'Bella Deli Imports', icon: '🇮🇹', cats: ['deli'],   fee: 30, time: 45, minOrder: 1, markup: 1.0,  discounts: [[5, 5], [10, 10]], level: 5, desc: 'Cheeses, cold cuts & antipasti.' },
-  { id: 'express', name: 'QuickMart Express',  icon: '⚡', cats: ['grocery', 'fridge', 'frozen', 'produce', 'meat', 'deli'], fee: 60, time: 12, minOrder: 1, markup: 1.2, discounts: [], level: 6, desc: 'Anything, fast. Premium prices.' },
-  { id: 'mega',    name: 'MegaBulk Distributors', icon: '🏭', cats: ['grocery', 'frozen'], fee: 45, time: 90, minOrder: 10, markup: 0.9, discounts: [[20, 10], [40, 18]], level: 8, desc: 'Huge orders, huge savings, slow trucks.' },
+  { id: 'express', name: 'QuickMart Express',  icon: '⚡', cats: ['grocery', 'household', 'fridge', 'frozen', 'produce', 'meat', 'deli'], fee: 60, time: 12, minOrder: 1, markup: 1.2, discounts: [], level: 6, desc: 'Anything, fast. Premium prices.' },
+  { id: 'mega',    name: 'MegaBulk Distributors', icon: '🏭', cats: ['grocery', 'household', 'frozen'], fee: 45, time: 90, minOrder: 10, markup: 0.9, discounts: [[20, 10], [40, 18]], level: 8, desc: 'Huge orders, huge savings, slow trucks.' },
 ];
 export const SUPPLIER_MAP = Object.fromEntries(SUPPLIERS.map(s => [s.id, s]));
 
@@ -332,6 +344,9 @@ export const SHAPE_DIMS = {
   can: { w: 0.075, h: 0.12, d: 0.075, stack: 2 }, bottle: { w: 0.08, h: 0.29, d: 0.08, stack: 1 }, jar: { w: 0.09, h: 0.14, d: 0.09, stack: 2 },
   carton: { w: 0.09, h: 0.24, d: 0.09, stack: 1 }, tub: { w: 0.1, h: 0.08, d: 0.1, stack: 3 }, sphere: { w: 0.085, h: 0.085, d: 0.085, stack: 2 },
   long: { w: 0.19, h: 0.045, d: 0.06, stack: 3 }, slab: { w: 0.2, h: 0.04, d: 0.15, stack: 1 }, wedge: { w: 0.14, h: 0.08, d: 0.12, stack: 1 },
+  // household: a plastic-wrapped toilet roll pack, a handled jug, a squeeze bottle, a big gusseted powder bag
+  pack: { w: 0.3, h: 0.27, d: 0.2, stack: 1 }, jug: { w: 0.15, h: 0.28, d: 0.11, stack: 1 }, squeeze: { w: 0.075, h: 0.21, d: 0.045, stack: 1 },
+  pouch: { w: 0.24, h: 0.32, d: 0.1, stack: 1 },
 };
 // Product sections of each fixture in local coordinates (centred, customer side = +z):
 // x0..x1 across, y = floor of the section, zf = front edge, depth, h = clear height.

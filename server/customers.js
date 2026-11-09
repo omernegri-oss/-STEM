@@ -1,5 +1,5 @@
 // Customer AI: arrive -> browse departments -> pick items -> butcher/deli counters -> queue -> pay -> leave.
-import { PRODUCTS, PRODUCT_MAP, FURNITURE, CLOSE_HOUR, FIRST_NAMES, slotCap } from '../shared/data.js';
+import { PRODUCTS, PRODUCT_MAP, FURNITURE, CLOSE_HOUR, FIRST_NAMES, slotCap, fixtureCats } from '../shared/data.js';
 import { rnd, rndi, pick, clamp } from './game.js';
 
 const COUNTER_CATS = ['meat', 'deli'];
@@ -36,7 +36,7 @@ function buildList(game, c) {
   const catPresent = new Set();
   for (const f of s.furniture) {
     const def = FURNITURE[f.type];
-    if (def.cat) catPresent.add(def.cat);
+    for (const c of fixtureCats(f.type)) catPresent.add(c); void def;
     if (f.slots) for (const sl of f.slots) { if (sl.pid) carried.add(sl.pid); if (sl.qty > 0 && !sl.expired) stocked.add(sl.pid); }
   }
   c.carried = carried;

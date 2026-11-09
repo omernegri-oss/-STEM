@@ -600,7 +600,13 @@ export function lookFromSeed(seed) {
     hairStyle: female ? p([1, 1, 3, 4, 0]) : p([0, 0, 0, 2, 5]),
     shirt: p(TOPS), pants: p(BOTTOMS), shoes: p(SHOES), skirt: female && r() < 0.3, longSleeves: r() < 0.45,
     jacket: r() < 0.22 ? p([0x262a30, 0x4a3a2a, 0x2f3b2f, 0x1f2a3a, 0x5a4a3a]) : null,
-    scale: kid ? 0.66 + r() * 0.08 : (female ? 0.9 : 0.95) + r() * 0.08, width: 1.12 + r() * 0.38, belly: r() * 0.9,
+    ...(() => { // build: slim, average or heavy; adult height about 1.55-1.95 m
+      const b = r(), build = kid ? 'slim' : b < 0.32 ? 'slim' : b < 0.78 ? 'average' : 'heavy';
+      const width = build === 'slim' ? 0.86 + r() * 0.08 : build === 'average' ? 0.96 + r() * 0.1 : 1.1 + r() * 0.2;
+      const belly = build === 'slim' ? 0 : build === 'average' ? r() * 0.25 : 0.35 + r() * 0.55;
+      const scale = kid ? 0.62 + r() * 0.1 : (female ? 0.9 : 0.96) + r() * 0.1 - (elder ? 0.03 : 0);
+      return { build, width, belly, scale };
+    })(),
     glasses: r() < (elder ? 0.55 : 0.18), beard: !female && !kid && r() < 0.25, hat: r() < 0.06 ? p([0x262a30, 0x3a3226, 0x2f3b2f]) : null,
   };
 }
@@ -648,36 +654,37 @@ export function makeCharacter(look) {
   const skin = mat(look.skin, { rough: 0.55 }), shirt = cloth(look.shirt), pants = cloth(look.pants, denim ? 'denim' : 'fabric'), shoe = mat(look.shoes ?? 0x111827, { rough: 0.45 });
   const sleeve = look.jacket ? cloth(look.jacket, 'fabric', 0.8) : shirt;
   const P = {};
-  const hips = new THREE.Group(); hips.position.y = 0.78; root.add(hips); P.hips = hips;
+  const HIP_Y = 0.92; g.userData.hipY = HIP_Y;
+  const hips = new THREE.Group(); hips.position.y = HIP_Y; root.add(hips); P.hips = hips;
   for (const side of [-1, 1]) {
-    const hip = new THREE.Group(); hip.position.set(side * 0.095 * W, 0, 0); hips.add(hip);
-    part(hip, capsule(0.075 * Math.min(1.3, W), 0.22), look.skirt ? skin : pants, 0, -0.17, 0);
-    const knee = new THREE.Group(); knee.position.y = -0.37; hip.add(knee);
-    part(knee, capsule(0.06 * Math.min(1.25, W), 0.2), look.skirt ? skin : pants, 0, -0.16, 0);
-    part(knee, boxGeo(0.11, 0.075, 0.25), shoe, 0, -0.37, 0.045);
+    const hip = new THREE.Group(); hip.position.set(side * 0.09 * W, 0, 0); hips.add(hip);
+    part(hip, capsule(0.072 * Math.min(1.3, W), 0.3), look.skirt ? skin : pants, 0, -0.21, 0);
+    const knee = new THREE.Group(); knee.position.y = -0.44; hip.add(knee);
+    part(knee, capsule(0.055 * Math.min(1.25, W), 0.3), look.skirt ? skin : pants, 0, -0.2, 0);
+    part(knee, boxGeo(0.1, 0.07, 0.26), shoe, 0, -0.44, 0.045);
     P[side < 0 ? 'legL' : 'legR'] = hip; P[side < 0 ? 'kneeL' : 'kneeR'] = knee;
   }
   const torso = new THREE.Group(); hips.add(torso); P.torso = torso;
-  part(torso, sphGeo(0.5, 14, 8), pants, 0, 0.02, 0).scale.set(0.34 * W, 0.22, 0.25);
-  if (look.skirt) { const sk = part(torso, cachedGeo('skirt' + W, () => new THREE.CylinderGeometry(0.15 * W, 0.24 * W, 0.42, 16, 1, true)), pants, 0, -0.17, 0); sk.material = mat(look.pants, { rough: 0.9, side: THREE.DoubleSide }); }
-  const body = part(torso, torsoGeometry(), look.jacket ? sleeve : shirt, 0, 0.0, 0); body.scale.set(W, 1, 0.9 + (W - 1) * 0.6);
-  const belly = part(torso, sphGeo(0.5, 16, 12), look.jacket ? sleeve : shirt, 0, 0.2, 0.05); belly.scale.set(0.3 * W, 0.34, 0.2 + (look.belly || 0) * 0.12 + (W - 1) * 0.15);
-  if (look.jacket) { B(torso, 0.06, 0.4, 0.01, look.shirt, 0, 0.27, 0.15 + (look.belly || 0) * 0.05, { shadow: false }); }
-  if (look.apron) { const ap = B(torso, 0.32 * W, 0.6, 0.02, look.apron, 0, 0.12, 0.17 + (look.belly || 0) * 0.06, { shadow: false }); void ap; }
-  if (look.badge) B(torso, 0.06, 0.03, 0.006, look.badge, 0.08, 0.4, 0.15, { rough: 0.4, shadow: false });
-  part(torso, cylGeo(0.05, 0.058, 0.08, 10), skin, 0, 0.56, 0);
+  part(torso, sphGeo(0.5, 14, 8), pants, 0, 0.02, 0).scale.set(0.32 * W, 0.2, 0.22);
+  if (look.skirt) { const sk = part(torso, cachedGeo('skirt' + W, () => new THREE.CylinderGeometry(0.15 * W, 0.24 * W, 0.5, 16, 1, true)), pants, 0, -0.21, 0); sk.material = mat(look.pants, { rough: 0.9, side: THREE.DoubleSide }); }
+  const body = part(torso, torsoGeometry(), look.jacket ? sleeve : shirt, 0, 0.0, 0); body.scale.set(0.92 * W, 1.1, 0.82 + (W - 1) * 0.6);
+  if ((look.belly || 0) > 0.05) { const belly = part(torso, sphGeo(0.5, 16, 12), look.jacket ? sleeve : shirt, 0, 0.2, 0.04); belly.scale.set(0.28 * W, 0.32, 0.16 + look.belly * 0.14 + (W - 1) * 0.12); }
+  if (look.jacket) { B(torso, 0.06, 0.44, 0.01, look.shirt, 0, 0.3, 0.135 + (look.belly || 0) * 0.06, { shadow: false }); }
+  if (look.apron) { const ap = B(torso, 0.3 * W, 0.66, 0.02, look.apron, 0, 0.12, 0.155 + (look.belly || 0) * 0.07, { shadow: false }); void ap; }
+  if (look.badge) B(torso, 0.06, 0.03, 0.006, look.badge, 0.08, 0.44, 0.135, { rough: 0.4, shadow: false });
+  part(torso, cylGeo(0.048, 0.056, 0.09, 10), skin, 0, 0.62, 0);
   // arms
   for (const side of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(side * 0.215 * W, 0.46, 0); torso.add(sh);
-    part(sh, sphGeo(0.07, 10, 8), sleeve, 0, 0, 0);
-    part(sh, capsule(0.058, 0.17), sleeve, 0, -0.12, 0);
-    const el = new THREE.Group(); el.position.y = -0.25; sh.add(el);
-    part(el, capsule(0.049, 0.15), look.longSleeves || look.jacket ? sleeve : skin, 0, -0.1, 0);
-    part(el, sphGeo(0.05, 10, 8), skin, 0, -0.23, 0.005).scale.set(0.85, 1.2, 0.6);
+    const sh = new THREE.Group(); sh.position.set(side * 0.2 * W, 0.51, 0); torso.add(sh);
+    part(sh, sphGeo(0.065, 10, 8), sleeve, 0, 0, 0);
+    part(sh, capsule(0.052, 0.21), sleeve, 0, -0.14, 0);
+    const el = new THREE.Group(); el.position.y = -0.29; sh.add(el);
+    part(el, capsule(0.044, 0.19), look.longSleeves || look.jacket ? sleeve : skin, 0, -0.12, 0);
+    part(el, sphGeo(0.048, 10, 8), skin, 0, -0.27, 0.005).scale.set(0.85, 1.25, 0.6);
     P[side < 0 ? 'armL' : 'armR'] = sh; P[side < 0 ? 'elbowL' : 'elbowR'] = el;
   }
   // head
-  const head = new THREE.Group(); head.position.y = 0.72; torso.add(head); P.head = head;
+  const head = new THREE.Group(); head.position.y = 0.8; torso.add(head); P.head = head;
   // the face is the same shape for everyone: a few merged, shared meshes (skin, eye whites, pupils, brows)
   const F = faceGeos();
   part(head, F.skin, skin, 0, 0, 0);
@@ -700,8 +707,8 @@ export function makeCharacter(look) {
   if (look.cap) { const c = C(head, 0.112, 0.112, 0.075, look.cap, 0, 0.1, -0.005, { seg: 18 }); void c; B(head, 0.13, 0.012, 0.11, look.cap, 0, 0.07, 0.13); }
   if (look.chef) { C(head, 0.1, 0.115, 0.14, 0xffffff, 0, 0.17, 0, { seg: 16 }); S(head, 0.12, 0xffffff, 0, 0.26, 0, { w: 12, h: 8 }); }
   if (look.hairnet) { const n = new THREE.Mesh(cachedGeo('hairnet', () => new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5)), mat(0xffffff, { opacity: 0.55 })); n.scale.set(0.215, 0.26, 0.235); n.position.y = 0.02; head.add(n); }
-  const hold = new THREE.Group(); hold.position.set(0, 0.98, 0.42); root.add(hold); P.hold = hold;
-  const sideHold = new THREE.Group(); sideHold.position.set(0.3 * W, 0.4, 0.04); root.add(sideHold); P.side = sideHold;
+  const hold = new THREE.Group(); hold.position.set(0, 1.12, 0.42); root.add(hold); P.hold = hold;
+  const sideHold = new THREE.Group(); sideHold.position.set(0.28 * W, 0.5, 0.04); root.add(sideHold); P.side = sideHold;
   g.userData.parts = P;
   g.userData.phase = Math.random() * 6;
   return g;
@@ -716,7 +723,7 @@ export function animateCharacter(ch, dt, moving, pose, speed = 1) {
   P.legL.rotation.x = sw; P.legR.rotation.x = -sw;
   P.kneeL.rotation.x = moving ? 0.08 + 0.75 * Math.max(0, Math.sin(ph + 1.9)) : 0.03;
   P.kneeR.rotation.x = moving ? 0.08 + 0.75 * Math.max(0, Math.sin(ph + 1.9 + Math.PI)) : 0.03;
-  P.hips.position.y = 0.78 - (moving ? Math.abs(Math.sin(ph)) * 0.025 : 0) + (moving ? 0 : Math.sin(ph) * 0.003);
+  P.hips.position.y = (ch.userData.hipY || 0.78) - (moving ? Math.abs(Math.sin(ph)) * 0.025 : 0) + (moving ? 0 : Math.sin(ph) * 0.003);
   P.torso.rotation.y = moving ? Math.sin(ph) * 0.06 : 0;
   P.torso.rotation.x = pose === 'cart' ? 0.12 : moving ? 0.04 : 0;
   const arms = (lx, rx, le, re, lz = 0.06, rz = -0.06) => { P.armL.rotation.x = lx; P.armR.rotation.x = rx; P.elbowL.rotation.x = le; P.elbowR.rotation.x = re; P.armL.rotation.z = lz; P.armR.rotation.z = rz; };

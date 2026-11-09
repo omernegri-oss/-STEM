@@ -3,7 +3,7 @@ import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, FIXTURE_UPGRADES, EXPANSIONS,
   TEAM_UPGRADES, TEAM_UPGRADE_MAP, ROLES, SHIFTS, MAX_LEVEL, levelForXp, ACHIEVEMENTS,
   FIRST_NAMES, LAST_NAMES, EVENT_TYPES, STARTING_CASH, REAL_SECONDS_PER_MINUTE, OPEN_HOUR, CLOSE_HOUR,
-  LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
+  LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, fitsFixture, fixtureCats, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
   licenseCost, priceLimits, stairInfo, slotCap, HIRE_FEE_DAYS,
 } from '../shared/data.js';
 import { Grid, footprint, serviceTiles, FACING, center, route, deptSpots, dims } from '../shared/grid.js';
@@ -751,7 +751,7 @@ export class Game {
   stockInto(f, box, maxUnits) {
     const def = FURNITURE[f.type];
     const p = PRODUCT_MAP[box.pid];
-    if (def.cat !== p.cat) {
+    if (!fitsFixture(p.id, f.type)) {
       const need = CATEGORIES[p.cat];
       return { error: `${p.name} belongs in the ${need.name} section (${FURNITURE[need.fixtures[0]].name}).` };
     }
@@ -921,7 +921,7 @@ export class Game {
   // ------------------------------------------------------------------ challenge & achievements
   makeChallenge() {
     const lvl = this.s.level;
-    const cats = ['grocery', 'fridge', 'frozen', 'produce', 'meat', 'deli'].filter(c => this.s.furniture.some(f => FURNITURE[f.type].cat === c));
+    const cats = Object.keys(CATEGORIES).filter(c => this.s.furniture.some(f => fixtureCats(f.type).includes(c)));
     const opts = [
       { type: 'serve', target: Math.round((8 + lvl * 7) / 5) * 5 },
       { type: 'revenue', target: Math.round((60 + lvl * 160) / 10) * 10 },

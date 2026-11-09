@@ -4,7 +4,7 @@ import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, 
 import { Grid, center, dims } from '/shared/grid.js';
 import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, makePriceTag, TAG_W, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
 import { pbr, surfaceMaps } from './textures.js';
-import { muralTexture, MURALS, hangingSignTexture, hebrewCategory, storeSignTexture, decalTexture, promoTexture, buildTrackLights, basketStack } from './decor.js';
+import { muralTexture, MURALS, hangingSignTexture, departmentName, storeSignTexture, decalTexture, promoTexture, buildTrackLights, basketStack } from './decor.js';
 
 // small repeatable random numbers (the same customer's items always land the same way)
 function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -115,7 +115,7 @@ export class World {
     const signM = new THREE.MeshStandardMaterial({ map: sign.tex, emissive: 0xffffff, emissiveMap: sign.tex, emissiveIntensity: 0.75, transparent: true });
     const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(swid, swid / sign.aspect), signM); signMesh.position.set(W / 2, 3.17, fz + 0.16); front.add(signMesh);
     // big words on the windows, on both sides of the door
-    const decals = [['FRESH', 'טרי כל יום'], ['FRUITS', 'פירות'], ['BAKERY', 'מאפייה'], ['DELI', 'מעדנייה']];
+    const decals = [['FRESH', 'every day'], ['FRUITS', 'and vegetables'], ['BAKERY', 'baked daily'], ['DELI', 'cold cuts']];
     const decalMats = [], spots = []; for (let x = 0.9; x < W - 0.6; x += 1.9) if (x + 0.7 < dx0 || x - 0.7 > dx1) spots.push(x);
     spots.slice(0, 4).forEach((x, i) => {
       const dm = new THREE.MeshStandardMaterial({ map: decalTexture(...decals[i % decals.length]), roughness: 0.6, transparent: true });
@@ -284,7 +284,10 @@ export class World {
       if (e.aisle) { e.aisle.removeFromParent(); disposeOwned(e.aisle); }
       const g = new THREE.Group();
       const top = names.length ? names.join('  ·  ').toUpperCase() : 'GROCERY';
-      const tex = hangingSignTexture(i + 1, top, hebrewCategory(FURNITURE[f.type].cat));
+      // department from what is on the shelf (household goods share the gondolas with groceries)
+      const cats = (f.slots || []).filter(s => s.pid).map(s => PRODUCT_MAP[s.pid]?.cat);
+      const dept = cats.length && cats.filter(c => c === 'household').length > cats.length / 2 ? 'household' : FURNITURE[f.type].cat;
+      const tex = hangingSignTexture(i + 1, top, departmentName(dept));
       const sw = 1.1, sh = sw / 2;
       const board = new THREE.Mesh(new THREE.BoxGeometry(sw + 0.04, sh + 0.04, 0.035), mat(0x101113, { rough: 0.5 })); board.userData.owned = board.userData.ownGeo = true; g.add(board);
       const face = new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25, roughness: 0.6 });

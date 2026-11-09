@@ -1,6 +1,6 @@
 // Local player movement (client-predicted), third-person camera, input, and context-sensitive interaction.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo, slotCap } from '/shared/data.js';
+import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo, slotCap, fitsFixture } from '/shared/data.js';
 import { resolveCollision, dims, center, heightAt, deptSpots } from '/shared/grid.js';
 
 // The key by its place on the keyboard, so WASD and every shortcut work with any layout (Hebrew, Russian,
@@ -113,7 +113,7 @@ export class CameraRig {
       this.yaw -= dx * 0.0024; this.look = Math.max(-1.35, Math.min(1.3, this.look - dy * 0.0022));
       if (!input.typing()) { if (input.down('z')) this.yaw += dt * 1.8; if (input.down('c')) this.yaw -= dt * 1.8; }
       this.bob += focus.moving ? dt * 9 : 0;
-      const eye = (focus.y || 0) + 1.5 + (focus.moving ? Math.sin(this.bob) * 0.025 : 0);
+      const eye = (focus.y || 0) + 1.62 + (focus.moving ? Math.sin(this.bob) * 0.025 : 0);
       this.camera.fov = 72; this.camera.updateProjectionMatrix();
       this.camera.position.set(focus.x, eye, focus.z);
       const cp = Math.cos(this.look);
@@ -228,7 +228,7 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
     for (const f of near) {
       const def = FURNITURE[f.type];
       if (f.slots && def.kind !== 'counter') {
-        if (def.cat === p.cat) {
+        if (fitsFixture(p.id, f.type)) {
           if (DOORS.has(f.type) && !f.open) return { label: `Open the ${def.name}`, action: { a: 'door', id: f.id } };
           const free = f.slots.some(s => (s.pid === prodPid && s.qty < slotCap(f.type, prodPid) && !s.expired) || s.qty === 0);
           if (!free) return { label: `${def.name} is full${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: null, warn: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };

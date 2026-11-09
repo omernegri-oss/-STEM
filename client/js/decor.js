@@ -1,6 +1,7 @@
-// The look of a modern neighbourhood supermarket (dark, warm spotlights, illustrated wall graphics, bilingual
-// Hebrew/English signs): wall murals, hanging department signs, the storefront sign, window decals, a black
-// ceiling with track spotlights and a stack of shopping baskets. Everything is drawn in code on canvases.
+// The look of a modern neighbourhood supermarket (dark, warm spotlights, illustrated wall graphics): wall murals,
+// hanging department signs, the storefront sign, window decals, a black ceiling with track spotlights and a stack
+// of shopping baskets. All text is English. Everything is drawn in code on canvases.
+// (Heebo stays in the font stacks so a store name typed in Hebrew still shows properly.)
 import * as THREE from 'three';
 import { makeBasket } from './models.js';
 
@@ -51,14 +52,14 @@ const DRAW = {
     g.beginPath(); g.moveTo(x + 75 * s, y - 30 * s); g.lineTo(x + 85 * s, y - 100 * s); g.lineTo(x + 100 * s, y - 30 * s); g.stroke();
   },
 };
-// what goes on the walls: English word, Hebrew word, drawing, a small line under it
+// what goes on the walls: the big word, a second line, a drawing and a small handwritten line
 export const MURALS = [
-  { en: 'SALAD', he: 'סלטים', draw: 'salad', sub: 'matbucha · hummus · tahini' },
-  { en: 'BAKERY', he: 'מאפייה', draw: 'bread', sub: 'fresh every morning' },
-  { en: 'FRESH', he: 'פירות וירקות', draw: 'fresh', sub: 'from the farm' },
-  { en: 'DELI', he: 'נקניקים', draw: 'deli', sub: 'roast beef · salami' },
-  { en: 'DAIRY', he: 'מוצרי חלב', draw: 'dairy', sub: 'milk · cheese · yogurt' },
-  { en: 'MARKET', he: 'סופר שכונתי', draw: 'market', sub: 'your neighbourhood store' },
+  { en: 'SALAD', he: 'BAR', draw: 'salad', sub: 'hummus · tahini · matbucha' },
+  { en: 'BAKERY', he: 'BAKED DAILY', draw: 'bread', sub: 'fresh every morning' },
+  { en: 'FRESH', he: 'FRUIT & VEG', draw: 'fresh', sub: 'from the farm' },
+  { en: 'DELI', he: 'COLD CUTS', draw: 'deli', sub: 'roast beef · salami' },
+  { en: 'DAIRY', he: 'MILK & CHEESE', draw: 'dairy', sub: 'milk · cheese · yogurt' },
+  { en: 'MARKET', he: 'NEIGHBOURHOOD', draw: 'market', sub: 'your local store' },
 ];
 const muralCache = new Map();
 export function muralTexture(i) {
@@ -76,18 +77,15 @@ export function muralTexture(i) {
   const tx = flip ? 140 : 560;
   g.textAlign = 'left';
   g.font = '900 120px "Playfair Display", Georgia, serif'; g.fillText(m.en, tx, 230);
-  g.font = `800 64px ${HE}`; g.direction = 'rtl'; g.textAlign = 'right';
-  const enW = (() => { g.save(); g.direction = 'ltr'; g.font = '900 120px "Playfair Display", Georgia, serif'; const w = g.measureText(m.en).width; g.restore(); return w; })();
-  g.fillText(m.he, tx + Math.max(enW, 360), 320);
-  g.direction = 'ltr'; g.textAlign = 'left';
+  g.font = '600 52px "Barlow Condensed", Arial, sans-serif'; g.fillText(m.he.split('').join(String.fromCharCode(8202)), tx + 6, 305);
   g.font = '400 40px Pacifico, cursive'; g.fillText(m.sub, tx + 4, 390);
   const t = canvasTex(c); muralCache.set(m.en, t); return t;
 }
 
 // ------------------------------------------------------------------ hanging department sign (black board, orange band)
-const HEB_CAT = { grocery: 'מכולת', fridge: 'מוצרי חלב', frozen: 'קפואים', produce: 'פירות וירקות', meat: 'קצבייה', deli: 'מעדנייה' };
-export const hebrewCategory = (cat) => HEB_CAT[cat] || 'סופר';
-export function hangingSignTexture(num, english, hebrew) {
+const DEPT = { grocery: 'GROCERY', household: 'HOUSEHOLD', fridge: 'DAIRY', frozen: 'FROZEN', produce: 'FRUIT & VEG', meat: 'BUTCHER', deli: 'DELI' };
+export const departmentName = (cat) => DEPT[cat] || 'GROCERY';
+export function hangingSignTexture(num, english, dept) {
   const W = 768, H = 384, c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
   g.fillStyle = '#17181a'; g.fillRect(0, 0, W, H);
@@ -98,13 +96,13 @@ export function hangingSignTexture(num, english, hebrew) {
   const words = english.split('  ·  ').slice(0, 3), fs = words.length > 2 ? 62 : 74;
   g.font = `600 ${fs}px "Barlow Condensed", Arial, sans-serif`;
   words.forEach((w, i) => g.fillText(w, 175, 120 + (i - (words.length - 1) / 2) * (fs + 6), W - 200));
-  // the orange department band with the Hebrew name
+  // the orange department band
   g.fillStyle = '#e8892b'; g.fillRect(0, 240, W, H - 240);
-  g.fillStyle = '#ffffff'; g.font = `800 92px ${HE}`; g.direction = 'rtl'; g.textAlign = 'center'; g.fillText(hebrew, W / 2, 312);
+  g.fillStyle = '#ffffff'; g.font = '700 96px "Barlow Condensed", Arial, sans-serif'; g.textAlign = 'center'; g.fillText(dept, W / 2, 314, W - 60);
   return canvasTex(c);
 }
 
-// ------------------------------------------------------------------ storefront: store name, bilingual tagline, cart logo
+// ------------------------------------------------------------------ storefront: store name, tagline, cart logo
 export function storeSignTexture(name) {
   const W = 2048, H = 400, c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
@@ -119,17 +117,17 @@ export function storeSignTexture(name) {
   let size = 170; g.font = `800 ${size}px "Barlow Condensed", ${HE}`;
   while (g.measureText(name).width > W - 470 && size > 70) { size -= 8; g.font = `800 ${size}px "Barlow Condensed", ${HE}`; }
   g.fillText(name, 380, 165);
-  g.fillStyle = '#ff6fa3'; g.font = `700 64px ${HE}`; g.fillText('סופר שכונתי  ·  NEIGHBOURHOOD MARKET', 384, 305);
+  g.fillStyle = '#ff6fa3'; g.font = '600 64px "Barlow Condensed", Arial, sans-serif'; g.fillText('NEIGHBOURHOOD MARKET  ·  FRESH EVERY DAY', 384, 305);
   return { tex: canvasTex(c), aspect: W / H };
 }
 // big words on the shop windows (white on black), like FRESH · FRUITS · BAKERY
-export function decalTexture(en, he) {
+export function decalTexture(en, sub) {
   const W = 1024, H = 512, c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
   g.fillStyle = '#121315'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#f5f1ea'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.font = '700 190px "Barlow Condensed", Arial, sans-serif'; g.fillText(en, W / 2, 200);
-  g.fillStyle = '#ff6fa3'; g.font = `800 96px ${HE}`; g.direction = 'rtl'; g.fillText(he, W / 2, 380);
+  g.fillStyle = '#ff6fa3'; g.font = '600 84px "Barlow Condensed", Arial, sans-serif'; g.fillText(sub, W / 2, 380);
   return canvasTex(c);
 }
 // a promotion board on a stand by the entrance (yellow / blue / orange price tiles like the photo)
@@ -138,8 +136,8 @@ export function promoTexture() {
   const g = c.getContext('2d');
   g.fillStyle = '#17181a'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = `800 72px ${HE}`; g.direction = 'rtl'; g.fillText('אפשר לשלב!', W / 2, 110); g.direction = 'ltr';
-  g.font = '600 40px "Barlow Condensed", Arial, sans-serif'; g.fillText('MIX & MATCH', W / 2, 180);
+  g.font = '700 84px "Barlow Condensed", Arial, sans-serif'; g.fillText('MIX & MATCH', W / 2, 110);
+  g.font = '500 40px "Barlow Condensed", Arial, sans-serif'; g.fillText('combine any products', W / 2, 180);
   [['#e0453b', '2 for $5'], ['#f2c230', '3 for $7'], ['#3d8fe0', '5 for $10']].forEach(([col, t], i) => {
     const y = 270 + i * 210; g.fillStyle = col; g.fillRect(60, y, W - 120, 170);
     g.fillStyle = i === 1 ? '#17181a' : '#ffffff'; g.font = '700 96px "Barlow Condensed", Arial, sans-serif'; g.fillText(t, W / 2, y + 88);

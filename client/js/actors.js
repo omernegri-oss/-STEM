@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { PRODUCT_MAP, ROLES, PLAYER_ROLES } from '/shared/data.js';
 import { heightAt } from '/shared/grid.js';
-import { disposeOwned, makeCharacter, animateCharacter, lookFromSeed, makeSprite, setSpriteText, makeBasket, makeCart, makeBox, makeFBox, makeHandTruck, makePigeon, UNIT_GEOS, mat, B, C, productMaterial, S as Sph } from './models.js';
+import { disposeOwned, makeCharacter, animateCharacter, lookFromSeed, makeSprite, setSpriteText, makeBasket, makeCart, makeBox, makeFBox, makeHandTruck, makePigeon, UNIT_GEOS, mat, B, C, productMaterial, S as Sph, makeBaton } from './models.js';
 
 // visual for one carried item code: 'milk' | 'f:shelf' | 'raw:ribeye' | 'pack:ribeye'
 export function carryModel(code) {
@@ -101,7 +101,7 @@ export class Actors {
     this.myId = myId;
     // players
     const seenP = new Set();
-    for (const [id, x, z, rot, anim, carry, station, emote, floor, stun] of s.P) {
+    for (const [id, x, z, rot, anim, carry, station, emote, floor, stun, baton] of s.P) {
       seenP.add(id);
       let e = this.players.get(id);
       if (!e) { e = this.makePlayer(id); this.players.set(id, e); }
@@ -113,6 +113,7 @@ export class Actors {
       e.carryList = carry;
       this.setPlayerCarry(e, carry);
       e.gesture = emote || '';
+      this.setBaton(e, !!baton);
     }
     for (const [id, e] of this.players) if (!seenP.has(id)) { this.root.remove(e.obj); disposeOwned(e.obj); this.players.delete(id); }
     // customers
@@ -193,6 +194,12 @@ export class Actors {
     if (e.stun) { const t = performance.now() / 160; e.obj.rotation.z = Math.sin(t) * 0.12; e.obj.rotation.x = Math.cos(t * 0.7) * 0.06; } else if (e.obj.rotation.z) { e.obj.rotation.z = 0; e.obj.rotation.x = 0; }
   }
   swing(id) { const e = this.players.get(id); if (e) e.swingT = 0.3; }
+  // the baton sits in the right hand, pointing forward
+  setBaton(e, on) {
+    if (on && !e.batonObj) { e.batonObj = makeBaton(); e.batonObj.position.set(0, -0.24, 0.03); e.obj.userData.parts.elbowR.add(e.batonObj); }
+    if (e.batonObj) e.batonObj.visible = on;
+    e.baton = on;
+  }
   update(dt, local) {
     const k = 1 - Math.exp(-dt * 12);
     for (const [id, e] of this.players) {
@@ -203,6 +210,7 @@ export class Actors {
       const pose = e.station ? 'work' : carrying ? 'carry' : (e.gesture && !e.moving) ? GESTURES[e.gesture] || 'walk' : 'walk';
       animateCharacter(e.obj, dt, e.moving, pose, 1.1);
       if (e.swingT > 0) { e.swingT -= dt; const P = e.obj.userData.parts; P.armR.rotation.x = -1.6 - Math.sin((0.3 - e.swingT) / 0.3 * Math.PI) * 0.6; P.armR.rotation.z = 0.2; }
+      else if (e.baton && !carrying) { const P = e.obj.userData.parts; P.armR.rotation.x = -0.45; P.elbowR.rotation.x = -0.7; } // baton held ready
       if (e.stun) { const P = e.obj.userData.parts; P.head.rotation.z = Math.sin(performance.now() / 150) * 0.15; }
       e.tag.visible = !e.local;
     }

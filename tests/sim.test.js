@@ -209,6 +209,30 @@ let reachedUp = false;
 for (let i = 0; i < 20 * 80 && !climber.basket.length; i++) { g.tick(0.05); if (climber.floor === 1) reachedUp = true; }
 assert.ok(reachedUp, 'customer climbed the stairs'); assert.equal(climber.basket[0]?.pid, 'honey', 'bought the upstairs product');
 
+// --- the baton: only with empty hands; a hit customer leaves without buying and the store's reputation drops
+{
+  const g3 = new Game('BATON', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
+  const q = { id: 7, name: 'Q', x: 5, z: 5, rot: 0, carry: [], station: null, floor: 0 };
+  const r2 = { id: 8, name: 'R', x: 5, z: 6.2, rot: 0, carry: [], station: null, floor: 0 };
+  g3.players.set(7, q); g3.players.set(8, r2);
+  g3.act(q, { a: 'nameDraft', name: 'Baton Mart' }); g3.act(q, { a: 'nameVote' }); g3.act(r2, { a: 'nameVote' });
+  q.carry.push({ pid: 'flour', qty: 1, exp: 99 });
+  assert.equal(g3.act(q, { a: 'baton' }), false, 'no baton with full hands');
+  q.carry = [];
+  assert.ok(g3.act(q, { a: 'baton' })); assert.equal(q.baton, true);
+  // a friend 1.2 m in front (the fist would also reach), knocked down for longer
+  assert.ok(g3.act(q, { a: 'punch', weapon: 'baton' }));
+  assert.ok(r2.stunUntil - Date.now() > 2500, 'baton stuns a friend for about 3 s');
+  // a customer 1.6 m in front: out of fist reach, inside baton reach
+  r2.x = 50; q.punchAt = 0;
+  const c = spawnCustomer(g3); c.state = 'shop'; c.x = 5; c.z = 6.6; c.floor = 0; c.basket = [{ pid: 'flour', price: 2.29 }];
+  g3.s.rep = 60;
+  assert.ok(g3.act(q, { a: 'punch', weapon: 'baton' }));
+  assert.equal(c.state, 'leaving', 'the customer leaves'); assert.equal(c.basket.length, 0, 'without buying');
+  assert.ok(g3.s.rep < 57, `reputation drops (now ${g3.s.rep.toFixed(1)})`);
+  console.log('baton ✓ (rep', g3.s.rep.toFixed(1) + ')');
+}
+
 // --- unpaid bills lead to eviction
 g.s.bills = [{ id: 999, day: g.s.day - 3, due: g.s.day - 1, items: { rent: 100, power: 10, maint: 5, late: 0 }, total: 115, paid: false }];
 g.customers = []; g.endDay(); g.beginNewDay(); g.beginNewDay();

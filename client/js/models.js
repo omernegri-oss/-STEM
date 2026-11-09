@@ -77,7 +77,7 @@ export function textTexture(text, { size = 48, color = '#1e293b', bg = 'rgba(255
   const key = [text, size, color, bg, border, font, weight, bold, pad, radius].join('|');
   if (spriteTexCache.has(key)) { const hit = spriteTexCache.get(key); spriteTexCache.delete(key); spriteTexCache.set(key, hit); return hit; }
   const c = document.createElement('canvas'); const g = c.getContext('2d');
-  const f = `${weight || (bold ? '700' : '500')} ${size}px "${font}", "Barlow", "Segoe UI", "Helvetica Neue", Arial, sans-serif`;
+  const f = `${weight || (bold ? '700' : '500')} ${size}px "${font}", "Barlow", "Heebo", "Segoe UI", "Helvetica Neue", Arial, sans-serif`;
   g.font = f; const w = Math.ceil(g.measureText(text).width) + pad * 2; const h = size + pad * 1.3;
   c.width = w; c.height = h; g.font = f;
   if (bg) { g.fillStyle = bg; roundRect(g, 2, 2, w - 4, h - 4, radius); g.fill(); if (border) { g.lineWidth = 4; g.strokeStyle = border; g.stroke(); } }
@@ -110,6 +110,22 @@ export function setSpriteText(s, text, height = 0.4, opts = {}) {
   s.userData.text = text;
   const { tex, aspect } = textTexture(text, opts);
   s.material.map = tex; s.material.needsUpdate = true; s.scale.set(height * aspect, height, 1);
+}
+
+// ------------------------------------------------------------------ baton
+// a black side-handle baton: rubber grip, long shaft, short side handle, metal end caps. Points along +z from the hand.
+let batonMats = null;
+export function makeBaton() {
+  batonMats ||= { shaft: new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.45, metalness: 0.2 }),
+    grip: new THREE.MeshStandardMaterial({ color: 0x232629, roughness: 0.95 }), cap: new THREE.MeshStandardMaterial({ color: 0x8a9096, roughness: 0.3, metalness: 0.8 }) };
+  const g = new THREE.Group();
+  const cyl = (r, len, m, z) => { const c = new THREE.Mesh(cachedGeo(`bat${r}:${len}`, () => new THREE.CylinderGeometry(r, r, len, 12)), m); c.rotation.x = Math.PI / 2; c.position.z = z; c.castShadow = true; g.add(c); return c; };
+  cyl(0.02, 0.14, batonMats.grip, 0.0);
+  cyl(0.017, 0.46, batonMats.shaft, 0.3);
+  cyl(0.019, 0.02, batonMats.cap, 0.54);
+  cyl(0.021, 0.02, batonMats.cap, -0.08);
+  const side = new THREE.Mesh(cachedGeo('batside', () => new THREE.CylinderGeometry(0.016, 0.016, 0.12, 10)), batonMats.grip); side.position.set(0, 0.06, 0.09); side.castShadow = true; g.add(side);
+  return g;
 }
 
 // ------------------------------------------------------------------ shelf-edge price labels

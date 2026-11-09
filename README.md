@@ -29,10 +29,11 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
 | Rotate camera / zoom | drag mouse, `Z`/`C` · mouse wheel |
 | Interact (hold to repeat) | `E` or `Space` |
 | Drop what you carry | `Q` |
+| Baton out / away · swing it (friends are knocked down; customers leave without buying and your reputation drops) | `1` · left click |
 | Punch (friends get dizzy, customers walk out) | `F` |
 | Arrange furniture (move / rotate / pack / sell) | `B` (`M` / `R` / `P` / `X`) |
 | Stock overview · money · progress | `I` · `M` · `K` |
-| Chat · gestures (wave, point, thumbs up, shrug, clap, nod) · mark a spot | `Enter` · `1`–`6` · `G` |
+| Chat · gestures (wave, point, thumbs up, shrug, clap, nod) · mark a spot | `Enter` · `2`–`7` · `G` |
 | Help | `?` |
 
 **How it works**

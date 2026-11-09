@@ -68,6 +68,23 @@ const RECIPES = {
     o[0] = (c - grout * 0.12) * 0.99; o[1] = (c - grout * 0.12) * 0.98; o[2] = (c - grout * 0.12) * 0.95;
     o[3] = grout ? 0.15 : 0.5 + (chip - 0.5) * 0.02; o[4] = 0.16 + scuff * 0.22 + grout * 0.4;
   } },
+  // large-format porcelain tiles (60 cm), dark charcoal with a soft stone mottle and thin light grout: modern stores
+  porcelain: { meters: 1.2, normal: 1.2, fn(u, v, o) {
+    const tu = u * 2, tv = v * 2, ti = Math.floor(tu), tj = Math.floor(tv), fu = tu - ti, fv = tv - tj;
+    const tone = (hash(ti, tj, 13) - 0.5) * 0.035, mott = fbm(u, v, 10, 4, 14), speck = vnoise(u, v, 260, 15);
+    const edge = Math.min(fu, fv, 1 - fu, 1 - fv), grout = edge < 0.004;
+    const c = 0.3 + tone + (mott - 0.5) * 0.06 + (speck > 0.85 ? 0.03 : 0);
+    if (grout) { o[0] = 0.42; o[1] = 0.42; o[2] = 0.41; o[3] = 0.1; o[4] = 0.9; return; }
+    o[0] = c; o[1] = c; o[2] = c * 1.01; o[3] = 0.5 + (mott - 0.5) * 0.05; o[4] = 0.32 + (mott - 0.5) * 0.12 + fbm(u, v, 3, 4, 16) * 0.12;
+  } },
+  // painted brick (tinted by the material colour): bricks and mortar in one coat of paint, mortar recessed
+  paintbrick: { meters: 1.2, normal: 3, fn(u, v, o) {
+    const rows = 16, cols = 5.5, rv = v * rows, row = Math.floor(rv), cu = u * cols + (row % 2 ? 0.5 : 0), ci = Math.floor(cu), fu = cu - ci, fv = rv - row;
+    const mortar = Math.min(fu, 1 - fu) < 0.035 || Math.min(fv, 1 - fv) < 0.09;
+    const b = hash(ci, row, 63), n = fbm(u, v, 40, 3, 64), roll = fbm(u, v, 12, 2, 65);
+    const c = 0.9 + (b - 0.5) * 0.06 + (n - 0.5) * 0.06 + (roll - 0.5) * 0.04 - (mortar ? 0.08 : 0);
+    o[0] = c; o[1] = c; o[2] = c; o[3] = mortar ? 0.15 : 0.6 + (n - 0.5) * 0.3; o[4] = 0.8 + n * 0.1;
+  } },
   // acoustic ceiling tiles (60 cm) in a white T-bar grid
   ceiling: { meters: 1.2, normal: 3, fn(u, v, o) {
     const tu = u * 2, tv = v * 2, fu = tu - Math.floor(tu), fv = tv - Math.floor(tv), edge = Math.min(fu, fv, 1 - fu, 1 - fv);

@@ -8,6 +8,7 @@ import { OnlineHost, OnlineNet, localServerSocket, onlineAvailable } from './onl
 import { createScene } from './scene.js';
 import { World } from './world.js';
 import { Actors, carryModel } from './actors.js';
+import { makeBaton } from './models.js';
 import { FX } from './fx.js';
 import { Input, LocalPlayer, CameraRig, findInteraction, keyName } from './player.js';
 import { BuildMode } from './build.js';
@@ -28,7 +29,8 @@ if (!prefs.name) prefs.name = ['Alex', 'Sam', 'Robin', 'Jules', 'Kai', 'Noa', 'C
 // ----------------------------------------------------------------------------------- 3D setup
 // signs and packaging are drawn on canvases: wait (briefly) for the bundled fonts first
 await Promise.race([
-  Promise.all(['700 20px "Barlow Condensed"', '600 20px Barlow', '700 20px Barlow', '900 20px "Playfair Display"', '20px "Archivo Black"', '20px Pacifico'].map(f => document.fonts.load(f))).catch(() => {}),
+  Promise.all([...['700 20px "Barlow Condensed"', '600 20px Barlow', '700 20px Barlow', '900 20px "Playfair Display"', '20px "Archivo Black"', '20px Pacifico'].map(f => document.fonts.load(f)),
+    ...['500 20px Heebo', '700 20px Heebo', '800 20px Heebo'].map(f => document.fonts.load(f, 'אבג'))]).catch(() => {}),
   new Promise(r => setTimeout(r, 2500)),
 ]);
 const canvas = $('game'); canvas.tabIndex = 0;
@@ -49,12 +51,14 @@ try { rig.fps = localStorage.getItem('st_cam') !== 'tps'; } catch {}
 const viewModel = new THREE.Group(); S.camera.add(viewModel); viewModel.position.set(0.18, -0.36, -0.62);
 const fist = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshStandardMaterial({ color: 0xeac09a, roughness: 0.6 }));
 fist.scale.set(1, 0.9, 1.3); fist.position.set(0.12, 0.05, 0.1); fist.visible = false; viewModel.add(fist);
-let viewKey = '', punchT = 0;
+let viewKey = '', punchT = 0, batonT = 0;
+const batonVM = makeBaton(); batonVM.visible = false; viewModel.add(batonVM);
 function syncViewModel() {
   const top = (G.carry || []).at(-1) || '';
-  const key = (rig.fps && !build.active ? 'fps' : '') + top + (G.carry || []).length;
+  const key = (rig.fps && !build.active ? 'fps' : '') + top + (G.carry || []).length + (G.baton ? 'b' : '');
   if (key === viewKey) return; viewKey = key;
-  for (const c of [...viewModel.children]) if (c !== fist) viewModel.remove(c);
+  for (const c of [...viewModel.children]) if (c !== fist && c !== batonVM) viewModel.remove(c);
+  batonVM.visible = !!(rig.fps && !build.active && G.baton && !top);
   if (!rig.fps || build.active || !top) return;
   const m = carryModel(top); m.position.set(-0.18, -0.05, -0.05); m.rotation.y = Math.PI; viewModel.add(m);
   for (const sd of [-1, 1]) { const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.32, 4, 8), new THREE.MeshStandardMaterial({ color: 0xeac09a, roughness: 0.6 })); a.rotation.x = Math.PI / 2.4; a.position.set(-0.18 + sd * 0.24, -0.02, 0.12); viewModel.add(a); }
@@ -279,6 +283,9 @@ net.on('s', (s) => {
     if (firstSnap) { me.x = mine[1]; me.z = mine[2]; me.rot = mine[3]; me.floor = mine[8] || 0; firstSnap = false; }
     const prevTop = (G.carry || []).at(-1);
     G.carry = mine[5]; G.station = mine[6];
+    // the server decides whether the baton is out (it goes away when you pick something up); right after
+    // pressing 1 the local choice wins until the server has heard it
+    if (performance.now() - (G.batonHold || 0) > 600) G.baton = !!mine[10];
     if ((G.carry || []).at(-1) !== prevTop) G.deptProgress = 0;
   }
   actors.applySnapshot(s, G.me, me);
@@ -312,7 +319,7 @@ net.on('fx', (m) => {
     case 'ping': fx.ping(m.x, m.z, m.color, m.name); play('ping', m.x, m.z); break;
     case 'swing': actors.swing(m.id); break;
     case 'pow': play('punch', m.x, m.z); break;
-    case 'knock': if (m.id === G.me) { me.knock(m.dx, m.dz); rig.shake = 0.6; ui.error(`${m.by} punched you.`); } break;
+    case 'knock': if (m.id === G.me) { me.knock(m.dx, m.dz, m.baton ? 3200 : 2000); rig.shake = m.baton ? 0.9 : 0.6; ui.error(m.baton ? `${m.by} hit you with a baton.` : `${m.by} punched you.`); } break;
   }
 });
 
@@ -332,8 +339,16 @@ function maybeFirstHelp() {
 
 // ----------------------------------------------------------------------------------- key commands
 const PANEL_KEYS = { b: 'build', i: 'inventory', m: 'finance', k: 'stats' };
-// 1-6: body gestures (sent as short codes, shown as animations)
-const EMOTES = { 1: 'wave', 2: 'pnt', 3: 'thum', 4: 'shrg', 5: 'clap', 6: 'nod' };
+// 1: baton out / away. 2-7: body gestures (sent as short codes, shown as animations)
+const EMOTES = { 2: 'wave', 3: 'pnt', 4: 'thum', 5: 'shrg', 6: 'clap', 7: 'nod' };
+function toggleBaton() {
+  if (!G.baton && (G.carry || []).length) { ui.error('Put down what you are carrying first.'); return; }
+  G.baton = !G.baton; G.batonHold = performance.now(); net.act('baton'); play('click');
+}
+function swingBaton() {
+  if (batonT > 0) return;
+  net.act('punch', { weapon: 'baton' }); actors.swing(G.me); batonT = 0.35; play('whoosh');
+}
 addEventListener('keydown', (e) => {
   initAudio();
   if (!G.started || $('hud').classList.contains('hidden')) return;
@@ -350,6 +365,7 @@ addEventListener('keydown', (e) => {
   if (k === 'f' && !build.active && G.meta?.phase !== 'naming') { net.act('punch'); actors.swing(G.me); punchT = 0.3; play('whoosh'); return; }
   if (k === 'v' && !build.active) { setCamMode(!rig.fps); return; }
   if (PANEL_KEYS[k] && G.meta?.phase !== 'naming') { togglePanel(PANEL_KEYS[k]); e.preventDefault(); return; }
+  if (k === '1' && !build.active && G.meta?.phase !== 'naming') { toggleBaton(); return; }
   if (EMOTES[k]) { net.send({ t: 'emote', e: EMOTES[k] }); return; }
   if (k === 'g' && !build.active) {
     const ray = new THREE.Raycaster(); ray.setFromCamera({ x: input.mouse.nx, y: input.mouse.ny }, S.camera);
@@ -401,6 +417,9 @@ function frame(now) {
     }
     actors.hideLocal = fpsView; world.setCeilingVisible(fpsView);
     syncViewModel();
+    if (batonT > 0) batonT -= dt;
+    batonVM.position.set(0.2, -0.1 + (me.moving ? Math.sin(rig.bob * 2) * 0.01 : 0), -0.3);
+    batonVM.rotation.set(0.55 - (batonT > 0 ? Math.sin((0.35 - batonT) / 0.35 * Math.PI) * 1.5 : 0), -0.25, 0);
     if (punchT > 0) { punchT -= dt; fist.visible = fpsView && !(G.carry || []).length; fist.position.z = 0.1 - Math.sin((0.3 - punchT) / 0.3 * Math.PI) * 0.35; } else fist.visible = false;
     viewModel.position.y = -0.36 + (me.moving ? Math.sin(rig.bob * 2) * 0.008 : 0);
     $('crosshair').classList.toggle('hidden', !fpsView || !input.mouse.locked);
@@ -437,10 +456,12 @@ function frame(now) {
       const click = input.mouse.clicked;
       // first person: left click = interact, right click = drop
       if (click && fpsView && input.mouse.locked && !(G.station && world.beltItems.length)) {
-        if (click.button === 0 && currentInter && currentInter.action) doAct(currentInter.action);
+        if (click.button === 0 && G.baton && !(G.carry || []).length && G.meta?.phase !== 'naming') swingBaton();
+        else if (click.button === 0 && currentInter && currentInter.action) doAct(currentInter.action);
         if (click.button === 2) net.act('drop');
       }
-      if (click && click.button === 0 && !fpsView && aimedTag) doAct({ a: '_price', pid: aimedTag.pid });
+      if (click && click.button === 0 && !fpsView && G.baton && !(G.carry || []).length && G.meta?.phase !== 'naming' && !G.station) swingBaton();
+      else if (click && click.button === 0 && !fpsView && aimedTag) doAct({ a: '_price', pid: aimedTag.pid });
       if (click && click.button === 0 && G.station && world.beltItems.length) {
         const ray = new THREE.Raycaster(); ray.setFromCamera({ x: input.mouse.nx, y: input.mouse.ny }, S.camera);
         const hit = ray.intersectObjects(world.beltItems.filter(m => m.visible), false)[0];

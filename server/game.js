@@ -417,6 +417,7 @@ export class Game {
           return fail(this.carryCap() === 1 || b.ftype || hasFurniture ? 'Your hands are full!' : 'You cannot carry more boxes.');
         if (player.carry.some(c => c.dept)) return fail('Your hands are full!');
         this.removeBox(b);
+        player.baton = false;
         player.carry.push(b.ftype ? { ftype: b.ftype } : { pid: b.pid, qty: b.qty, exp: b.exp, expired: b.expired });
         this.sound('pickup', b.x, b.z); this.dirtyWorld(); return true;
       }
@@ -552,7 +553,12 @@ export class Game {
       }
 
       // ---------------- punching (cartoon slapstick)
-      case 'punch': return this.punch(player);
+      case 'punch': return this.punch(player, m);
+      // the baton: draw it / put it away (only with empty hands)
+      case 'baton': {
+        if (!player.baton && player.carry.length) return fail('Put down what you are carrying first.');
+        player.baton = !player.baton; return true;
+      }
 
       // ---------------- day flow
       case 'open': {
@@ -580,24 +586,27 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ punching
-  punch(player) {
+  // fist (F) or baton (left click with the baton out): the baton reaches further and hits harder
+  punch(player, m = {}) {
     const now = Date.now();
-    if (player.punchAt && now - player.punchAt < 550) return false;
+    const baton = m.weapon === 'baton' && player.baton && !player.carry.length;
+    if (player.punchAt && now - player.punchAt < (baton ? 650 : 550)) return false;
     player.punchAt = now;
+    const reach = baton ? 1.8 : 1.35;
     const pf = player.floor || 0;
     const fx = Math.sin(player.rot), fz = Math.cos(player.rot);
     const cands = [];
     const consider = (kind, e) => {
       if ((e.floor || 0) !== pf) return;
       const dx = e.x - player.x, dz = e.z - player.z, d = Math.hypot(dx, dz);
-      if (d > 1.35 || d < 0.01) return;
+      if (d > reach || d < 0.01) return;
       if ((dx * fx + dz * fz) / d < 0.35) return;
       cands.push({ kind, e, d, dx: dx / d, dz: dz / d });
     };
     for (const p of this.players.values()) if (p !== player) consider('player', p);
     for (const c of this.customers) if (c.state !== 'leaving' && c.state !== 'arrive') consider('customer', c);
     for (const st of this.s.staff) if (st.present) consider('staff', st);
-    this.fx({ k: 'swing', id: player.id });
+    this.fx({ k: 'swing', id: player.id, baton });
     if (!cands.length) { this.sound('whoosh', player.x, player.z); return true; }
     cands.sort((a, b) => a.d - b.d);
     const t = cands[0];
@@ -605,10 +614,10 @@ export class Game {
     this.fx({ k: 'pow', x: t.e.x, z: t.e.z, floor: pf });
     if (t.kind === 'player') {
       const v = t.e;
-      v.stunUntil = now + 2000;
+      v.stunUntil = now + (baton ? 3200 : 2000);
       for (const b of v.carry) this.respawnBox(b, v.x, v.z, v.floor || 0);
       v.carry = []; v.station = null;
-      this.fx({ k: 'knock', id: v.id, dx: t.dx * 3.2, dz: t.dz * 3.2, by: player.name });
+      this.fx({ k: 'knock', id: v.id, dx: t.dx * (baton ? 4.5 : 3.2), dz: t.dz * (baton ? 4.5 : 3.2), by: player.name, baton });
       this.dirtyWorld();
     } else if (t.kind === 'customer') {
       const c = t.e;
@@ -617,11 +626,14 @@ export class Game {
       if (!g.isBlocked(Math.floor(nx), Math.floor(nz))) { c.x = nx; c.z = nz; }
       this.s.stats.punched++;
       customerLeave(this, c, 'hit');
-      c.stunT = 1.2;
+      c.stunT = baton ? 2 : 1.2;
+      // word gets around: a beating costs more reputation than a shove
+      if (baton) { this.s.rep = clamp(this.s.rep - 2.5, 0, 100); this.msg('Someone hit a customer with a baton! They left without buying, and the store\'s reputation took a hit.', '🥊', `baton:${this.s.day}`); }
     } else {
       const st = t.e;
-      st.happiness = clamp(st.happiness - 15, 0, 100); st.stunT = 1.5; st.thought = '💢'; st.thoughtT = 1.5;
-      this.msg(`${st.name} didn't appreciate being punched (happiness −15).`, '💢');
+      const hurt = baton ? 25 : 15;
+      st.happiness = clamp(st.happiness - hurt, 0, 100); st.stunT = baton ? 2.5 : 1.5; st.thought = '💢'; st.thoughtT = 1.5;
+      this.msg(`${st.name} didn't appreciate being ${baton ? 'hit with a baton' : 'punched'} (happiness −${hurt}).`, '💢');
       this.dirtyMeta();
     }
     return true;

@@ -4,6 +4,7 @@ import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, 
 import { Grid, center, dims } from '/shared/grid.js';
 import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, makePriceTag, TAG_W, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
 import { pbr, surfaceMaps } from './textures.js';
+import { muralTexture, MURALS, hangingSignTexture, hebrewCategory, storeSignTexture, decalTexture, promoTexture, buildTrackLights, basketStack } from './decor.js';
 
 // small repeatable random numbers (the same customer's items always land the same way)
 function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -72,30 +73,32 @@ export class World {
     const fl = FLOORS.find(f => f.id === w.floor) || FLOORS[0];
     const wl = WALLS.find(x => x.id === w.wall) || WALLS[0];
     void fl;
-    const floorTex = () => surfaceMaps('vct', W, D);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ ...floorTex(), roughness: 1, metalness: 0, envMapIntensity: 1.2 }));
+    const floorTex = () => surfaceMaps('porcelain', W, D);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ ...floorTex(), roughness: 1, metalness: 0, envMapIntensity: 1.4 }));
     floor.rotation.x = -Math.PI / 2; floor.position.set(W / 2, 0.002, D / 2); floor.receiveShadow = true; this.shell.add(floor);
     const sill = new THREE.Mesh(new THREE.PlaneGeometry(W, 1), pbr('concrete', W, 1)); sill.rotation.x = -Math.PI / 2; sill.position.set(W / 2, 0.003, D + 0.5); this.shell.add(sill);
     const H = 3.4; void wl;
     const mkWall = (parent, w_, d_, x, z, side, y0 = 0, h = H) => {
       const g = new THREE.Group();
       const len = Math.max(w_, d_);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w_, h, d_), pbr('block', len, h, { color: 0xe9e6df, transparent: true })); m.position.set(x, y0 + h / 2, z); m.castShadow = true; m.receiveShadow = true; g.add(m);
-      // rubber cove base and a painted brand band like real store walls
-      const base = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.1, d_ + 0.02), pbr('rubber', len, 0.1, { color: 0x3a3d40, transparent: true })); base.position.set(x, y0 + 0.05, z); g.add(base);
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.5, d_ + 0.02), pbr('plaster', len, 0.5, { color: BRAND, transparent: true })); stripe.position.set(x, y0 + 2.75, z); g.add(stripe);
-      parent.add(g); this.fadeWalls.push({ side, mats: [m.material, base.material, stripe.material] });
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w_, h, d_), pbr('paintbrick', len, h, { color: 0x4a4e54, transparent: true })); m.position.set(x, y0 + h / 2, z); m.castShadow = true; m.receiveShadow = true; g.add(m);
+      // black skirting, and a black cornice with a warm LED cove line under it (modern store fit-out)
+      const base = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.02, 0.12, d_ + 0.02), pbr('plaster', len, 0.12, { color: 0x141517, transparent: true })); base.position.set(x, y0 + 0.06, z); g.add(base);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.04, 0.32, d_ + 0.04), pbr('plaster', len, 0.32, { color: 0x121315, transparent: true })); stripe.position.set(x, y0 + h - 0.2, z); g.add(stripe);
+      const cove = new THREE.Mesh(new THREE.BoxGeometry(w_ + 0.05, 0.025, d_ + 0.05), new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffd9a0, emissiveIntensity: 1.6, transparent: true })); cove.position.set(x, y0 + h - 0.37, z); g.add(cove);
+      parent.add(g); this.fadeWalls.push({ side, mats: [m.material, base.material, stripe.material, cove.material] });
     };
     mkWall(this.shell, W + 0.4, 0.2, W / 2, -0.1, 'back');
     mkWall(this.shell, 0.2, D + 1, -0.1, (D + 1) / 2, 'left');
     mkWall(this.shell, 0.2, D + 1, W + 0.1, (D + 1) / 2, 'right');
+    this.buildMurals(W, D);
     // storefront
     const front = new THREE.Group(); this.shell.add(front);
     const fz = D + 0.5, dx0 = w.doorX, dx1 = w.doorX + 2;
     const glassM = new THREE.MeshStandardMaterial({ color: 0xc9d6d3, transparent: true, opacity: 0.16, roughness: 0.03, metalness: 0.2, depthWrite: false, envMapIntensity: 1.5 });
-    const baseM = pbr('brick', W, 0.5, { transparent: true });
+    const baseM = pbr('paintbrick', W, 0.5, { color: 0x2c2e33, transparent: true });
     const frameM = pbr('metal', 1, 1, { color: 0xb9bdc2, metalness: 0.85, transparent: true });
-    const fasciaM = pbr('plaster', W, 1, { color: 0x2b2f33, transparent: true });
+    const fasciaM = pbr('plaster', W, 1, { color: 0x16181b, transparent: true });
     const glassRow = (parent, x0, x1, y0, withBase) => {
       if (x1 - x0 <= 0.01) return;
       const cx = (x0 + x1) / 2, ww = x1 - x0;
@@ -107,10 +110,17 @@ export class World {
     const top = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.1, 0.3), frameM); top.position.set(W / 2, 2.62, fz); front.add(top);
     const fascia = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.95, 0.3), fasciaM); fascia.position.set(W / 2, 3.12, fz); fascia.castShadow = true; front.add(fascia);
     const name = w.name || 'Your Supermarket';
-    const sign = textTexture(name.toUpperCase(), { size: 96, bg: null, color: '#f4f6f2', pad: 20, radius: 0, font: 'Barlow Condensed', weight: 700 });
-    const sh = 0.6, swid = Math.min(W - 1, sh * sign.aspect);
-    const signM = new THREE.MeshStandardMaterial({ map: sign.tex, emissive: 0xffffff, emissiveMap: sign.tex, emissiveIntensity: 0.9, transparent: true });
-    const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(swid, swid / sign.aspect), signM); signMesh.position.set(W / 2, 3.12, fz + 0.16); front.add(signMesh);
+    const sign = storeSignTexture(name);
+    const swid = Math.min(W - 0.6, 0.7 * sign.aspect);
+    const signM = new THREE.MeshStandardMaterial({ map: sign.tex, emissive: 0xffffff, emissiveMap: sign.tex, emissiveIntensity: 0.75, transparent: true });
+    const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(swid, swid / sign.aspect), signM); signMesh.position.set(W / 2, 3.17, fz + 0.16); front.add(signMesh);
+    // big words on the windows, on both sides of the door
+    const decals = [['FRESH', 'טרי כל יום'], ['FRUITS', 'פירות'], ['BAKERY', 'מאפייה'], ['DELI', 'מעדנייה']];
+    const decalMats = [], spots = []; for (let x = 0.9; x < W - 0.6; x += 1.9) if (x + 0.7 < dx0 || x - 0.7 > dx1) spots.push(x);
+    spots.slice(0, 4).forEach((x, i) => {
+      const dm = new THREE.MeshStandardMaterial({ map: decalTexture(...decals[i % decals.length]), roughness: 0.6, transparent: true });
+      const d = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.65), dm); d.position.set(x, 0.95, fz + 0.03); front.add(d); decalMats.push(dm);
+    });
     for (const x of [dx0, dx1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.2), frameM); p.position.set(x, 1.3, fz); front.add(p); }
     for (let i = 0; i < 2; i++) {
       const door = new THREE.Group();
@@ -122,15 +132,22 @@ export class World {
       door.userData = { base, dir: i === 0 ? -1 : 1, open: 0 };
       front.add(door); this.doors.push(door);
     }
-    { const can = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.12, 1.4), frameM); can.position.set(dx0 + 1, 2.72, fz + 0.7); can.castShadow = true; front.add(can); }
+    { const can = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.08, 1.4), frameM); can.position.set(dx0 + 1, 2.66, fz + 0.7); can.castShadow = true; front.add(can); }
     { const ex = makeLabel('EXIT', 0.14, { bg: '#1d2023', color: '#e0453b', size: 40, pad: 14, radius: 2, font: 'Barlow Condensed', weight: 700 }, 0.5); ex.material.toneMapped = false; ex.position.set(dx0 + 1, 2.75, fz - 0.12); ex.rotation.y = Math.PI; front.add(ex); }
     const matM = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), pbr('rubber', 2, 1.2, { color: 0x4a4d50 })); matM.rotation.x = -Math.PI / 2; matM.position.set(dx0 + 1, 0.006, D - 0.6); this.shell.add(matM);
-    this.frontMats = [baseM, frameM, fasciaM, signM];
+    { const bs = basketStack(9); bs.position.set(dx1 + 0.45, 0, D - 0.35); this.shell.add(bs); }
+    { // promotion board on a stand
+      const pr = new THREE.Group(); pr.position.set(dx0 - 0.45, 0, D - 0.3); pr.rotation.y = 0.35; this.shell.add(pr);
+      B(pr, 0.5, 0.03, 0.3, 0x17181a, 0, 0.015, 0); C(pr, 0.02, 0.02, 1.2, 0x2a2c30, 0, 0.6, 0, { metal: 0.6, rough: 0.4 });
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 1.1), new THREE.MeshStandardMaterial({ map: promoTexture(), roughness: 0.5 }));
+      board.position.set(0, 1.3, 0.025); pr.add(board); B(pr, 0.6, 1.15, 0.04, 0x17181a, 0, 1.3, 0);
+    }
+    this.frontMats = [...decalMats, baseM, frameM, fasciaM, signM];
     // entrance pylon sign with the store name (outside, next to the door)
     const py = new THREE.Group(); py.position.set(dx0 - 1.2, 0, D + 1.6); this.shell.add(py);
     C(py, 0.08, 0.1, 2.6, 0x3a3d40, 0, 1.3, 0, { metal: 0.6, rough: 0.4 });
-    B(py, 1.9, 0.7, 0.18, BRAND, 0, 2.75, 0);
-    const pt = textTexture(name, { size: 64, bg: BRAND_CSS, color: '#ffffff', pad: 18, radius: 4, font: 'Barlow Condensed', weight: 700 });
+    B(py, 1.9, 0.7, 0.18, 0x16181b, 0, 2.75, 0);
+    const pt = textTexture(name, { size: 64, bg: '#16181b', color: '#ffffff', pad: 18, radius: 4, font: 'Barlow Condensed', weight: 700 });
     const pw = Math.min(1.75, 0.55 * pt.aspect), pm = new THREE.MeshStandardMaterial({ map: pt.tex, emissive: 0xffffff, emissiveMap: pt.tex, emissiveIntensity: 0.35 });
     for (const [z, r] of [[0.1, 0], [-0.1, Math.PI]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, pw / pt.aspect), pm); m.position.set(0, 2.75, z); m.rotation.y = r; py.add(m); }
     const op = makeLabel('OPEN DAILY  8:00 – 22:00', 0.11, { bg: '#2b2f33', color: '#f4f6f2', size: 32, font: 'Barlow Condensed' }, 1.2); op.position.set(0, 2.25, 0.1); py.add(op);
@@ -143,16 +160,30 @@ export class World {
     this.setCeilingVisible(this.ceilingOn || false);
   }
 
+  // illustrated wall graphics (cream panels with line drawings, English + Hebrew), high on the inside walls
+  buildMurals(W, D) {
+    const panel = (i, x, z, rotY, side) => {
+      const mtl = new THREE.MeshStandardMaterial({ map: muralTexture(i), roughness: 0.85, transparent: true });
+      const pw = 2.6, ph = pw * 448 / 1280;
+      const g = new THREE.Group(); g.position.set(x, 2.45, z); g.rotation.y = rotY;
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.12, ph + 0.12, 0.05), new THREE.MeshStandardMaterial({ color: 0x141517, roughness: 0.5, transparent: true })); g.add(frame);
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mtl); pl.position.z = 0.027; g.add(pl);
+      this.shell.add(g);
+      const fw = this.fadeWalls.find(f => f.side === side); if (fw) fw.mats.push(mtl, frame.material);
+    };
+    let k = 0;
+    const n = Math.max(1, Math.floor((W - 1) / 3.6));
+    for (let i = 0; i < n; i++) panel(k++, (i + 0.5) * (W / n), 0.03, 0, 'back');
+    const m = Math.max(1, Math.floor((D - 2) / 4.2));
+    for (let i = 0; i < m; i++) { panel(k++, 0.03, 1.8 + i * 4.2, Math.PI / 2, 'left'); panel(k++, W - 0.03, 1.8 + i * 4.2, -Math.PI / 2, 'right'); }
+    void MURALS;
+  }
+
   buildCeiling(group, W, D, y) {
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, D + 1), pbr('ceiling', W, D + 1, { side: THREE.DoubleSide }));
+    // open ceiling painted black, with track spotlights in rows (modern store fit-out)
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, D + 1), pbr('plaster', W, D + 1, { color: 0x0b0c0e, side: THREE.DoubleSide, normalScale: 0.3 }));
     ceil.rotation.x = Math.PI / 2; ceil.position.set(W / 2, y, (D + 1) / 2); group.add(ceil);
-    // 60x120 cm LED troffers in the grid, in rows like a real sales floor
-    const panelM = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf4f6ff, emissiveIntensity: 2.0 });
-    const frameM = mat(0xe5e7eb, { metal: 0.4, rough: 0.4 });
-    for (let x = 1.8; x < W - 0.9; x += 2.4) for (let z = 1.5; z < D - 0.4; z += 2.4) {
-      const fr = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.03, 0.64), frameM); fr.position.set(x, y - 0.015, z); group.add(fr);
-      const pn = new THREE.Mesh(new THREE.PlaneGeometry(1.18, 0.58), panelM); pn.rotation.x = Math.PI / 2; pn.position.set(x, y - 0.032, z); group.add(pn);
-    }
+    buildTrackLights(group, W, D, y);
     // ceiling details: dome security cameras, sprinkler heads, exit signs over the doors
     const domeM = new THREE.MeshStandardMaterial({ color: 0x111418, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.85 });
     for (const [cx, cz] of [[0.8, 0.8], [W - 0.8, 0.8], [W / 2, D / 2]]) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), domeM); d.rotation.x = Math.PI; d.position.set(cx, y - 0.01, cz); group.add(d); C(group, 0.1, 0.1, 0.03, 0xf3f4f6, cx, y - 0.015, cz); }
@@ -178,7 +209,7 @@ export class World {
     mkWall(U, 0.2, D + 1, W + 0.1, (D + 1) / 2, 'right', FLOOR_H);
     const fz = D + 0.5;
     const up = new THREE.Group(); U.add(up);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.5, 0.25), pbr('brick', W, 0.5, { transparent: true })); base.position.set(W / 2, FLOOR_H + 0.25, fz); up.add(base);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.5, 0.25), pbr('paintbrick', W, 0.5, { color: 0x2c2e33, transparent: true })); base.position.set(W / 2, FLOOR_H + 0.25, fz); up.add(base);
     glassRow(up, 0, W, FLOOR_H, false);
     const fas = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.6, 0.3), fasciaM); fas.position.set(W / 2, FLOOR_H + 2.95, fz); up.add(fas);
     this.frontMats.push(base.material);
@@ -253,18 +284,13 @@ export class World {
       if (e.aisle) { e.aisle.removeFromParent(); disposeOwned(e.aisle); }
       const g = new THREE.Group();
       const top = names.length ? names.join('  ·  ').toUpperCase() : 'GROCERY';
-      const opts = { bg: BRAND_CSS, color: '#ffffff', size: 40, pad: 22, radius: 2, font: 'Barlow Condensed', weight: 700 };
-      const num = makeLabel(String(i + 1), 0.3, { ...opts, bg: '#f4f6f2', color: BRAND_CSS, size: 56 }, 0.34);
-      const lbl = makeLabel(top, 0.2, opts, 1.6);
-      const wN = num.scale.x, wL = lbl.scale.x;
-      for (const side of [1, -1]) {
-        const a = num.clone(), b = lbl.clone();
-        a.position.set(side * -(wL / 2 + 0.02), 0, side * 0.012); b.position.set(side * (wN / 2 + 0.02), 0, side * 0.012);
-        a.rotation.y = b.rotation.y = side > 0 ? 0 : Math.PI;
-        g.add(a, b);
-      }
-      for (const x of [-0.5, 0.5]) { const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.6, 4), mat(0x8a8f94, { metal: 0.8 })); wire.position.set(x * (wN + wL) * 0.8, 0.45, 0); wire.userData.owned = wire.userData.ownGeo = true; g.add(wire); }
-      g.position.set(0, 2.62, 0);
+      const tex = hangingSignTexture(i + 1, top, hebrewCategory(FURNITURE[f.type].cat));
+      const sw = 1.1, sh = sw / 2;
+      const board = new THREE.Mesh(new THREE.BoxGeometry(sw + 0.04, sh + 0.04, 0.035), mat(0x101113, { rough: 0.5 })); board.userData.owned = board.userData.ownGeo = true; g.add(board);
+      const face = new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25, roughness: 0.6 });
+      for (const side of [1, -1]) { const pl = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), side > 0 ? face : face.clone()); pl.position.z = side * 0.019; pl.rotation.y = side > 0 ? 0 : Math.PI; pl.userData.owned = true; g.add(pl); }
+      for (const x of [-0.4, 0.4]) { const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.6, 4), mat(0x2a2c30, { metal: 0.8 })); wire.position.set(x, sh / 2 + 0.3, 0); wire.userData.owned = wire.userData.ownGeo = true; g.add(wire); }
+      g.position.set(0, 2.55, 0);
       e.aisle = g; e.group.add(g);
     });
   }

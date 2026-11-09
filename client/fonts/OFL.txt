@@ -3,6 +3,7 @@ The fonts in this folder are licensed under the SIL Open Font License, Version 1
 Barlow and Barlow Condensed: Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
 Playfair Display: Copyright 2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display)
 Archivo Black: Copyright 2017 The Archivo Black Project Authors (https://github.com/Omnibus-Type/ArchivoBlack)
+Heebo: Copyright 2014 The Heebo Project Authors (https://github.com/OdedEzer/heebo)
 Pacifico: Copyright 2018 The Pacifico Project Authors (https://github.com/googlefonts/Pacifico)
 
 The full license text is available at https://openfontlicense.org/open-font-license-official-text/

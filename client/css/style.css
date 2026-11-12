@@ -431,3 +431,20 @@ button.den.small { cursor: pointer; }
 .term-keys .yellow { background: #c79a22; color: #1d1600; font-size: 12px; }
 .term-keys .green { background: #2f8a5b; }
 .term-keys .ok { grid-column: 1 / -1; }
+
+/* settings */
+.settings-card { max-width: 480px; display: grid; gap: 12px; }
+.settings-card h2 { margin: 0 0 4px; }
+.set-row { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 10px; font-size: 14px; }
+.set-row label { color: var(--muted); }
+.set-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.set-row .seg { grid-column: 2 / -1; }
+.set-row input[type=range] { width: 100%; accent-color: var(--brand-hi); }
+.set-check { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.set-check input { accent-color: var(--brand-hi); width: 16px; height: 16px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; background: var(--raise); color: var(--ink); border: 0; padding: 8px 0; font: 600 14px var(--font); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.sel { background: var(--brand); color: #fff; }
+.settings-card .note { margin: -4px 0 0; font-size: 12px; color: var(--muted); }
+#fps { position: fixed; left: 8px; top: 8px; z-index: 60; background: rgba(0,0,0,.55); color: #9be7b4; font: 600 12px ui-monospace, Consolas, monospace; padding: 3px 7px; border-radius: 5px; pointer-events: none; }

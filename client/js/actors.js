@@ -101,7 +101,7 @@ export class Actors {
     this.myId = myId;
     // players
     const seenP = new Set();
-    for (const [id, x, z, rot, anim, carry, station, emote, floor, stun, baton] of s.P) {
+    for (const [id, x, z, rot, anim, carry, station, emote, floor, stun, baton, cart] of s.P) {
       seenP.add(id);
       let e = this.players.get(id);
       if (!e) { e = this.makePlayer(id); this.players.set(id, e); }
@@ -111,7 +111,8 @@ export class Actors {
       e.carryDept = carry.some(c => c.startsWith('raw:') || c.startsWith('pack:'));
       e.station = station;
       e.carryList = carry;
-      this.setPlayerCarry(e, carry);
+      e.cartOn = !!cart;
+      this.setPlayerCarry(e, carry, !!cart);
       e.gesture = emote || '';
       this.setBaton(e, !!baton);
     }
@@ -171,11 +172,16 @@ export class Actors {
     for (const [id, e] of this.pigeons) if (!seenG.has(id)) { this.root.remove(e.obj); this.pigeons.delete(id); }
   }
 
-  setPlayerCarry(e, carry) {
-    const key = carry.join(',');
+  setPlayerCarry(e, carry, cart = false) {
+    const key = carry.join(',') + (cart ? '|cart' : '');
     if (key === e.carryKey) return;
     e.carryKey = key;
     e.carry.clear();
+    if (cart) { // pushing a shopping cart with the boxes inside
+      const c = makeCart(); c.position.set(0, 0, 0.85); e.carry.add(c);
+      carry.forEach((pid, i) => { const b = carryModel(pid); b.scale.setScalar(0.8); b.position.set((i % 2 ? 0.11 : -0.11) * (carry.length > 1 ? 1 : 0), 0.53 + Math.floor(i / 2) * 0.3, 0.85 + (i % 2 ? -0.12 : 0.14)); e.carry.add(b); });
+      return;
+    }
     if (!carry.length) return;
     if (carry.length === 1) {
       const b = carryModel(carry[0]); b.position.set(0, carry[0].startsWith('f:') ? 0.62 : carry[0].includes(':') ? 1.0 : 0.82, carry[0].startsWith('f:') ? 0.55 : 0.44); e.carry.add(b);
@@ -207,7 +213,7 @@ export class Actors {
       else { e.x += (e.tx - e.x) * k; e.z += (e.tz - e.z) * k; e.rot = lerpAngle(e.rot, e.trot, k); }
       this.place(e);
       const carrying = e.carryList && e.carryList.length;
-      const pose = e.station ? 'work' : carrying ? 'carry' : (e.gesture && !e.moving) ? GESTURES[e.gesture] || 'walk' : 'walk';
+      const pose = e.station ? 'work' : e.cartOn ? 'cart' : carrying ? 'carry' : (e.gesture && !e.moving) ? GESTURES[e.gesture] || 'walk' : 'walk';
       animateCharacter(e.obj, dt, e.moving, pose, 1.1);
       if (e.swingT > 0) { e.swingT -= dt; const P = e.obj.userData.parts; P.armR.rotation.x = -1.6 - Math.sin((0.3 - e.swingT) / 0.3 * Math.PI) * 0.6; P.armR.rotation.z = 0.2; }
       else if (e.baton && !carrying) { const P = e.obj.userData.parts; P.armR.rotation.x = -0.45; P.elbowR.rotation.x = -0.7; } // baton held ready

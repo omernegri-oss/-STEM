@@ -50,6 +50,7 @@
           <p id="dl-started" class="dl-started" hidden>Your download has started (about 130 MB). It appears in your browser's downloads: press <b>Ctrl+J</b>, or <b>⌘+⇧+J</b> on a Mac. On Windows, open <b>Supermarket-windows-setup.exe</b>: it installs the game and puts a shortcut on your desktop (if Windows warns about an unknown app, click <b>More info</b>, then <b>Run anyway</b>). Nothing happening? <a id="dl-page" target="_blank" rel="noopener">Open the downloads page</a>.</p>
           <p class="note">The download runs in its own window and keeps your stores on your computer. You can play together with friends whether they use the website or the download.</p>
         </div>
+        <div class="menu-actions row"><button id="m-settings" class="btn">Settings</button></div>
         <div class="menu-actions row desk-only" hidden><button id="m-fullscreen" class="btn">⛶ Fullscreen (F11)</button><button id="m-quit" class="btn">⏻ Quit game</button></div>
         <p class="help">WASD move · Mouse drag rotate camera · <b>E</b> interact · <b>Q</b> drop · <b>B</b> build · <b>O</b> order stock</p>
       </div>
@@ -87,7 +88,7 @@
         </div>
         <button id="h-open" class="btn primary glow">Open Store</button>
         <button id="h-msgs" class="msgs" title="Messages and bills are on the store computer">0</button>
-        <div class="tb-audio"><button id="h-sfx" title="Sound effects"></button><button id="h-music" title="Music"></button><button id="h-gfx"></button><button id="h-help" title="How to play (?)"></button><button id="h-exit" title="Leave store (progress is saved)"></button></div>
+        <div class="tb-audio"><button id="h-sfx" title="Sound effects"></button><button id="h-music" title="Music"></button><button id="h-settings" title="Settings"></button><button id="h-help" title="How to play (?)"></button><button id="h-exit" title="Leave store (progress is saved)"></button></div>
       </header>
 
 
@@ -158,6 +159,20 @@
         <div style="text-align:center;margin-top:12px"><button class="btn primary" id="help-close">Got it!</button></div>
       </div></div>
     </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <div id="settings" class="overlay hidden"><div class="ov-card settings-card">
+      <h2>Settings</h2>
+      <div class="set-row"><label>Graphics quality</label><div id="set-gfx" class="seg"><button data-gfx="low">Low</button><button data-gfx="medium">Medium</button><button data-gfx="high">High</button></div></div>
+      <p class="note">Low: fastest, no shadows. Medium: shadows. High: adds soft shading and glow (needs a good graphics card).</p>
+      <label class="set-check"><input type="checkbox" id="set-auto" /> Lower the quality automatically when the game runs slowly</label>
+      <label class="set-check"><input type="checkbox" id="set-fps" /> Show frames per second</label>
+      <div class="set-row"><label for="set-sens">Mouse sensitivity</label><input type="range" id="set-sens" min="0.3" max="3" step="0.1" /><b id="set-sens-v"></b></div>
+      <div class="set-row"><label for="set-sfx">Sound effects</label><input type="range" id="set-sfx" min="0" max="100" step="5" /><b id="set-sfx-v"></b></div>
+      <div class="set-row"><label for="set-music">Music</label><input type="range" id="set-music" min="0" max="100" step="5" /><b id="set-music-v"></b></div>
+      <div style="text-align:center;margin-top:14px"><button class="btn primary" id="set-close">Done</button></div>
+    </div></div>
+    <div id="fps" hidden></div>
 
     <div id="loading" class="hidden"><div class="spinner"></div><p>Connecting…</p></div>
     <div id="toast-err"></div>

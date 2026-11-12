@@ -65,7 +65,7 @@ function buildList(game, c) {
   else c.list = list;
   c.qty = Object.fromEntries(c.list.map(pid => { const r = Math.random(); return [pid, r < 0.1 ? 3 : r < 0.38 ? 2 : 1]; }));
   c.wanted = c.list.length;
-  c.cart = s.upgrades.carts && c.list.length >= 4;
+  c.cart = c.list.length >= 4; // a big shop: takes a cart from the bay by the entrance, smaller shops use a basket
   // butcher / deli requests
   for (const cat of COUNTER_CATS) {
     if (c.counterReq) break;

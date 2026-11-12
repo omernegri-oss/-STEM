@@ -3,7 +3,7 @@ import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, FIXTURE_UPGRADES, EXPANSIONS,
   TEAM_UPGRADES, TEAM_UPGRADE_MAP, ROLES, SHIFTS, MAX_LEVEL, levelForXp, ACHIEVEMENTS,
   FIRST_NAMES, LAST_NAMES, EVENT_TYPES, STARTING_CASH, REAL_SECONDS_PER_MINUTE, OPEN_HOUR, CLOSE_HOUR,
-  LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, fitsFixture, fixtureCats, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
+  LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, fitsFixture, fixtureCats, cartBay, CART_BOXES, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
   licenseCost, priceLimits, stairInfo, slotCap, HIRE_FEE_DAYS,
 } from '../shared/data.js';
 import { Grid, footprint, serviceTiles, FACING, center, route, deptSpots, dims } from '../shared/grid.js';
@@ -175,7 +175,7 @@ export class Game {
     a -= this.s.dirt.length;
     return Math.round(a);
   }
-  carryCap() { return this.s.upgrades.palletjack ? 6 : this.s.upgrades.handtruck ? 3 : 1; }
+  carryCap(player) { const base = this.s.upgrades.palletjack ? 6 : this.s.upgrades.handtruck ? 3 : 1; return player && player.cart ? Math.max(base, CART_BOXES) : base; }
   hasDept(cat) { return this.s.furniture.some(f => FURNITURE[f.type].cat === cat && f.slots && f.slots.some(sl => sl.qty > 0)); }
   unlocked(level) { return this.s.level >= level; }
   licensed(pid) { return this.s.licenses.includes(pid); }
@@ -413,8 +413,9 @@ export class Game {
         if (!b) return false;
         if ((b.floor || 0) !== pf || dist(player, b) > 2.2) return fail('Too far away.');
         const hasFurniture = player.carry.some(c => c.ftype);
-        if (b.ftype ? player.carry.length : (hasFurniture || player.carry.length >= this.carryCap()))
-          return fail(this.carryCap() === 1 || b.ftype || hasFurniture ? 'Your hands are full!' : 'You cannot carry more boxes.');
+        if (b.ftype && player.cart) return fail('Furniture boxes do not fit in a shopping cart. Return the cart first.');
+        if (b.ftype ? player.carry.length : (hasFurniture || player.carry.length >= this.carryCap(player)))
+          return fail(player.cart ? 'The cart is full.' : this.carryCap(player) === 1 || b.ftype || hasFurniture ? 'Your hands are full!' : 'You cannot carry more boxes.');
         if (player.carry.some(c => c.dept)) return fail('Your hands are full!');
         this.removeBox(b);
         player.baton = false;
@@ -424,7 +425,7 @@ export class Game {
       case 'rackTake': {
         const f = this.fixture(m.id); if (!f || !f.boxes) return false;
         if (!f.boxes.length) return fail('Rack is empty.');
-        if (player.carry.length >= this.carryCap() || player.carry.some(c => c.ftype || c.dept)) return fail('Your hands are full!');
+        if (player.carry.length >= this.carryCap(player) || player.carry.some(c => c.ftype || c.dept)) return fail(player.cart ? 'The cart is full.' : 'Your hands are full!');
         const b = f.boxes.pop();
         player.carry.push(b); this.sound('pickup', f.x, f.z); this.dirtyWorld(); return true;
       }
@@ -555,7 +556,16 @@ export class Game {
       // ---------------- punching (cartoon slapstick)
       case 'punch': return this.punch(player, m);
       // the baton: draw it / put it away (only with empty hands)
+      // take a shopping cart from the bay outside (moves several boxes at once), or put it back
+      case 'cart': {
+        const bay = cartBay(s.doorX, s.d);
+        if (pf !== 0 || Math.hypot(player.x - bay.x, player.z - bay.z) > 2.8) return fail('The shopping carts are outside, to the right of the entrance.');
+        if (player.cart) { if (player.carry.length) return fail('Empty the cart before you return it.'); player.cart = false; }
+        else { if (player.carry.length) return fail('Put down what you are carrying first.'); player.cart = true; player.baton = false; player.station = null; }
+        this.sound('place', player.x, player.z); return true;
+      }
       case 'baton': {
+        if (player.cart) return fail('Return the shopping cart first.');
         if (!player.baton && player.carry.length) return fail('Put down what you are carrying first.');
         player.baton = !player.baton; return true;
       }

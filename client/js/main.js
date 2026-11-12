@@ -6,14 +6,15 @@ import { slotCap } from '/shared/data.js';
 import { Net } from './net.js';
 import { OnlineHost, OnlineNet, localServerSocket, onlineAvailable } from './online.js';
 import { createScene } from './scene.js';
+import { prewarmTextures } from './textures.js';
 import { World } from './world.js';
 import { Actors, carryModel } from './actors.js';
-import { makeBaton } from './models.js';
+import { makeBaton, makeCart } from './models.js';
 import { FX } from './fx.js';
 import { Input, LocalPlayer, CameraRig, findInteraction, keyName } from './player.js';
 import { BuildMode } from './build.js';
 import { UI, esc } from './ui.js';
-import { initAudio, play, audio } from './audio.js';
+import { initAudio, play, audio, setVolumes } from './audio.js';
 import { svg, setIcon, ROLE_ICON } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
@@ -34,12 +35,17 @@ await Promise.race([
   new Promise(r => setTimeout(r, 2500)),
 ]);
 const canvas = $('game'); canvas.tabIndex = 0;
-let lowGfx = /[?&]low/.test(location.search);
+// graphics quality: low / medium (default) / high. The player's own choice is remembered; without one, weak
+// devices start in low, and the game steps down by itself if it runs slowly
+const GFX = ['low', 'medium', 'high'];
 let gfxChoice = null; try { gfxChoice = localStorage.getItem('st_gfx'); } catch {}
-if (gfxChoice === 'low') lowGfx = true;
-// phones, tablets and low-memory computers start in low graphics unless the player picked high themselves
-if (!gfxChoice && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory && navigator.deviceMemory <= 4))) lowGfx = true;
-const S = createScene(canvas, { low: lowGfx });
+if (!GFX.includes(gfxChoice)) gfxChoice = null;
+let gfx = gfxChoice || 'medium';
+if (/[?&]low/.test(location.search)) gfx = 'low';
+else if (!gfxChoice && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory && navigator.deviceMemory <= 4))) gfx = 'low';
+let gfxAuto = true; try { gfxAuto = localStorage.getItem('st_gfx_auto') !== '0'; } catch {}
+const S = createScene(canvas, { quality: gfx });
+prewarmTextures();
 const world = new World(S.scene);
 const actors = new Actors(S.scene);
 const fx = new FX(S.scene);
@@ -53,7 +59,23 @@ const fist = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.Me
 fist.scale.set(1, 0.9, 1.3); fist.position.set(0.12, 0.05, 0.1); fist.visible = false; viewModel.add(fist);
 let viewKey = '', punchT = 0, batonT = 0;
 const batonVM = makeBaton(); batonVM.visible = false; viewModel.add(batonVM);
+// first person: the shopping cart you push, on the floor in front of you (follows where you face, not where you look)
+const cartVM = new THREE.Group(); cartVM.visible = false; S.scene.add(cartVM);
+let cartVMKey = null;
+function syncCartVM() {
+  const on = !!(G.cart && rig.fps && !build.active && G.started);
+  cartVM.visible = on; if (!on) return;
+  const key = (G.carry || []).join(',');
+  if (key !== cartVMKey) {
+    cartVMKey = key; cartVM.clear();
+    const c = makeCart(); c.position.set(0, 0, 0.95); cartVM.add(c);
+    (G.carry || []).forEach((pid, i, arr) => { const b = carryModel(pid); b.scale.setScalar(0.8); b.position.set((i % 2 ? 0.11 : -0.11) * (arr.length > 1 ? 1 : 0), 0.53 + Math.floor(i / 2) * 0.3, 0.95 + (i % 2 ? -0.12 : 0.14)); cartVM.add(b); });
+  }
+  cartVM.position.set(me.x, me.y || 0, me.z); cartVM.rotation.y = me.rot;
+}
 function syncViewModel() {
+  syncCartVM();
+  if (G.cart) { for (const c of [...viewModel.children]) if (c !== fist && c !== batonVM) viewModel.remove(c); batonVM.visible = false; viewKey = 'cart'; return; }
   const top = (G.carry || []).at(-1) || '';
   const key = (rig.fps && !build.active ? 'fps' : '') + top + (G.carry || []).length + (G.baton ? 'b' : '');
   if (key === viewKey) return; viewKey = key;
@@ -81,7 +103,6 @@ S.buildEnvironment(12, 9);
 world.set({ name: 'Supermarket', w: 12, d: 9, doorX: 5, floor: 'checker', wall: 'cream', furniture: demoFurniture(), boxes: [], dirt: [], prices: {} });
 
 const ui = new UI({ G, net, onPanel: (p) => togglePanel(p) });
-const gfxBtn = $('h-gfx');
 // if the graphics card runs out of memory the browser drops the 3D context: save, then reload in low graphics
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
@@ -93,23 +114,56 @@ canvas.addEventListener('webglcontextlost', (e) => {
   document.body.appendChild(box);
   setTimeout(() => location.reload(), 1800);
 });
-// auto-switch to low graphics if high graphics runs too slowly on this device
-let perfT = 0, perfN = 0, slowWindows = 0;
+// step the graphics down one level when the game runs too slowly on this device (can be turned off in Settings)
+let perfT = 0, perfN = 0, slowWindows = 0, fpsNow = 0;
+function setGfx(level, byPlayer) {
+  gfx = level; S.setQuality(level);
+  if (byPlayer) gfxChoice = level;
+  try { localStorage.setItem('st_gfx', level); } catch {}
+  syncSettings();
+}
 function watchPerf(dt) {
-  if (lowGfx || gfxChoice === 'high') return;
   perfT += dt; perfN++;
-  if (perfT < 4) return;
-  const fps = perfN / perfT; perfT = 0; perfN = 0;
-  slowWindows = fps < 24 ? slowWindows + 1 : 0;
-  if (slowWindows >= 2) {
-    lowGfx = true; S.setQuality(true); syncGfx();
-    try { localStorage.setItem('st_gfx', 'low'); } catch {}
-    ui.system('Switched to low graphics so the game runs smoothly (graphics button in the top bar to switch back).');
+  if (perfT < 2) return;
+  fpsNow = perfN / perfT;
+  const el = $('fps'); if (el && !el.hidden) el.textContent = Math.round(fpsNow) + ' FPS';
+  perfT = 0; perfN = 0;
+  if (gfx === 'low' || !gfxAuto) return;
+  slowWindows = fpsNow < 24 ? slowWindows + 1 : 0;
+  if (slowWindows >= 3) {
+    slowWindows = 0;
+    const next = GFX[GFX.indexOf(gfx) - 1];
+    setGfx(next, false);
+    ui.system(`Graphics set to ${next} so the game runs smoothly (change it in Settings).`);
   }
 }
-const syncGfx = () => { setIcon(gfxBtn, lowGfx ? 'eco' : 'gauge', 16); gfxBtn.title = `Graphics: ${lowGfx ? 'Low' : 'High'} (click to toggle)`; };
-gfxBtn.onclick = () => { lowGfx = !lowGfx; gfxChoice = lowGfx ? 'low' : 'high'; try { localStorage.setItem('st_gfx', lowGfx ? 'low' : 'high'); } catch {} S.setQuality(lowGfx); syncGfx(); };
-syncGfx();
+// ----------------------------------------------------------------------------------- settings
+const settings = { sens: 1, sfxVol: 0.7, musicVol: 0.7, fps: false };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('st_settings') || '{}')); } catch {}
+const saveSettings = () => { try { localStorage.setItem('st_settings', JSON.stringify(settings)); localStorage.setItem('st_gfx_auto', gfxAuto ? '1' : '0'); } catch {} };
+function applySettings() {
+  rig.sens = settings.sens;
+  setVolumes(settings.sfxVol, settings.musicVol);
+  $('fps').hidden = !settings.fps;
+}
+function syncSettings() {
+  document.querySelectorAll('#set-gfx button').forEach(b => b.classList.toggle('sel', b.dataset.gfx === gfx));
+  $('set-auto').checked = gfxAuto; $('set-fps').checked = settings.fps;
+  $('set-sens').value = settings.sens; $('set-sens-v').textContent = settings.sens.toFixed(1) + '×';
+  $('set-sfx').value = Math.round(settings.sfxVol * 100); $('set-sfx-v').textContent = Math.round(settings.sfxVol * 100) + '%';
+  $('set-music').value = Math.round(settings.musicVol * 100); $('set-music-v').textContent = Math.round(settings.musicVol * 100) + '%';
+}
+const toggleSettings = (on) => { const el = $('settings'); const show = on === undefined ? el.classList.contains('hidden') : on; el.classList.toggle('hidden', !show); if (show) { syncSettings(); if (document.pointerLockElement) document.exitPointerLock(); } };
+$('set-gfx').onclick = (e) => { const b = e.target.closest('button'); if (b) setGfx(b.dataset.gfx, true); };
+$('set-auto').onchange = (e) => { gfxAuto = e.target.checked; saveSettings(); };
+$('set-fps').onchange = (e) => { settings.fps = e.target.checked; saveSettings(); applySettings(); };
+$('set-sens').oninput = (e) => { settings.sens = +e.target.value; saveSettings(); applySettings(); syncSettings(); };
+$('set-sfx').oninput = (e) => { initAudio(); settings.sfxVol = e.target.value / 100; saveSettings(); applySettings(); syncSettings(); };
+$('set-sfx').onchange = () => play('click');
+$('set-music').oninput = (e) => { initAudio(); settings.musicVol = e.target.value / 100; saveSettings(); applySettings(); syncSettings(); };
+$('set-close').onclick = () => toggleSettings(false);
+$('h-settings').onclick = () => toggleSettings();
+$('m-settings').onclick = () => toggleSettings(true);
 const toggleHelp = (on) => $('help').classList.toggle('hidden', on === undefined ? undefined : !on);
 $('h-help').onclick = () => toggleHelp();
 $('h-exit').onclick = async () => { if (await ui.ask('Leave this store? Your team keeps playing and progress is saved.', 'Leave')) { net.send({ t: 'leave' }); G.code = ''; host.stop(); setTimeout(() => location.reload(), 150); } };
@@ -170,10 +224,10 @@ if (onlineJoin) setTimeout(async () => {
   net.send({ t: 'join', code: onlineJoin.code, name: prefs.name || 'Player', color: prefs.color });
 }, 0);
 // line icons on the top bar, dock and menu buttons
-for (const [id, ic] of [['h-sfx', 'speaker'], ['h-music', 'music'], ['h-help', 'help'], ['h-exit', 'exit']]) setIcon($(id), ic, 16);
+for (const [id, ic] of [['h-sfx', 'speaker'], ['h-music', 'music'], ['h-settings', 'settings'], ['h-help', 'help'], ['h-exit', 'exit']]) setIcon($(id), ic, 16);
 setIcon(document.querySelector('[data-speed="0"]'), 'pause', 14);
 for (const [p, ic] of [['build', 'layout'], ['inventory', 'box'], ['finance', 'chart'], ['stats', 'award']]) setIcon(document.querySelector(`#dock [data-panel="${p}"] i`), ic, 22);
-window.__dbg = { net, me, rig, ui, world, S, fx };
+window.__dbg = { net, me, rig, ui, world, S, fx, actors };
 const build = new BuildMode({ scene: S.scene, camera: S.camera, world, net, G, ui, rig });
 window.__dbg.build = build;
 
@@ -286,6 +340,7 @@ net.on('s', (s) => {
     // the server decides whether the baton is out (it goes away when you pick something up); right after
     // pressing 1 the local choice wins until the server has heard it
     if (performance.now() - (G.batonHold || 0) > 600) G.baton = !!mine[10];
+    G.cart = !!mine[11];
     if ((G.carry || []).at(-1) !== prevTop) G.deptProgress = 0;
   }
   actors.applySnapshot(s, G.me, me);
@@ -357,6 +412,7 @@ addEventListener('keydown', (e) => {
   if (k === 'enter') { $('chat-input').focus(); e.preventDefault(); return; }
   if (k === '?' || k === 'f1') { toggleHelp(); e.preventDefault(); return; }
   if (k === 'escape') {
+    if (!$('settings').classList.contains('hidden')) { toggleSettings(false); return; }
     if (!$('help').classList.contains('hidden')) { toggleHelp(false); return; }
     if (ui.panel) { ui.closePanel(); return; }
     return; // build mode handles its own escape
@@ -374,6 +430,7 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('mousedown', () => initAudio());
 
+applySettings(); syncSettings();
 // ----------------------------------------------------------------------------------- main loop
 let last = performance.now(), sendT = 0, holdT = 0, tasksT = 0, lastInter = null, stepT = 0;
 let currentInter = null, payGoneT = 0;
@@ -382,7 +439,7 @@ function frame(now) {
   const rawDt = (now - last) / 1000;
   const dt = Math.min(0.05, rawDt); last = now;
   const inGame = G.started && G.world && !$('hud').classList.contains('hidden');
-  if (inGame && !document.hidden && rawDt < 1) watchPerf(rawDt);
+  if (!document.hidden && rawDt < 1 && (inGame || settings.fps)) watchPerf(rawDt);
   if (inGame) {
     if (!build.active) {
       const blockMove = G.meta?.phase === 'naming';
@@ -438,8 +495,9 @@ function frame(now) {
     if (ui.payFor) { const k = (G.snap?.K || []).find(k => k[0] === G.station); if (!k || k[1] !== ui.payFor) { payGoneT ||= now; if (now - payGoneT > 800) ui.closePayment(k ? `customer ${k[1]} at the register now` : `no register (station ${G.station})`); } else payGoneT = 0; } else payGoneT = 0;
     const carry = G.carry || [];
     const ce = $('carry');
+    world.setCartsInUse(((G.snap?.C || []).filter(c => c[8] & 1).length) + ((G.snap?.P || []).filter(p => p[11]).length));
     const nameOf = (c) => c.startsWith('f:') ? FURNITURE[c.slice(2)].name + ' (box)' : c.includes(':') ? `${c.startsWith('raw') ? 'Raw' : 'Wrapped'} ${PRODUCT_MAP[c.split(':')[1]]?.name}` : PRODUCT_MAP[c]?.name;
-    if (carry.length && !build.active) { const t = `Carrying: ${carry.map(nameOf).join(', ')}  ·  Q drop`; if (ce.textContent !== t) ce.textContent = t; ce.classList.remove('hidden'); } else ce.classList.add('hidden');
+    if (carry.length && !build.active) { const t = `${G.cart ? 'In the cart' : 'Carrying'}: ${carry.map(nameOf).join(', ')}  ·  Q ${G.cart ? 'take one out' : 'drop'}`; if (ce.textContent !== t) ce.textContent = t; ce.classList.remove('hidden'); } else ce.classList.add('hidden');
     me.cutting = !!(currentInter && currentInter.cutting && input.down('e'));
     const doAct = (a) => {
       if (a.a === '_pay') { if (document.pointerLockElement) document.exitPointerLock(); ui.payment(a); return; }

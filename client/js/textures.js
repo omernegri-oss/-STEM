@@ -188,4 +188,11 @@ export function pbrShared(kind, key, repeat = 1, opts = {}) {
   return shared.get(k);
 }
 export const TEXTURE_KINDS = Object.keys(RECIPES);
+// build every texture ahead of time, one at a time between frames, so the first shopper / first delivery
+// doesn't freeze the game while a texture is generated
+export function prewarmTextures() {
+  const todo = TEXTURE_KINDS.filter(k => !cache.has(k));
+  const next = () => { const k = todo.shift(); if (!k) return; try { base(k); } catch {} setTimeout(next, 60); };
+  setTimeout(next, 400);
+}
 export { hex as hexToRgb };

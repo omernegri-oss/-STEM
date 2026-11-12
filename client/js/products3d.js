@@ -15,7 +15,7 @@ function parts(list) {
   m.groups.forEach((gr, i) => { gr.materialIndex = list[i][1]; });
   return m;
 }
-function lathe(points, seg = 20) { return new THREE.LatheGeometry(points.map(([r, y]) => new THREE.Vector2(r, y)), seg); }
+function lathe(points, seg = 12) { return new THREE.LatheGeometry(points.map(([r, y]) => new THREE.Vector2(r, y)), seg); }
 
 const D = SHAPE_DIMS;
 export const SHAPE_MATS = {}; // shape -> list of material roles for each material index
@@ -25,7 +25,7 @@ function build() {
   G.box = based(new THREE.BoxGeometry(D.box.w, D.box.h, D.box.d)); SHAPE_MATS.box = ['side', 'side', 'top', 'top', 'label', 'label'];
   G.flatbox = based(new THREE.BoxGeometry(D.flatbox.w, D.flatbox.h, D.flatbox.d)); SHAPE_MATS.flatbox = ['side', 'side', 'label', 'top', 'label', 'label'];
   // pillow bag: a box with bulged faces
-  const bag = new THREE.BoxGeometry(D.bag.w, D.bag.h, D.bag.d, 6, 8, 2);
+  const bag = new THREE.BoxGeometry(D.bag.w, D.bag.h, D.bag.d, 4, 5, 2);
   const pos = bag.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i) / (D.bag.w / 2), y = pos.getY(i) / (D.bag.h / 2), z = pos.getZ(i);
@@ -37,9 +37,9 @@ function build() {
   G.bag = based(bag); SHAPE_MATS.bag = ['side', 'side', 'top', 'top', 'label', 'label'];
   // tin can with rims
   const r = D.can.w / 2;
-  G.can = based(parts([[new THREE.CylinderGeometry(r * 0.97, r * 0.97, D.can.h * 0.9, 18, 1, true).translate(0, D.can.h * 0.5, 0), 0],
-    [new THREE.CylinderGeometry(r, r, D.can.h * 0.05, 18).translate(0, D.can.h * 0.975, 0), 1],
-    [new THREE.CylinderGeometry(r, r, D.can.h * 0.05, 18).translate(0, D.can.h * 0.025, 0), 1]]));
+  G.can = based(parts([[new THREE.CylinderGeometry(r * 0.97, r * 0.97, D.can.h * 0.9, 12, 1, true).translate(0, D.can.h * 0.5, 0), 0],
+    [new THREE.CylinderGeometry(r, r, D.can.h * 0.05, 12).translate(0, D.can.h * 0.975, 0), 1],
+    [new THREE.CylinderGeometry(r, r, D.can.h * 0.05, 12).translate(0, D.can.h * 0.025, 0), 1]]));
   SHAPE_MATS.can = ['label', 'metal'];
   // bottle: lathe body + cap
   const br = D.bottle.w / 2, bh = D.bottle.h;
@@ -48,7 +48,7 @@ function build() {
   SHAPE_MATS.bottle = ['label', 'cap'];
   const jr = D.jar.w / 2, jh = D.jar.h;
   G.jar = based(parts([[lathe([[0.001, 0], [jr, 0.004], [jr, jh * 0.78], [jr * 0.85, jh * 0.86], [0.001, jh * 0.86]]), 0],
-    [new THREE.CylinderGeometry(jr * 0.88, jr * 0.88, jh * 0.14, 16).translate(0, jh * 0.93, 0), 1]]));
+    [new THREE.CylinderGeometry(jr * 0.88, jr * 0.88, jh * 0.14, 10).translate(0, jh * 0.93, 0), 1]]));
   SHAPE_MATS.jar = ['label', 'lid'];
   // milk/juice carton with gable top
   const cw = D.carton.w, ch = D.carton.h * 0.8;
@@ -56,14 +56,14 @@ function build() {
   G.carton = based(parts([[new THREE.BoxGeometry(cw, ch, cw).translate(0, ch / 2, 0), 0], [gable, 1], [new THREE.BoxGeometry(cw * 0.95, D.carton.h * 0.05, 0.01).translate(0, ch + D.carton.h * 0.18, 0), 1]]));
   SHAPE_MATS.carton = ['label', 'top'];
   const tr = D.tub.w / 2;
-  G.tub = based(parts([[new THREE.CylinderGeometry(tr, tr * 0.85, D.tub.h * 0.92, 18, 1, true).translate(0, D.tub.h * 0.46, 0), 0],
-    [new THREE.CylinderGeometry(tr * 1.03, tr * 1.03, D.tub.h * 0.08, 18).translate(0, D.tub.h * 0.96, 0), 1]]));
+  G.tub = based(parts([[new THREE.CylinderGeometry(tr, tr * 0.85, D.tub.h * 0.92, 12, 1, true).translate(0, D.tub.h * 0.46, 0), 0],
+    [new THREE.CylinderGeometry(tr * 1.03, tr * 1.03, D.tub.h * 0.08, 12).translate(0, D.tub.h * 0.96, 0), 1]]));
   SHAPE_MATS.tub = ['label', 'foil'];
   // fruit with a little stem
-  G.sphere = based(parts([[new THREE.SphereGeometry(D.sphere.w / 2, 14, 10).scale(1, 0.92, 1), 0], [new THREE.CylinderGeometry(0.003, 0.004, 0.018, 5).translate(0, D.sphere.w * 0.47, 0), 1]]));
+  G.sphere = based(parts([[new THREE.SphereGeometry(D.sphere.w / 2, 10, 7).scale(1, 0.92, 1), 0], [new THREE.CylinderGeometry(0.003, 0.004, 0.018, 5).translate(0, D.sphere.w * 0.47, 0), 1]]));
   SHAPE_MATS.sphere = ['plain', 'stem'];
   const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-D.long.w / 2, 0.02, 0), new THREE.Vector3(0, 0.055, 0), new THREE.Vector3(D.long.w / 2, 0.02, 0));
-  G.long = based(oneGroup(new THREE.TubeGeometry(curve, 10, D.long.h / 2, 8, false)));
+  G.long = based(oneGroup(new THREE.TubeGeometry(curve, 6, D.long.h / 2, 6, false)));
   SHAPE_MATS.long = ['plain'];
   // meat on a foam tray
   G.slab = based(parts([[new THREE.BoxGeometry(D.slab.w, 0.012, D.slab.d).translate(0, 0.006, 0), 1],
@@ -72,7 +72,7 @@ function build() {
   G.wedge = based(parts([[new THREE.CylinderGeometry(D.wedge.w / 2, D.wedge.w / 2, D.wedge.h, 16, 1, false, 0, Math.PI * 0.5).translate(0, D.wedge.h / 2, 0), 0]]));
   SHAPE_MATS.wedge = ['plain'];
   // toilet roll pack: plastic-wrapped block with soft, slightly bulged sides; the top shows the roll ends
-  const pk = new THREE.BoxGeometry(D.pack.w, D.pack.h, D.pack.d, 6, 6, 4), pp = pk.attributes.position;
+  const pk = new THREE.BoxGeometry(D.pack.w, D.pack.h, D.pack.d, 3, 3, 2), pp = pk.attributes.position;
   for (let i = 0; i < pp.count; i++) {
     const x = pp.getX(i) / (D.pack.w / 2), y = pp.getY(i) / (D.pack.h / 2), z = pp.getZ(i) / (D.pack.d / 2);
     const soft = 1 - 0.06 * Math.pow(Math.max(Math.abs(x), Math.abs(z)), 6) * (Math.abs(y) > 0.9 ? 1 : 0.3);
@@ -82,21 +82,21 @@ function build() {
   G.pack = based(pk); SHAPE_MATS.pack = ['label', 'label', 'rolls', 'top', 'label', 'label'];
   // handled jug (bleach, liquid detergent): rounded body, shoulder, cap, handle on the back corner
   const gw = D.jug.w, gh = D.jug.h, gd = D.jug.d;
-  const jb = new THREE.BoxGeometry(gw, gh * 0.78, gd, 6, 6, 4), jp = jb.attributes.position;
+  const jb = new THREE.BoxGeometry(gw, gh * 0.78, gd, 4, 2, 3), jp = jb.attributes.position;
   for (let i = 0; i < jp.count; i++) { const x = jp.getX(i) / (gw / 2), z = jp.getZ(i) / (gd / 2); const k = 1 - 0.12 * Math.pow(Math.abs(x * z), 2); jp.setX(i, jp.getX(i) * k); jp.setZ(i, jp.getZ(i) * k); }
   jb.computeVertexNormals();
   G.jug = based(parts([[jb.translate(0, gh * 0.39, 0), 0],
-    [new THREE.CylinderGeometry(gw * 0.16, gw * 0.48, gh * 0.12, 16).scale(1, 1, gd / gw).translate(-gw * 0.18, gh * 0.84, 0), 2],
+    [new THREE.CylinderGeometry(gw * 0.16, gw * 0.48, gh * 0.12, 10).scale(1, 1, gd / gw).translate(-gw * 0.18, gh * 0.84, 0), 2],
     [new THREE.CylinderGeometry(gw * 0.17, gw * 0.17, gh * 0.08, 14).translate(-gw * 0.18, gh * 0.94, 0), 1],
-    [new THREE.TorusGeometry(gh * 0.12, 0.012, 6, 14, Math.PI).rotateZ(-Math.PI / 2).translate(gw * 0.36, gh * 0.7, 0), 2]]));
+    [new THREE.TorusGeometry(gh * 0.12, 0.012, 5, 7, Math.PI).rotateZ(-Math.PI / 2).translate(gw * 0.36, gh * 0.7, 0), 2]]));
   SHAPE_MATS.jug = ['label', 'cap', 'side'];
   // squeeze bottle (shampoo, dish soap): flat oval body, flip cap
-  const sq = new THREE.CylinderGeometry(D.squeeze.w / 2, D.squeeze.w / 2 * 0.92, D.squeeze.h * 0.84, 20, 4).scale(1, 1, D.squeeze.d / D.squeeze.w);
+  const sq = new THREE.CylinderGeometry(D.squeeze.w / 2, D.squeeze.w / 2 * 0.92, D.squeeze.h * 0.84, 12, 1).scale(1, 1, D.squeeze.d / D.squeeze.w);
   G.squeeze = based(parts([[sq.translate(0, D.squeeze.h * 0.42, 0), 0],
     [new THREE.CylinderGeometry(D.squeeze.w * 0.3, D.squeeze.w * 0.36, D.squeeze.h * 0.16, 14).scale(1, 1, 0.8).translate(0, D.squeeze.h * 0.92, 0), 1]]));
   SHAPE_MATS.squeeze = ['label', 'cap'];
   // big gusseted bag of washing powder: like the pillow bag, wider and with a flat base
-  const pb = new THREE.BoxGeometry(D.pouch.w, D.pouch.h, D.pouch.d, 6, 8, 2), ppb = pb.attributes.position;
+  const pb = new THREE.BoxGeometry(D.pouch.w, D.pouch.h, D.pouch.d, 4, 5, 2), ppb = pb.attributes.position;
   for (let i = 0; i < ppb.count; i++) {
     const x = ppb.getX(i) / (D.pouch.w / 2), y = ppb.getY(i) / (D.pouch.h / 2), z = ppb.getZ(i);
     const bulge = (1 - x * x * 0.6) * (y > 0.6 ? 1 - (y - 0.6) * 1.6 : 1);

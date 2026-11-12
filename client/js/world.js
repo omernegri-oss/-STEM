@@ -1,8 +1,8 @@
 // Renders the shared world state: the store building (1 or 2 floors), furniture, labelled products, boxes, dirt.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap } from '/shared/data.js';
+import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap, cartBay } from '/shared/data.js';
 import { Grid, center, dims } from '/shared/grid.js';
-import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, makePriceTag, TAG_W, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
+import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, makePriceTag, TAG_W, makeCart, mergeStatic, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
 import { pbr, surfaceMaps } from './textures.js';
 import { muralTexture, MURALS, hangingSignTexture, departmentName, storeSignTexture, decalTexture, promoTexture, buildTrackLights, basketStack } from './decor.js';
 
@@ -136,6 +136,14 @@ export class World {
     { const ex = makeLabel('EXIT', 0.14, { bg: '#1d2023', color: '#e0453b', size: 40, pad: 14, radius: 2, font: 'Barlow Condensed', weight: 700 }, 0.5); ex.material.toneMapped = false; ex.position.set(dx0 + 1, 2.75, fz - 0.12); ex.rotation.y = Math.PI; front.add(ex); }
     const matM = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), pbr('rubber', 2, 1.2, { color: 0x4a4d50 })); matM.rotation.x = -Math.PI / 2; matM.position.set(dx0 + 1, 0.006, D - 0.6); this.shell.add(matM);
     { const bs = basketStack(9); bs.position.set(dx1 + 0.45, 0, D - 0.35); this.shell.add(bs); }
+    // shopping-cart bay on the sidewalk: tube rails, a sign, and a row of nested carts (fewer when carts are in use)
+    { const bay = cartBay(w.doorX, D);
+      const cb = new THREE.Group(); cb.position.set(bay.x, 0, bay.z); this.shell.add(cb);
+      const tube = mat(0x9aa3ad, { metal: 0.85, rough: 0.3 });
+      for (const z of [-0.36, 0.36]) { const r = C(cb, 0.02, 0.02, 2.5, 0, 0, 0.55, z, { material: tube }); r.rotation.z = Math.PI / 2; for (const x of [-1.2, 0, 1.2]) C(cb, 0.02, 0.02, 0.55, 0, x, 0.275, z, { material: tube }); }
+      const sg = makeLabel('SHOPPING CARTS', 0.11, { bg: '#16181b', color: '#f4f6f2', size: 40, pad: 16, radius: 2, font: 'Barlow Condensed', weight: 700 }, 1.2); sg.position.set(0, 1.25, -0.5); cb.add(sg);
+      for (const x of [-0.55, 0.55]) C(cb, 0.015, 0.015, 1.25, 0, x, 0.625, -0.5, { material: tube });
+      this.cartRow = new THREE.Group(); cb.add(this.cartRow); this.cartsShown = -1; this.setCartsInUse(this.cartsInUse || 0); }
     { // promotion board on a stand
       const pr = new THREE.Group(); pr.position.set(dx0 - 0.45, 0, D - 0.3); pr.rotation.y = 0.35; this.shell.add(pr);
       B(pr, 0.5, 0.03, 0.3, 0x17181a, 0, 0.015, 0); C(pr, 0.02, 0.02, 1.2, 0x2a2c30, 0, 0.6, 0, { metal: 0.6, rough: 0.4 });
@@ -316,6 +324,16 @@ export class World {
       e.tags.add(tag);
     });
   }
+  // the row of nested carts in the bay: 8 carts minus the ones shoppers and players are pushing (always at least one)
+  setCartsInUse(n) {
+    this.cartsInUse = n;
+    const show = Math.max(1, 8 - n);
+    if (!this.cartRow || show === this.cartsShown) return;
+    this.cartsShown = show;
+    this.cartRow.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); this.cartRow.clear(); // (materials are shared)
+    for (let i = 0; i < show; i++) { const c = makeCart(); c.rotation.y = -Math.PI / 2; c.position.set(-1.0 + i * 0.26, 0, 0); this.cartRow.add(c); }
+    mergeStatic(this.cartRow); // one merged row: a few draw calls for all the carts
+  }
   // every price label in the store (for aiming at them)
   tagMeshes() {
     if (this.tagsDirty || !this.tagList) {
@@ -365,7 +383,7 @@ export class World {
         if (im) { im.removeFromParent(); im.dispose(); }
         const cap = Math.max(32, 1 << Math.ceil(Math.log2(gr.items.length + 1)));
         im = new THREE.InstancedMesh(UNIT_GEOS[gr.p.shape] || UNIT_GEOS.box, productMaterial(gr.p), cap);
-        im.userData.cap = cap; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
+        im.userData.cap = cap; im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false; // the shelves cast the shadows
         this.floorRoots[gr.floor].add(im); this.units.set(key, im);
       }
       gr.items.forEach((it, i) => {

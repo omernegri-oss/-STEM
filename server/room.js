@@ -165,9 +165,9 @@ export class Room {
   snapshot() {
     const g = this.game, s = g.s;
     const now = Date.now();
-    const P = [...this.players.values()].map(p => [p.id, r2(p.x), r2(p.z), r2(p.rot), p.anim, p.carry.map(carryCode), p.station, p.emote, p.floor || 0, p.stunUntil > now ? 1 : 0, p.baton && !p.carry.length ? 1 : 0]);
+    const P = [...this.players.values()].map(p => [p.id, r2(p.x), r2(p.z), r2(p.rot), p.anim, p.carry.map(carryCode), p.station, p.emote, p.floor || 0, p.stunUntil > now ? 1 : 0, p.baton && !p.carry.length ? 1 : 0, p.cart ? 1 : 0]);
     const C = g.customers.map(c => [c.id, r2(c.x), r2(c.z), r2(c.rot), c.moving ? 1 : 0, REACTIONS.has(c.thought) ? c.thought : '',
-      c.basket.slice(0, 8).map(b => b.pid), c.seed, (c.cart ? 1 : 0) | (c.vip ? 2 : 0) | (c.mood < 25 ? 4 : 0) | (c.paid ? 8 : 0) | (c.stunT > 0 ? 16 : 0), c.floor || 0]);
+      c.basket.slice(0, 8).map(b => b.pid), c.seed, (c.cart && c.z < s.d + 2.2 ? 1 : 0) | (c.vip ? 2 : 0) | (c.mood < 25 ? 4 : 0) | (c.paid ? 8 : 0) | (c.stunT > 0 ? 16 : 0), c.floor || 0]);
     const S = s.staff.filter(st => st.present).map(st => [st.id, r2(st.x), r2(st.z), r2(st.rot), st.moving ? 1 : 0, st.role,
       st.carry ? carryCode(st.carry) : '', st.seed, REACTIONS.has(st.thought) ? st.thought : '', st.task && st.task.stage ? st.task.stage : st.state, st.floor || 0, st.stunT > 0 ? 1 : 0]);
     const K = [], N = [];

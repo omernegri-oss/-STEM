@@ -219,7 +219,7 @@ export const LIGHTS = [
 export const TEAM_UPGRADES = [
   { id: 'handtruck',   name: 'Hand Trucks',        icon: '🛞', cost: 600,  level: 2, desc: 'Every player can carry 3 boxes at once.' },
   { id: 'palletjack',  name: 'Pallet Jacks',       icon: '🏗️', cost: 2500, level: 5, desc: 'Every player can carry 6 boxes at once.', requires: 'handtruck' },
-  { id: 'carts',       name: 'Shopping Carts',     icon: '🛒', cost: 800,  level: 3, desc: 'Customers buy up to 3 more items each.' },
+  { id: 'carts',       name: 'Bigger Shopping Carts', icon: '🛒', cost: 800,  level: 3, desc: 'Customers buy up to 3 more items each.' },
   { id: 'trolleys',    name: 'Staff Trolleys',     icon: '🚚', cost: 1200, level: 4, desc: 'Shelf stockers carry 2 boxes per trip.' },
   { id: 'led',         name: 'LED Lighting',       icon: '💡', cost: 1500, level: 4, desc: '-30% electricity, +5 store appeal.' },
   { id: 'music',       name: 'In-Store Radio',     icon: '📻', cost: 700,  level: 3, desc: 'Customers are more patient (+20%).' },
@@ -382,6 +382,9 @@ export function slotCap(type, pid) {
   return cap;
 }
 
+// the shopping-cart bay: outside, on the sidewalk to the right of the entrance
+export function cartBay(doorX, d) { return { x: doorX + 3.7, z: d + 1.3 }; }
+export const CART_BOXES = 4; // boxes a player can move in a shopping cart
 export function productsForCat(cat) { return PRODUCTS.filter(p => p.cat === cat); }
 export function fmtMoney(v) {
   const s = Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');

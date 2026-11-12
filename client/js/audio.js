@@ -1,20 +1,27 @@
 // Procedural sound effects & background music using WebAudio – no audio files needed.
 let ctx = null, master = null, sfxGain = null, musicGain = null, noiseBuf = null;
-export const audio = { sfx: true, music: true, listener: { x: 0, z: 0 } };
+export const audio = { sfx: true, music: true, sfxVol: 0.7, musicVol: 0.7, listener: { x: 0, z: 0 } };
+const sfxLevel = () => (audio.sfx ? 0.8 * audio.sfxVol : 0), musicLevel = () => (audio.music ? 0.16 * audio.musicVol : 0);
+// volumes 0..1 from the settings screen
+export function setVolumes(sfxVol, musicVol) {
+  audio.sfxVol = sfxVol; audio.musicVol = musicVol;
+  if (sfxGain) sfxGain.gain.value = sfxLevel();
+  if (musicGain) musicGain.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.1);
+}
 try { audio.sfx = localStorage.getItem('st_sfx') !== '0'; audio.music = localStorage.getItem('st_music') !== '0'; } catch {}
 
 export function initAudio() {
   if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
   try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
   master = ctx.createGain(); master.gain.value = 0.8; master.connect(ctx.destination);
-  sfxGain = ctx.createGain(); sfxGain.gain.value = audio.sfx ? 0.55 : 0; sfxGain.connect(master);
-  musicGain = ctx.createGain(); musicGain.gain.value = audio.music ? 0.11 : 0; musicGain.connect(master);
+  sfxGain = ctx.createGain(); sfxGain.gain.value = sfxLevel(); sfxGain.connect(master);
+  musicGain = ctx.createGain(); musicGain.gain.value = musicLevel(); musicGain.connect(master);
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   startMusic();
 }
-export function setSfx(on) { audio.sfx = on; try { localStorage.setItem('st_sfx', on ? '1' : '0'); } catch {} if (sfxGain) sfxGain.gain.value = on ? 0.55 : 0; }
-export function setMusic(on) { audio.music = on; try { localStorage.setItem('st_music', on ? '1' : '0'); } catch {} if (musicGain) musicGain.gain.setTargetAtTime(on ? 0.11 : 0, ctx.currentTime, 0.3); }
+export function setSfx(on) { audio.sfx = on; try { localStorage.setItem('st_sfx', on ? '1' : '0'); } catch {} if (sfxGain) sfxGain.gain.value = sfxLevel(); }
+export function setMusic(on) { audio.music = on; try { localStorage.setItem('st_music', on ? '1' : '0'); } catch {} if (musicGain) musicGain.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.3); }
 
 function tone(freq, dur, { type = 'sine', vol = 0.3, at = 0, slide = 0, attack = 0.005, out = sfxGain } = {}) {
   if (!ctx) return;

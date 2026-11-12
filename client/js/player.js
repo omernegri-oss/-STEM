@@ -1,6 +1,6 @@
 // Local player movement (client-predicted), third-person camera, input, and context-sensitive interaction.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo, slotCap, fitsFixture } from '/shared/data.js';
+import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo, slotCap, fitsFixture, cartBay, CART_BOXES } from '/shared/data.js';
 import { resolveCollision, dims, center, heightAt, deptSpots } from '/shared/grid.js';
 
 // The key by its place on the keyboard, so WASD and every shortcut work with any layout (Hebrew, Russian,
@@ -107,13 +107,13 @@ export class LocalPlayer {
 }
 
 export class CameraRig {
-  constructor(camera) { this.camera = camera; this.yaw = 0; this.pitch = 0.95; this.dist = 11; this.target = new THREE.Vector3(6, 0, 6); this.cur = new THREE.Vector3(6, 0, 6); this.build = false; this.fps = true; this.look = 0; this.bob = 0; }
+  constructor(camera) { this.camera = camera; this.yaw = 0; this.pitch = 0.95; this.dist = 11; this.target = new THREE.Vector3(6, 0, 6); this.cur = new THREE.Vector3(6, 0, 6); this.build = false; this.fps = true; this.look = 0; this.bob = 0; this.sens = 1; }
   update(dt, input, focus) {
     const m = input.mouse;
     if (this.fps && !this.build && focus.fpsReady) {
       // first person: look with the (pointer-locked) mouse, eye height 1.62 m, gentle head bob
       const dx = m.locked ? m.lx : (m.dragging ? m.dx : 0), dy = m.locked ? m.ly : (m.dragging ? m.dy : 0);
-      this.yaw -= dx * 0.0024; this.look = Math.max(-1.35, Math.min(1.3, this.look - dy * 0.0022));
+      this.yaw -= dx * 0.0024 * this.sens; this.look = Math.max(-1.35, Math.min(1.3, this.look - dy * 0.0022 * this.sens));
       if (!input.typing()) { if (input.down('z')) this.yaw += dt * 1.8; if (input.down('c')) this.yaw -= dt * 1.8; }
       this.bob += focus.moving ? dt * 9 : 0;
       const eye = (focus.y || 0) + 1.62 + (focus.moving ? Math.sin(this.bob) * 0.025 : 0);
@@ -127,7 +127,7 @@ export class CameraRig {
     }
     if (this.camera.fov !== 48) { this.camera.fov = 48; this.camera.updateProjectionMatrix(); }
     if (m.dragging && (m.button === 2 || m.button === 1 || (m.button === 0 && !this.build))) {
-      this.yaw -= m.dx * 0.006; this.pitch = Math.min(1.35, Math.max(0.35, this.pitch + m.dy * 0.004));
+      this.yaw -= m.dx * 0.006 * this.sens; this.pitch = Math.min(1.35, Math.max(0.35, this.pitch + m.dy * 0.004 * this.sens));
     }
     if (!input.typing()) {
       if (input.down('z')) this.yaw += dt * 1.8;
@@ -207,8 +207,16 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
       return { label: req ? `Customer wants ${req.qty}× ${reqP.name} (${reqP.unit}) — get it from the fridge` : 'Waiting for customers…', action: null, station: info };
     }
   }
+  // the shopping-cart bay outside the entrance: take a cart to move several boxes, or put it back
+  if (fl === 0 && !station) {
+    const bay = cartBay(W.doorX, W.d);
+    if (Math.hypot(me.x - bay.x, me.z - bay.z) < 2.2) {
+      if (G.cart) return carry.length ? { label: 'Empty the cart before you return it', action: null, warn: true } : { label: 'Return the shopping cart', action: { a: 'cart' } };
+      if (!carry.length) return { label: `Take a shopping cart (moves ${CART_BOXES} boxes at once)`, action: { a: 'cart' } };
+    }
+  }
   // 3) step behind a checkout
-  if (!carry.length) {
+  if (!carry.length && !G.cart) {
     for (const f of furn) {
       if (f.type !== 'checkout') continue;
       const bt = backTileOf(f);

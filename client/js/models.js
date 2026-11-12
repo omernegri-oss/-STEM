@@ -709,6 +709,9 @@ export function makeCharacter(look) {
   if (look.hairnet) { const n = new THREE.Mesh(cachedGeo('hairnet', () => new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5)), mat(0xffffff, { opacity: 0.55 })); n.scale.set(0.215, 0.26, 0.235); n.position.y = 0.02; head.add(n); }
   const hold = new THREE.Group(); hold.position.set(0, 1.12, 0.42); root.add(hold); P.hold = hold;
   const sideHold = new THREE.Group(); sideHold.position.set(0.28 * W, 0.5, 0.04); root.add(sideHold); P.side = sideHold;
+  // shadows only from the torso and legs: the small parts (face, hair, hands, shoes) would add ~20 shadow draws per person
+  head.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  for (const k of ['elbowL', 'elbowR']) P[k].traverse(o => { if (o.isMesh) o.castShadow = false; });
   g.userData.parts = P;
   g.userData.phase = Math.random() * 6;
   return g;
@@ -790,18 +793,24 @@ export function makeBasket(color = 0xdc2626) {
   for (const sd of [-1, 1]) { const h = new THREE.Mesh(cachedGeo('handle', () => new THREE.TorusGeometry(0.13, 0.008, 6, 14, Math.PI)), mat(0x111827)); h.position.set(0, H, sd * 0.05); g.add(h); }
   return g;
 }
-export function makeCart() {
-  // wire shopping trolley: mesh basket, tubular frame, red handle, casters, child seat
+// one cart is built and merged once; every cart in the game is a clone that shares its geometry
+let cartProto = null;
+export function makeCart() { cartProto ||= buildCart(); const g = cartProto.clone(); g.userData.itemsAt = cartProto.userData.itemsAt; return g; }
+function buildCart() {
+  // wire shopping trolley: mesh basket, tubular frame, blue handle and child-seat flap, casters
   const g = new THREE.Group();
   const wire = latticeMats.get('wire') || latticeMats.set('wire', new THREE.MeshStandardMaterial({ color: 0xc0c7d0, metalness: 0.85, roughness: 0.3, alphaMap: latticeMap(), alphaTest: 0.5, side: THREE.DoubleSide })).get('wire');
   const tube = mat(0xb6bec8, { metal: 0.9, rough: 0.25 });
   const W = 0.52, L = 0.8, H = 0.42, y0 = 0.5;
   for (const [w, h, d, x, y, z] of [[W, H, 0.005, 0, y0 + H / 2, L / 2], [W * 0.85, H, 0.005, 0, y0 + H / 2, -L / 2], [0.005, H, L, W / 2, y0 + H / 2, 0], [0.005, H, L, -W / 2, y0 + H / 2, 0], [W, 0.005, L, 0, y0, 0]]) { const p = new THREE.Mesh(boxGeo(w, h, d), wire); p.position.set(x, y, z); g.add(p); }
   for (const x of [-W / 2, W / 2]) { const r = C(g, 0.01, 0.01, L, 0, x, y0 + H, 0, { material: tube }); r.rotation.x = Math.PI / 2; const b = C(g, 0.012, 0.012, L, 0, x * 0.8, 0.12, -0.02, { material: tube }); b.rotation.x = Math.PI / 2; C(g, 0.012, 0.012, y0, 0, x, y0 / 2 + 0.06, -L / 2, { material: tube }); }
-  const handle = C(g, 0.018, 0.018, W + 0.04, 0xdc2626, 0, y0 + H + 0.12, -L / 2 - 0.08, { material: mat(0xdc2626, { rough: 0.4 }) }); handle.rotation.z = Math.PI / 2;
+  const handle = C(g, 0.018, 0.018, W + 0.04, 0x1d4ed8, 0, y0 + H + 0.12, -L / 2 - 0.08, { material: mat(0x1d4ed8, { rough: 0.4 }) }); handle.rotation.z = Math.PI / 2;
   for (const x of [-W / 2, W / 2]) { const a = C(g, 0.01, 0.01, 0.2, 0, x, y0 + H + 0.05, -L / 2 - 0.04, { material: tube }); a.rotation.x = -0.6; }
   for (const [x, z] of [[-0.22, -0.32], [0.22, -0.32], [-0.18, 0.32], [0.18, 0.32]]) { const w = C(g, 0.045, 0.045, 0.03, 0x1f2937, x, 0.045, z, { material: mat(0x1f2937) }); w.rotation.z = Math.PI / 2; }
-  B(g, W * 0.8, 0.02, 0.2, 0xdc2626, 0, y0 + H - 0.05, -L / 2 + 0.12, { material: mat(0xdc2626, { rough: 0.45 }) });
+  B(g, W * 0.8, 0.02, 0.2, 0x1d4ed8, 0, y0 + H - 0.05, -L / 2 + 0.12, { material: mat(0x1d4ed8, { rough: 0.45 }) });
+  for (const x of [-W / 2 - 0.01, W / 2 + 0.01]) B(g, 0.03, 0.03, 0.1, 0x1d4ed8, x, y0 + H, L / 2 - 0.06, { material: mat(0x1d4ed8, { rough: 0.45 }), shadow: false }); // corner bumpers
+  g.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  mergeStatic(g); // a handful of draw calls instead of ~30
   g.userData.itemsAt = new THREE.Vector3(0, y0 + 0.02, 0.05);
   return g;
 }

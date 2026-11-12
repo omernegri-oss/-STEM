@@ -3,6 +3,7 @@
 // of shopping baskets. All text is English. Everything is drawn in code on canvases.
 // (Heebo stays in the font stacks so a store name typed in Hebrew still shows properly.)
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeBasket } from './models.js';
 
 const INK = '#262422', PAPER = '#ebe5d9';
@@ -146,27 +147,33 @@ export function promoTexture() {
 }
 
 // ------------------------------------------------------------------ black open ceiling with track spotlights
-let trackMats = null, trackGeos = null;
+// All the spotlights of a ceiling are merged into three meshes (bodies, lenses, rails): dozens of lights, 4 draw calls.
+let trackMats = null;
+function placedGeo(geo, pos, rot) {
+  const o = new THREE.Object3D(); o.position.set(...pos); if (rot) o.rotation.set(...rot); o.updateMatrix();
+  const g = geo.clone().applyMatrix4(o.matrix); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return g.index ? g.toNonIndexed() : g;
+}
 export function buildTrackLights(group, W, D, y) {
   trackMats ||= { rail: new THREE.MeshStandardMaterial({ color: 0x0f1012, roughness: 0.5, metalness: 0.5 }),
     body: new THREE.MeshStandardMaterial({ color: 0x141518, roughness: 0.35, metalness: 0.6 }),
     lens: new THREE.MeshStandardMaterial({ color: 0xfff3dc, emissive: 0xffe6bf, emissiveIntensity: 3.2 }),
     led: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff4e2, emissiveIntensity: 2.2 }) };
-  trackGeos ||= { body: new THREE.CylinderGeometry(0.05, 0.042, 0.16, 14), lens: new THREE.CircleGeometry(0.036, 14), stem: new THREE.CylinderGeometry(0.008, 0.008, 0.08, 6) };
-  const rows = []; for (let z = 1.6; z < D - 0.3; z += 2.6) rows.push(z);
-  for (const z of rows) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(W - 1.2, 0.035, 0.045), trackMats.rail); rail.position.set(W / 2, y - 0.3, z); rail.userData.owned = rail.userData.ownGeo = true; group.add(rail);
-    for (const x of [1, W - 1]) { const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.3, 4), trackMats.rail); rod.position.set(x, y - 0.15, z); rod.userData.owned = rod.userData.ownGeo = true; group.add(rod); }
+  const bodyG = new THREE.CylinderGeometry(0.05, 0.042, 0.16, 10), lensG = new THREE.CircleGeometry(0.036, 10), stemG = new THREE.CylinderGeometry(0.008, 0.008, 0.08, 5);
+  const rails = [], bodies = [], lenses = [];
+  for (let z = 1.6; z < D - 0.3; z += 2.6) {
+    rails.push(placedGeo(new THREE.BoxGeometry(W - 1.2, 0.035, 0.045), [W / 2, y - 0.3, z]));
+    for (const x of [1, W - 1]) rails.push(placedGeo(new THREE.CylinderGeometry(0.006, 0.006, 0.3, 4), [x, y - 0.15, z]));
     let k = 0;
     for (let x = 1.2; x < W - 0.9; x += 1.5, k++) {
-      const spot = new THREE.Group(); spot.position.set(x, y - 0.33, z);
-      const stem = new THREE.Mesh(trackGeos.stem, trackMats.body); stem.position.y = -0.03; spot.add(stem);
-      const head = new THREE.Group(); head.position.y = -0.09; head.rotation.x = (k % 2 ? 1 : -1) * 0.45; head.rotation.z = ((k >> 1) % 2 ? 1 : -1) * 0.15; spot.add(head);
-      const body = new THREE.Mesh(trackGeos.body, trackMats.body); head.add(body);
-      const lens = new THREE.Mesh(trackGeos.lens, trackMats.lens); lens.rotation.x = Math.PI / 2; lens.position.y = -0.081; head.add(lens);
-      group.add(spot);
+      const rx = (k % 2 ? 1 : -1) * 0.45, rz = ((k >> 1) % 2 ? 1 : -1) * 0.15;
+      const head = new THREE.Object3D(); head.position.set(x, y - 0.42, z); head.rotation.set(rx, 0, rz); head.updateMatrix();
+      bodies.push(placedGeo(stemG, [x, y - 0.36, z]));
+      bodies.push(bodyG.clone().toNonIndexed().applyMatrix4(head.matrix));
+      const lens = lensG.clone().rotateX(Math.PI / 2).translate(0, -0.081, 0).applyMatrix4(head.matrix); lenses.push(lens.index ? lens.toNonIndexed() : lens);
     }
   }
+  const add = (list, m) => { if (!list.length) return; const mesh = new THREE.Mesh(mergeGeometries(list), m); mesh.userData.owned = mesh.userData.ownGeo = true; group.add(mesh); };
+  add(rails, trackMats.rail); add(bodies, trackMats.body); add(lenses, trackMats.lens);
   // a long linear LED along the middle, like the strip lights in the aisle photo
   const strip = new THREE.Mesh(new THREE.BoxGeometry(W - 2, 0.03, 0.08), trackMats.led); strip.position.set(W / 2, y - 0.05, D / 2 + 0.3); strip.userData.owned = strip.userData.ownGeo = true; group.add(strip);
 }

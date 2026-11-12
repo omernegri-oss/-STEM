@@ -9,10 +9,15 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { pbr, setTextureQuality } from './textures.js';
 
-export function createScene(canvas, { low = false } = {}) {
+// quality: 'low' (no shadows, no effects), 'medium' (shadows, one render pass: the default), 'high' (adds ambient
+// occlusion and bloom, which draw the whole scene again and need a good graphics card)
+const PIXEL_RATIO = { low: 1, medium: 1.25, high: 1.5 };
+export function createScene(canvas, { quality = 'medium' } = {}) {
+  const low = quality === 'low';
+  let level = quality;
   setTextureQuality(low);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, PIXEL_RATIO[quality]));
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   // AgX: a photographic response curve (keeps bright packaging and lights from looking cartoon-saturated)
@@ -64,9 +69,8 @@ export function createScene(canvas, { low = false } = {}) {
     composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.3, 1.8));
     composer.addPass(new OutputPass());
   };
-  if (!low) { try { makeComposer(); } catch (e) { console.warn('post-processing unavailable', e); composer = null; } }
-  if (!low) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
+  if (quality === 'high') { try { makeComposer(); } catch (e) { console.warn('post-processing unavailable', e); composer = null; } }
+  sun.shadow.mapSize.set(quality === 'high' ? 2048 : 1024, quality === 'high' ? 2048 : 1024);
   function render() { if (composer) composer.render(); else renderer.render(scene, camera); }
   window.addEventListener('resize', resize); resize();
 
@@ -192,14 +196,19 @@ export function createScene(canvas, { low = false } = {}) {
     return { night, dusk };
   }
 
-  function setQuality(lowQ) {
-    renderer.shadowMap.enabled = !lowQ;
-    renderer.setPixelRatio(lowQ ? 1 : Math.min(window.devicePixelRatio, 1.5));
+  function setQuality(q) {
+    if (q === level) return;
+    level = q;
+    renderer.shadowMap.enabled = q !== 'low';
+    const size = q === 'high' ? 2048 : 1024;
+    if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, PIXEL_RATIO[q]));
     scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
-    if (lowQ) composer = null; else if (!composer) { try { makeComposer(); } catch { composer = null; } }
+    if (q !== 'high') { if (composer) { try { composer.dispose(); } catch {} } composer = null; }
+    else if (!composer) { try { makeComposer(); } catch { composer = null; } }
     resize();
   }
-  return { renderer, scene, camera, sun, hemi, resize, buildEnvironment, updateLighting, setQuality, render, get composer() { return composer; } };
+  return { renderer, scene, camera, sun, hemi, resize, buildEnvironment, updateLighting, setQuality, render, get composer() { return composer; }, get quality() { return level; } };
 }
 
 function makeCar(color, x, z) {

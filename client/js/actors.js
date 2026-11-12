@@ -19,8 +19,9 @@ const GESTURES = { wave: 'wave', pnt: 'point', thum: 'thumbs', shrg: 'shrug', cl
 
 // store uniforms: brand-green polos with a name badge; white coat for the butcher, black polo at the deli
 const ROLE_UNIFORM = {
-  cashier: { shirt: 0x1f5135, pants: 0x1a1a1a },
-  stocker: { shirt: 0x1f5135, apron: 0x2b2f33, pants: 0x2c3e5a },
+  // store uniform like a real supermarket: blue shirt under a green bib apron
+  cashier: { shirt: 0x2456a6, apron: 0x1f7a4d, pants: 0x1a1a1a },
+  stocker: { shirt: 0x2456a6, apron: 0x1f7a4d, pants: 0x2c3e5a },
   cleaner: { shirt: 0x55595d, pants: 0x3a3a3a },
   guard:   { shirt: 0x1b2333, pants: 0x14171c, cap: 0x14171c, badge: 0xe9c84a },
   butcher: { shirt: 0xf2f2ef, apron: 0x2b2f33, chef: true, pants: 0x1a1a1a },
@@ -56,7 +57,7 @@ export class Actors {
     const inf = this.info.get(id) || { name: '?', color: '#888', role: 'manager' };
     const col = new THREE.Color(inf.color).getHex();
     const muted = new THREE.Color(col).lerp(new THREE.Color(0x4a4d50), 0.45).getHex(); // player colour, toned down like a real shirt
-    const look = { ...lookFromSeed(id * 7777 + 13), shirt: muted, pants: 0x2c3e5a, cap: null, hat: null, scale: 1, glasses: false, badge: 0xe9e6df };
+    const look = { ...lookFromSeed(id * 7777 + 13), shirt: muted, pants: 0x2c3e5a, cap: null, hat: null, scale: 1, glasses: false, badge: 0xe9e6df, apron: 0x1f7a4d, jacket: null, bag: null };
     const obj = makeCharacter(look);
     const tag = makeSprite(inf.name, 0.17, { bg: 'rgba(17,20,24,0.72)', color: '#f4f6f2', size: 40, radius: 8, pad: 12, font: 'Barlow', weight: 600 }); tag.position.y = 2.08; obj.add(tag);
     const emote = { visible: false, userData: { text: '' } }; // gestures are animations, not icons
@@ -84,7 +85,7 @@ export class Actors {
 
   makeStaff(role, seed) {
     const u = ROLE_UNIFORM[role] || {};
-    const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: u.apron, chef: u.chef, hairnet: u.hairnet, cap: u.cap || null, hat: null, badge: u.badge || 0xe9e6df, longSleeves: role === 'guard' ? true : undefined, pants: u.pants ?? 0x1a1a1a, jacket: null, scale: 1 };
+    const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: u.apron, chef: u.chef, hairnet: u.hairnet, cap: u.cap || null, hat: null, badge: u.badge || 0xe9e6df, longSleeves: role === 'guard' ? true : undefined, pants: u.pants ?? 0x1a1a1a, jacket: null, bag: null, scale: 1 };
     const obj = makeCharacter(look);
     const tag = { visible: false }, bubble = { visible: false, position: { y: 0 } };
     const carry = new THREE.Group(); obj.userData.parts.hold.add(carry);

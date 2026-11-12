@@ -3,7 +3,7 @@ import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, FIXTURE_UPGRADES, EXPANSIONS,
   TEAM_UPGRADES, TEAM_UPGRADE_MAP, ROLES, SHIFTS, MAX_LEVEL, levelForXp, ACHIEVEMENTS,
   FIRST_NAMES, LAST_NAMES, EVENT_TYPES, STARTING_CASH, REAL_SECONDS_PER_MINUTE, OPEN_HOUR, CLOSE_HOUR,
-  LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, fitsFixture, fixtureCats, cartBay, CART_BOXES, PROMO_OFF, PROMO_MAX, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
+  LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, fitsFixture, fixtureCats, cartBay, CART_BOXES, PROMO_OFF, PROMO_MAX, BAKE_SECONDS, DOUGH_DAYS, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
   licenseCost, priceLimits, stairInfo, slotCap, HIRE_FEE_DAYS,
 } from '../shared/data.js';
 import { Grid, footprint, serviceTiles, FACING, center, route, deptSpots, dims } from '../shared/grid.js';
@@ -432,7 +432,7 @@ export class Game {
         if (player.carry.some(c => c.dept)) return fail('Your hands are full!');
         this.removeBox(b);
         player.baton = false;
-        player.carry.push(b.ftype ? { ftype: b.ftype } : { pid: b.pid, qty: b.qty, exp: b.exp, expired: b.expired });
+        player.carry.push(b.ftype ? { ftype: b.ftype } : { pid: b.pid, qty: b.qty, exp: b.exp, expired: b.expired, raw: b.raw });
         this.sound('pickup', b.x, b.z); this.dirtyWorld(); return true;
       }
       case 'rackTake': {
@@ -481,6 +481,30 @@ export class Game {
         if (box.qty <= 0) { player.carry.pop(); this.sound('boxempty', f.x, f.z); }
         this.fx({ k: 'stocked', id: f.id, n: r.n, pid: box.pid, by: player.id });
         this.dirtyWorld(); return true;
+      }
+      // the bakery oven: load a box of dough, wait, take out a box of fresh bread
+      case 'ovenLoad': {
+        const f = this.fixture(m.id); if (!f || f.type !== 'oven') return false;
+        if ((f.floor || 0) !== pf || dist(player, { x: f.x + 0.5, z: f.z + 0.5 }) > 2.6) return fail('Too far away.');
+        const box = player.carry[player.carry.length - 1];
+        if (!box || !box.pid || PRODUCT_MAP[box.pid].cat !== 'bakery') return fail('The oven bakes dough from the bakery supplier.');
+        if (!box.raw) return fail('This is already baked. Put it on the bread rack.');
+        if (box.expired) return fail('This dough has gone off. Throw it in a trash bin.');
+        if (f.broken) return fail('The oven is broken. Call the technician.');
+        if (f.oven) return fail('The oven is busy.');
+        player.carry.pop();
+        f.oven = { pid: box.pid, qty: box.qty, exp: box.exp, left: BAKE_SECONDS, total: BAKE_SECONDS };
+        this.sound('place', f.x, f.z); this.dirtyWorld(); return true;
+      }
+      case 'ovenTake': {
+        const f = this.fixture(m.id); if (!f || f.type !== 'oven' || !f.oven) return false;
+        if ((f.floor || 0) !== pf || dist(player, { x: f.x + 0.5, z: f.z + 0.5 }) > 2.6) return fail('Too far away.');
+        if (f.oven.left > 0) return fail('Still baking.');
+        if (player.carry.length >= this.carryCap(player) || player.carry.some(c => c.ftype || c.dept)) return fail(player.cart ? 'The cart is full.' : 'Your hands are full!');
+        player.baton = false;
+        player.carry.push({ pid: f.oven.pid, qty: f.oven.qty, exp: s.day + PRODUCT_MAP[f.oven.pid].life, expired: false });
+        f.oven = null; s.stats.baked = (s.stats.baked || 0) + 1;
+        this.sound('pickup', f.x, f.z); this.dirtyWorld(); return true;
       }
       case 'clearExpired': {
         const f = this.fixture(m.id); if (!f || !f.slots) return false;
@@ -697,7 +721,10 @@ export class Game {
   deliver(o) {
     for (const it of o.items) {
       const p = PRODUCT_MAP[it.pid];
-      for (let i = 0; i < it.boxes; i++) this.spawnBox(p.id, p.box, this.s.day + p.life, null, null);
+      for (let i = 0; i < it.boxes; i++) {
+        const b = this.spawnBox(p.id, p.box, this.s.day + (p.cat === 'bakery' ? DOUGH_DAYS : p.life), null, null);
+        if (p.cat === 'bakery') b.raw = true; // dough: bake it in the oven before it can go on the bread rack
+      }
     }
     for (const fu of o.furniture || []) for (let i = 0; i < fu.n; i++) this.spawnFBox(fu.type, null, null);
     const [px, pz] = this.padCenter();
@@ -739,7 +766,7 @@ export class Game {
   }
   respawnBox(item, x, z, floor = 0) {
     if (item.ftype) return this.spawnFBox(item.ftype, x, z, floor);
-    if (item.pid) return this.spawnBox(item.pid, item.qty, item.exp, x, z, item.expired, floor);
+    if (item.pid) { const b = this.spawnBox(item.pid, item.qty, item.exp, x, z, item.expired, floor); if (item.raw) b.raw = true; return b; }
   }
   removeBox(b) {
     this.s.boxes = this.s.boxes.filter(x => x !== b);
@@ -752,7 +779,8 @@ export class Game {
     const [cx, cz] = f._front ? [f._front[0] + 0.5, f._front[1] + 0.5] : center(f.type, f.x, f.z, f.rot);
     const fl = f.floor || 0;
     if (f.slots) for (const sl of f.slots) if (sl.qty > 0) this.spawnBox(sl.pid, sl.qty, sl.exp, cx + rnd(-0.3, 0.3), cz + rnd(-0.3, 0.3), sl.expired, fl);
-    if (f.boxes) for (const b of f.boxes) this.spawnBox(b.pid, b.qty, b.exp, cx + rnd(-0.3, 0.3), cz + rnd(-0.3, 0.3), b.expired, fl);
+    if (f.boxes) for (const b of f.boxes) this.respawnBox(b, cx + rnd(-0.3, 0.3), cz + rnd(-0.3, 0.3), fl);
+    if (f.oven) { const b = this.spawnBox(f.oven.pid, f.oven.qty, f.oven.left <= 0 ? this.s.day + PRODUCT_MAP[f.oven.pid].life : f.oven.exp, cx, cz, false, fl); if (f.oven.left > 0) b.raw = true; f.oven = null; }
     if (keepBox) this.spawnFBox(f.type, cx, cz, fl);
     const rt = this.rt.get(f.id);
     if (rt) for (const cid of rt.queue) { const c = this.customers.find(c => c.id === cid); if (c) c.reroute = true; }
@@ -776,6 +804,7 @@ export class Game {
   stockInto(f, box, maxUnits) {
     const def = FURNITURE[f.type];
     const p = PRODUCT_MAP[box.pid];
+    if (box.raw) return { error: `${p.name} dough must be baked in the oven first.` };
     if (!fitsFixture(p.id, f.type)) {
       const need = CATEGORIES[p.cat];
       return { error: `${p.name} belongs in the ${need.name} section (${FURNITURE[need.fixtures[0]].name}).` };
@@ -1213,6 +1242,11 @@ export class Game {
       this.updatePigeons(simDt);
       if (s.phase === 'closing' && (this.customers.length === 0 || s.minute >= CLOSE_HOUR * 60 + 60)) this.endDay();
     }
+    // ovens bake whether the store is open or not
+    for (const f of s.furniture) if (f.oven && f.oven.left > 0 && !f.broken) {
+      f.oven.left -= simDt;
+      if (f.oven.left <= 0) { this.sound('ding', f.x, f.z); this.fx({ k: 'baked', pid: f.oven.pid }); this.dirtyWorld(); }
+    }
     updateCustomers(this, simDt, dMin);
     updateStaff(this, simDt, dMin);
     this.lastAchCheck += dt;
@@ -1303,8 +1337,9 @@ export class Game {
     return {
       name: s.name, w: s.w, d: s.d, doorX: s.doorX, floors: s.floors, floor: s.floor, wall: s.wall, expansion: s.expansion,
       furniture: s.furniture.map(f => ({ id: f.id, type: f.type, x: f.x, z: f.z, rot: f.rot, floor: f.floor || 0, upg: f.upg, broken: f.broken, repair: f.repair || 0,
-        open: !!f.open, techEta: f.techEta, temp: f.temp !== undefined ? Math.round(f.temp) : undefined, slots: f.slots, boxes: f.boxes })),
-      boxes: s.boxes.map(b => ({ id: b.id, pid: b.pid, ftype: b.ftype, qty: b.qty, exp: b.exp, x: b.x, z: b.z, y: b.y, floor: b.floor || 0, expired: b.expired })),
+        open: !!f.open, techEta: f.techEta, temp: f.temp !== undefined ? Math.round(f.temp) : undefined, slots: f.slots, boxes: f.boxes,
+        oven: f.oven ? { pid: f.oven.pid, ready: f.oven.left <= 0 } : undefined })),
+      boxes: s.boxes.map(b => ({ id: b.id, pid: b.pid, ftype: b.ftype, qty: b.qty, exp: b.exp, x: b.x, z: b.z, y: b.y, floor: b.floor || 0, expired: b.expired, raw: b.raw || undefined })),
       dirt: s.dirt, prices: s.prices, saleActive: s.saleActive, promos: s.promos || [],
     };
   }

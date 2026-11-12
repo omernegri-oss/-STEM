@@ -229,6 +229,15 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
   const reach = (f) => world.fixtureDistance(f, me.x, me.z);
   const facing = (f) => { const [cx, cz] = center(f.type, f.x, f.z, f.rot); const dx = cx - me.x, dz = cz - me.z; const d = Math.hypot(dx, dz) || 1; return (dx * fx + dz * fz) / d; };
   const near = furn.filter(f => fps ? reach(f) < 1.35 && facing(f) > 0.5 : reach(f) < 0.95 && facing(f) > -0.1).sort((a, b) => fps ? facing(b) - facing(a) + (reach(a) - reach(b)) * 0.5 : reach(a) - reach(b) - (facing(a) - facing(b)) * 0.3);
+  // the bakery oven: dough in, fresh bread out
+  const oven = near.find(f => f.type === 'oven');
+  if (oven) {
+    const o = oven.oven, bake = prodPid && PRODUCT_MAP[prodPid].cat === 'bakery';
+    if (bake && G.topRaw) return o ? { label: 'The oven is busy', action: null, warn: true } : { label: `Put the ${PRODUCT_MAP[prodPid].name} dough in the oven`, action: { a: 'ovenLoad', id: oven.id } };
+    if (bake) return { label: 'Already baked: put it on the bread rack', action: null };
+    if (o && !isFBox && !dept && (!carry.length || G.cart)) return o.ready ? { label: `Take out the fresh ${PRODUCT_MAP[o.pid].name}`, action: { a: 'ovenTake', id: oven.id } } : { label: `${PRODUCT_MAP[o.pid].name} is baking…`, action: null };
+    if (!o && !carry.length) return { label: "Oven: bring a box of dough (order it from Miller's Bakehouse)", action: null };
+  }
   // 4) the computer
   const comp = near.find(f => f.type === 'computer');
   if (comp && !isFBox) return { label: 'Use the computer', action: { a: '_computer' } };
@@ -240,6 +249,7 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
       const def = FURNITURE[f.type];
       if (f.slots && def.kind !== 'counter') {
         if (fitsFixture(p.id, f.type)) {
+          if (G.topRaw) return { label: `${p.name} dough: bake it in the oven first`, action: null, warn: true };
           if (DOORS.has(f.type) && !f.open) return { label: `Open the ${def.name}`, action: { a: 'door', id: f.id } };
           const free = f.slots.some(s => (s.pid === prodPid && s.qty < slotCap(f.type, prodPid) && !s.expired) || s.qty === 0);
           if (!free) return { label: `${def.name} is full${DOORS.has(f.type) ? '  ·  [X] close door' : ''}`, action: null, warn: true, alt: DOORS.has(f.type) ? { a: 'door', id: f.id } : null };
@@ -251,7 +261,7 @@ export function findInteraction(G, world, me, carry, station, fps = false) {
       if (def.kind === 'rack') return { label: 'Store box on rack', action: { a: 'rackPut', id: f.id } };
       if (f.type === 'bin') return { label: 'Throw box away', action: { a: 'trash', id: f.id } };
     }
-    if (carry.length < (G.meta?.carryCap || 1)) {
+    if (carry.length < Math.max(G.meta?.carryCap || 1, G.cart ? CART_BOXES : 0)) {
       const b = nearestBox(world, me, fps);
       if (b && b.pid) return { label: `Pick up another box (${PRODUCT_MAP[b.pid].name})`, action: { a: 'pickup', id: b.id } };
     }

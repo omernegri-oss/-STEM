@@ -233,6 +233,29 @@ assert.ok(reachedUp, 'customer climbed the stairs'); assert.equal(climber.basket
   console.log('baton ✓ (rep', g3.s.rep.toFixed(1) + ')');
 }
 
+// --- bakery: dough is delivered raw, baked in the oven, then stocked on the bread rack; staff leave dough alone
+{
+  const g6 = new Game('BAKE', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
+  const q = { id: 7, name: 'Q', x: 4.5, z: 4.5, rot: 0, carry: [], station: null, floor: 0 };
+  g6.players.set(7, q); g6.act(q, { a: 'nameDraft', name: 'Bake Mart' }); g6.act(q, { a: 'nameVote' });
+  g6.s.level = 3; g6.s.licenses.push('bread');
+  const oven = g6.newFixture('oven', 4, 2, 0, 0), rack = g6.newFixture('bakery', 6, 2, 0, 0);
+  g6.s.furniture.push(oven, rack); g6.rebuildGrid();
+  g6.deliver({ supplier: 'miller', items: [{ pid: 'bread', boxes: 1 }] });
+  const box = g6.s.boxes.find(b => b.pid === 'bread'); assert.equal(box.raw, true, 'delivered as dough');
+  q.x = box.x; q.z = box.z; assert.ok(g6.act(q, { a: 'pickup', id: box.id })); assert.equal(q.carry[0].raw, true);
+  q.x = 5; q.z = 3.5;
+  assert.equal(g6.act(q, { a: 'stock', id: rack.id }), false, 'dough cannot go on the rack');
+  assert.ok(g6.act(q, { a: 'ovenLoad', id: oven.id })); assert.equal(q.carry.length, 0);
+  assert.equal(g6.act(q, { a: 'ovenTake', id: oven.id }), false, 'still baking');
+  for (let i = 0; i < 20 * 21; i++) g6.tick(0.05);
+  assert.ok(oven.oven.left <= 0, 'baked after about 20 seconds');
+  assert.ok(g6.act(q, { a: 'ovenTake', id: oven.id })); assert.equal(q.carry[0].raw, undefined); assert.equal(q.carry[0].exp, g6.s.day + 1);
+  let guard = 0; while (q.carry.length && guard++ < 10) assert.ok(g6.act(q, { a: 'stock', id: rack.id, n: 6 }));
+  assert.equal(rack.slots.reduce((a, sl) => a + sl.qty, 0), 8, 'eight loaves on the bread rack');
+  console.log('bakery ✓');
+}
+
 // --- promotions: 20% off at the register, a limit of four, never below cost
 {
   const g5 = new Game('PROMO', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });

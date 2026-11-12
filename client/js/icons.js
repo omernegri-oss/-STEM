@@ -63,7 +63,7 @@ export function setIcon(el, name, size) { if (el) el.innerHTML = svg(name, size)
 // what to show for game things in lists
 export function furnitureIcon(type) {
   const def = FURNITURE[type] || {};
-  const byType = { computer: 'monitor', plant: 'plant', plant_tall: 'plant', flowerpot: 'plant', cactus: 'plant', flowers: 'plant', bin: 'trash', lamp: 'lamp', sign: 'tag', balloons: 'tag',
+  const byType = { oven: 'bolt', bakery: 'shelf', computer: 'monitor', plant: 'plant', plant_tall: 'plant', flowerpot: 'plant', cactus: 'plant', flowers: 'plant', bin: 'trash', lamp: 'lamp', sign: 'tag', balloons: 'tag',
     bench: 'seat', fountain: 'seat', vending: 'cup', statue: 'cup', neon: 'monitor', butcher: 'knife', deli: 'cheese', rack: 'pallet', checkout: 'register', selfcheckout: 'register' };
   if (byType[type]) return byType[type];
   if (def.kind === 'storage') return def.cat === 'produce' ? 'leaf' : def.cat === 'frozen' ? 'snow' : def.cat === 'fridge' ? 'fridge' : 'shelf';

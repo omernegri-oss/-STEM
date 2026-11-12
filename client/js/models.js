@@ -263,6 +263,33 @@ export function makeFurniture(type, f = {}) {
       lbl.position.set(-W / 2 + 0.22, 0.56, 0.473); g.add(lbl);
       break;
     }
+    case 'bakery': {
+      // bread rack: dark frame, slanted-look oak shelves with a front lip, a chalkboard header
+      const oak = mat(0xb98a55, { rough: 0.75 }), frame = mat(0x2a2623, { rough: 0.6 });
+      B(g, W - 0.04, 0.3, 0.6, 0, 0, 0.15, 0, { material: frame });
+      B(g, W - 0.04, 1.75, 0.03, 0, 0, 0.875, -0.3, { material: mat(0x3a332d, { rough: 0.8 }) });
+      for (const x of [-W / 2 + 0.03, 0, W / 2 - 0.03]) B(g, 0.04, 1.75, 0.6, 0, x, 0.875, 0, { material: frame });
+      for (const y of [...new Set(slotRegions(type).map(r => r.y))]) { B(g, W - 0.08, 0.025, 0.56, 0, 0, y - 0.0125, 0.01, { material: oak }); B(g, W - 0.08, 0.06, 0.02, 0, 0, y + 0.02, 0.29, { material: oak }); }
+      B(g, W, 0.26, 0.04, 0, 0, 1.88, -0.29, { material: mat(0x1c1c1a, { rough: 0.9 }) });
+      const lbl = makeLabel('FRESH BREAD  ·  baked here today', 0.09, { bg: null, color: '#f2efe8', size: 34, font: 'Barlow Condensed', weight: 600 }, W - 0.2); lbl.position.set(0, 1.88, -0.265); g.add(lbl);
+      break;
+    }
+    case 'oven': {
+      // deck oven: stainless body on legs, two glass doors that glow while baking, control panel, vent hood
+      const steel = mat(0xc9ced4, { metal: 0.8, rough: 0.3 }), dark = mat(0x1b1d20, { rough: 0.5 });
+      for (const [x, z] of [[-0.4, -0.38], [0.4, -0.38], [-0.4, 0.38], [0.4, 0.38]]) B(g, 0.06, 0.3, 0.06, 0, x, 0.15, z, { material: steel });
+      B(g, 0.92, 1.3, 0.88, 0, 0, 0.95, 0, { material: steel });
+      B(g, 0.96, 0.12, 0.92, 0, 0, 1.66, 0, { material: dark });
+      const glowM = new THREE.MeshStandardMaterial({ color: 0x241408, emissive: 0xff8a2a, emissiveIntensity: 0, roughness: 0.15 });
+      const glow = new THREE.Group();
+      for (const y of [0.72, 1.24]) { const door = new THREE.Mesh(boxGeo(0.62, 0.34, 0.02), glowM); door.position.set(-0.1, y, 0.45); glow.add(door); }
+      g.add(glow); g.userData.glow = glow; g.userData.glowMat = glowM;
+      for (const y of [0.72, 1.24]) { B(g, 0.66, 0.38, 0.015, 0, -0.1, y, 0.442, { material: dark }); const h = C(g, 0.012, 0.012, 0.5, 0, -0.1, y + 0.21, 0.48, { material: steel }); h.rotation.z = Math.PI / 2; }
+      B(g, 0.16, 0.9, 0.015, 0, 0.36, 0.98, 0.445, { material: dark });
+      for (let i = 0; i < 3; i++) C(g, 0.03, 0.03, 0.02, 0xdfe3e8, 0.36, 1.3 - i * 0.14, 0.46, { material: steel }).rotation.x = Math.PI / 2;
+      const led = B(g, 0.08, 0.03, 0.01, 0x22c55e, 0.36, 0.72, 0.455, { emissive: 0x22c55e, ei: 1.5, shadow: false }); g.userData.led = led;
+      break;
+    }
     case 'produce': {
       const wood = mat(0xb7834f, { rough: 0.8 }), wood2 = mat(0x8b5a2b, { rough: 0.85 });
       B(g, W, 0.36, 0.86, 0, 0, 0.18, 0, { material: wood2 });
@@ -510,7 +537,7 @@ export function makeFurniture(type, f = {}) {
     default: B(g, W, 1, D, 0x94a3b8, 0, 0.5, 0);
   }
   const ud = g.userData;
-  mergeStatic(g, new Set([ud.led, ud.belt, ud.screen, ud.lamp, ud.lid, ud.tool, ...(ud.doors || []), ...ud.anim.map(a => a.obj)]));
+  mergeStatic(g, new Set([ud.glow, ud.led, ud.belt, ud.screen, ud.lamp, ud.lid, ud.tool, ...(ud.doors || []), ...ud.anim.map(a => a.obj)]));
   return g;
 }
 
@@ -599,7 +626,8 @@ export function lookFromSeed(seed) {
     female, kid, skin: p(SKINS), hair: elder ? 0xd4d4d4 : p(HAIRS),
     hairStyle: female ? p([1, 1, 3, 4, 0]) : p([0, 0, 0, 2, 5]),
     shirt: p(TOPS), pants: p(BOTTOMS), shoes: p(SHOES), skirt: female && r() < 0.3, longSleeves: r() < 0.45,
-    jacket: r() < 0.22 ? p([0x262a30, 0x4a3a2a, 0x2f3b2f, 0x1f2a3a, 0x5a4a3a]) : null,
+    jacket: r() < 0.4 ? p([0x262a30, 0x4a3a2a, 0x2f3b2f, 0x1f2a3a, 0x5a4a3a, 0x8a8d90, 0x6b1f1f, 0x3d4a5c]) : null,
+    bag: !kid && r() < 0.35 ? p([0x1a1a1a, 0x4a2f1c, 0x6b4a2a, 0x2a2f45]) : null,
     ...(() => { // build: slim, average or heavy; adult height about 1.55-1.95 m
       const b = r(), build = kid ? 'slim' : b < 0.32 ? 'slim' : b < 0.78 ? 'average' : 'heavy';
       const width = build === 'slim' ? 0.86 + r() * 0.08 : build === 'average' ? 0.96 + r() * 0.1 : 1.1 + r() * 0.2;
@@ -670,7 +698,20 @@ export function makeCharacter(look) {
   const body = part(torso, torsoGeometry(), look.jacket ? sleeve : shirt, 0, 0.0, 0); body.scale.set(0.92 * W, 1.1, 0.82 + (W - 1) * 0.6);
   if ((look.belly || 0) > 0.05) { const belly = part(torso, sphGeo(0.5, 16, 12), look.jacket ? sleeve : shirt, 0, 0.2, 0.04); belly.scale.set(0.28 * W, 0.32, 0.16 + look.belly * 0.14 + (W - 1) * 0.12); }
   if (look.jacket) { B(torso, 0.06, 0.44, 0.01, look.shirt, 0, 0.3, 0.135 + (look.belly || 0) * 0.06, { shadow: false }); }
-  if (look.apron) { const ap = B(torso, 0.3 * W, 0.66, 0.02, look.apron, 0, 0.12, 0.155 + (look.belly || 0) * 0.07, { shadow: false }); void ap; }
+  if (look.apron) { // bib apron: a wide skirt part, a narrower bib on the chest, neck straps and a waist tie
+    const az = 0.15 + (look.belly || 0) * 0.07, am = cloth(look.apron, 'fabric', 0.85);
+    B(torso, 0.33 * W, 0.5, 0.018, 0, 0, -0.02, az + 0.005, { material: am, shadow: false });
+    B(torso, 0.2 * W, 0.26, 0.018, 0, 0, 0.35, az - 0.012, { material: am, shadow: false });
+    for (const sd of [-1, 1]) { const st = B(torso, 0.025, 0.2, 0.012, 0, sd * 0.075 * W, 0.53, az - 0.05, { material: am, shadow: false }); st.rotation.z = sd * 0.25; st.rotation.x = -0.35; }
+    B(torso, 0.36 * W, 0.03, 0.2, 0, 0, 0.2, 0.02, { material: am, shadow: false });
+    B(torso, 0.1, 0.07, 0.006, 0xf4f1e8, -0.03, 0.36, az - 0.001, { rough: 0.6, shadow: false }); // name tag
+  }
+  if (look.bag) { // cross-body bag: strap over the shoulder, bag on the hip
+    const bm = mat(look.bag, { rough: 0.7 });
+    const strap = B(torso, 0.03, 0.62, 0.012, 0, 0.0, 0.28, 0.135 + (look.belly || 0) * 0.07, { material: bm, shadow: false }); strap.rotation.z = 0.62;
+    const strap2 = B(torso, 0.03, 0.62, 0.012, 0, 0.0, 0.28, -0.125, { material: bm, shadow: false }); strap2.rotation.z = -0.62;
+    B(torso, 0.07, 0.17, 0.2, 0, -0.2 * W - 0.03, 0.02, 0.0, { material: bm, shadow: false });
+  }
   if (look.badge) B(torso, 0.06, 0.03, 0.006, look.badge, 0.08, 0.44, 0.135, { rough: 0.4, shadow: false });
   part(torso, cylGeo(0.048, 0.056, 0.09, 10), skin, 0, 0.62, 0);
   // arms
@@ -699,7 +740,7 @@ export function makeCharacter(look) {
     const hk = look.hairStyle === 5 ? 0.38 : 0.55;
     const hair = new THREE.Mesh(cachedGeo('hair' + hk, () => new THREE.SphereGeometry(0.5, 16, 10, 0, Math.PI * 2, 0, Math.PI * hk)), hm);
     hair.scale.set(0.205, 0.25, 0.225); hair.rotation.x = -0.35; hair.position.set(0, 0.025, -0.01); hair.castShadow = true; head.add(hair);
-    if (look.hairStyle === 1) part(head, boxGeo(0.2, 0.26, 0.08), hm, 0, -0.1, -0.08);
+    if (look.hairStyle === 1) { const lh = part(head, sphGeo(0.5, 12, 10), hm, 0, -0.1, -0.06); lh.scale.set(0.23, 0.36, 0.14); for (const sd of [-1, 1]) { const sdh = part(head, sphGeo(0.5, 8, 8), hm, sd * 0.085, -0.09, -0.01); sdh.scale.set(0.07, 0.3, 0.13); } }
     if (look.hairStyle === 3) part(head, sphGeo(0.05, 10, 8), hm, 0, 0.11, -0.09);
     if (look.hairStyle === 4) { part(head, sphGeo(0.035, 8, 6), hm, 0, 0.02, -0.12); part(head, capsule(0.03, 0.14), hm, 0, -0.08, -0.13); }
   }

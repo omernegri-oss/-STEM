@@ -13,8 +13,8 @@ const stars = (rep) => { const s = Math.max(0, Math.min(5, rep / 20)); const ful
 const skillStars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 const discountFor = (sup, boxes) => { let d = 0; for (const [n, pct] of sup.discounts) if (boxes >= n) d = pct; return d; };
 const COMPUTER_TABS = { orders: 'Order stock', licenses: 'Products', furniture: 'Furniture', prices: 'Prices', staff: 'Staff', upgrades: 'Upgrades', bills: 'Bills', messages: 'Messages' };
-const BUY_GROUPS = [['Shelving & coolers', ['shelf', 'shelf_large', 'endcap', 'produce', 'fridge', 'fridge_large', 'freezer', 'freezer_upright']],
-  ['Service', ['checkout', 'selfcheckout', 'butcher', 'deli', 'rack', 'bin', 'computer']],
+const BUY_GROUPS = [['Shelving & coolers', ['shelf', 'shelf_large', 'endcap', 'produce', 'bakery', 'fridge', 'fridge_large', 'freezer', 'freezer_upright']],
+  ['Service', ['checkout', 'selfcheckout', 'butcher', 'deli', 'oven', 'rack', 'bin', 'computer']],
   ['Plants & decor', ['plant', 'flowerpot', 'cactus', 'plant_tall', 'lamp', 'sign', 'bench', 'balloons', 'vending', 'flowers', 'fountain', 'neon', 'statue']]];
 
 // the notes and coins making up a cash amount (largest first), as small pictures

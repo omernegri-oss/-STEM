@@ -248,7 +248,7 @@ function stocker(game, st, dt) {
         const t = freeFront(game, exp);
         if (moveTo(game, st, t[0] + 0.5, t[1] + 0.5, exp.floor || 0)) { st.task = { type: 'expired', fid: exp.id }; st.state = 'toFixture'; return; }
       }
-      const floor = s.boxes.filter(b => b.pid && !b.expired && !b._claim && b.y === topOf(s, b)).sort((a, b) => b.z - a.z);
+      const floor = s.boxes.filter(b => b.pid && !b.raw && !b.expired && !b._claim && b.y === topOf(s, b)).sort((a, b) => b.z - a.z);
       for (const b of floor) {
         const target = stockTarget(game, b.pid, false);
         const rack = target ? null : (b.z >= s.d ? rackWithSpace(game) : null);
@@ -261,7 +261,7 @@ function stocker(game, st, dt) {
       }
       for (const r of s.furniture.filter(f => f.boxes && f.boxes.length)) {
         for (const b of r.boxes) {
-          if (b.expired) continue;
+          if (b.expired || b.raw) continue;
           const target = stockTarget(game, b.pid, true);
           if (!target) continue;
           const t = freeFront(game, r);

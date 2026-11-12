@@ -69,6 +69,7 @@ const SOUNDS = {
   open: () => { tone(659, 0.35, { vol: 0.2 }); tone(523, 0.5, { vol: 0.2, at: 0.3 }); },
   door: () => { tone(988, 0.25, { vol: 0.08 }); tone(784, 0.35, { vol: 0.08, at: 0.18 }); },
   alarm: () => { for (let i = 0; i < 4; i++) tone(i % 2 ? 880 : 1175, 0.14, { type: 'square', vol: 0.12, at: i * 0.15 }); },
+  ding: () => { tone(1568, 0.5, { type: 'sine', vol: 0.22 }); tone(2093, 0.6, { type: 'sine', vol: 0.12, at: 0.02 }); },
   honk: () => { tone(330, 0.22, { type: 'square', vol: 0.07 }); tone(330, 0.3, { type: 'square', vol: 0.07, at: 0.3 }); tone(415, 0.3, { type: 'square', vol: 0.05, at: 0.3 }); },
   event: () => { [784, 659, 784, 988].forEach((f, i) => tone(f, 0.12, { vol: 0.14, at: i * 0.1, type: 'square' })); },
   goal: () => { [659, 784, 988, 1318].forEach((f, i) => tone(f, 0.2, { vol: 0.15, at: i * 0.07, type: 'triangle' })); },

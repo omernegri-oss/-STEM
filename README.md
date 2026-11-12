@@ -53,6 +53,15 @@ Requires Node.js 18+. No build step: the client is plain ES modules plus Three.j
   and place it wherever you like. Nobody tells you how to lay out your store.
 - **Household & toiletries** (toilet tissue, bleach, dish soap, shampoo, soap, washing powder, detergent) share the
   gondola shelves with groceries; order them from CleanCo Supply (from level 2).
+- **Bakery** (level 3): order dough from Miller's Bakehouse, put the box in the **Bakery Oven**, take the fresh
+  bread out about 20 seconds later and stock the **Bread Rack**. Baked goods stay fresh for one day.
+- **Shopping carts**: shoppers with a big shop push a cart from the bay outside the entrance. Players can take one
+  too (`E` at the bay) to move 4 boxes at once.
+- **Shoplifters** (level 2+): now and then a shopper walks out without paying, marked SHOPLIFTER. Stop them before
+  the door with the baton or a punch (the goods go back on the shelf), or hire a **Security Guard**.
+- **Promotions**: in a shelf label's price calculator, put up to 4 products on promotion (20% off, a yellow sign,
+  many more shoppers pick it).
+- **Settings** (gear button): graphics quality (low / medium / high), mouse sensitivity, volumes, FPS counter.
 - **Fridges and freezers have doors**: open them before stocking.
 - **At the register**, shoppers unload their basket onto the belt (side by side, stacked, some lying down). Click each
   product to pass it over the scanner, then take the payment:

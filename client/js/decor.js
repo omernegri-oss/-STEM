@@ -84,7 +84,7 @@ export function muralTexture(i) {
 }
 
 // ------------------------------------------------------------------ hanging department sign (black board, orange band)
-const DEPT = { grocery: 'GROCERY', household: 'HOUSEHOLD', fridge: 'DAIRY', frozen: 'FROZEN', produce: 'FRUIT & VEG', meat: 'BUTCHER', deli: 'DELI' };
+const DEPT = { bakery: 'BAKERY', grocery: 'GROCERY', household: 'HOUSEHOLD', fridge: 'DAIRY', frozen: 'FROZEN', produce: 'FRUIT & VEG', meat: 'BUTCHER', deli: 'DELI' };
 export const departmentName = (cat) => DEPT[cat] || 'GROCERY';
 export function hangingSignTexture(num, english, dept) {
   const W = 768, H = 384, c = document.createElement('canvas'); c.width = W; c.height = H;

@@ -20,6 +20,8 @@ export const CATEGORIES = {
   produce: { name: 'Produce', icon: '🍎', color: '#22c55e', fixtures: ['produce'] },
   meat:    { name: 'Butcher', icon: '🥩', color: '#ef4444', fixtures: ['butcher'] },
   deli:    { name: 'Deli', icon: '🧀', color: '#eab308', fixtures: ['deli'] },
+  // baked on site: dough is delivered in boxes, baked in the oven, then goes on the bread rack
+  bakery: { name: 'Bakery', icon: '🥖', color: '#d97706', fixtures: ['bakery'] },
   // cleaning & toiletries share the gondola shelves with groceries
   household: { name: 'Household', icon: '🧴', color: '#06b6d4', fixtures: ['shelf', 'shelf_large', 'endcap'] },
 };
@@ -112,6 +114,15 @@ export const PRODUCTS = [
   { id: 'sushi',       name: 'Sushi Platter',      cat: 'deli', cost: 5.00, price: 12.99, box: 6, shape: 'flatbox',color: 0xf8fafc, life: 2, level: 8, icon: '🍣', unit: '12 pcs' },
 ];
 
+// bakery: delivered as ready-to-bake dough; one day fresh once baked
+PRODUCTS.push(
+  { id: 'bread',     name: 'Farmhouse Loaf',   cat: 'bakery', cost: 0.90, price: 2.99, box: 8,  shape: 'loaf',     color: 0xb9762f, life: 1, level: 3, icon: '🍞' },
+  { id: 'rolls',     name: 'Bread Rolls',      cat: 'bakery', cost: 0.22, price: 0.79, box: 16, shape: 'bun',      color: 0xc98b3f, life: 1, level: 3, icon: '🥯' },
+  { id: 'baguette',  name: 'Baguette',         cat: 'bakery', cost: 0.50, price: 1.79, box: 10, shape: 'stick',    color: 0xc68a3c, life: 1, level: 3, icon: '🥖' },
+  { id: 'croissant', name: 'Butter Croissant', cat: 'bakery', cost: 0.45, price: 1.49, box: 12, shape: 'crescent', color: 0xd9963a, life: 1, level: 4, icon: '🥐' },
+);
+export const BAKE_SECONDS = 20;  // real seconds at 1x speed to bake one box
+export const DOUGH_DAYS = 5;     // how long an unbaked box keeps
 export const PRODUCT_MAP = Object.fromEntries(PRODUCTS.map(p => [p.id, p]));
 
 // minOrder = minimum boxes per order. time = delivery time in real seconds at 1x speed.
@@ -122,9 +133,10 @@ export const SUPPLIERS = [
   { id: 'green',   name: 'Green Valley Farms', icon: '🚜', cats: ['produce'], fee: 20, time: 30, minOrder: 2, markup: 1.0,  discounts: [[8, 6], [16, 12]], level: 2, desc: 'Farm-fresh fruit and vegetables.' },
   { id: 'polar',   name: 'Polar Frozen Foods', icon: '🐻‍❄️', cats: ['frozen'], fee: 30, time: 50, minOrder: 2, markup: 1.0,  discounts: [[6, 6], [12, 12]], level: 3, desc: 'Everything sub-zero.' },
   { id: 'prime',   name: 'Prime Cuts Meats',   icon: '🔪', cats: ['meat'],    fee: 35, time: 40, minOrder: 1, markup: 1.0,  discounts: [[5, 5], [10, 10]], level: 4, desc: 'Quality butcher supply.' },
+  { id: 'miller',  name: "Miller's Bakehouse", icon: '🥖', cats: ['bakery'], fee: 15, time: 30, minOrder: 1, markup: 1.0, discounts: [[4, 5], [8, 10]], level: 3, desc: 'Ready-to-bake dough. Bake it in your own oven.' },
   { id: 'cleanco', name: 'CleanCo Supply',     icon: '🧴', cats: ['household'], fee: 20, time: 45, minOrder: 2, markup: 1.0, discounts: [[6, 5], [12, 10]], level: 2, desc: 'Cleaning products and toiletries.' },
   { id: 'bella',   name: 'Bella Deli Imports', icon: '🇮🇹', cats: ['deli'],   fee: 30, time: 45, minOrder: 1, markup: 1.0,  discounts: [[5, 5], [10, 10]], level: 5, desc: 'Cheeses, cold cuts & antipasti.' },
-  { id: 'express', name: 'QuickMart Express',  icon: '⚡', cats: ['grocery', 'household', 'fridge', 'frozen', 'produce', 'meat', 'deli'], fee: 60, time: 12, minOrder: 1, markup: 1.2, discounts: [], level: 6, desc: 'Anything, fast. Premium prices.' },
+  { id: 'express', name: 'QuickMart Express',  icon: '⚡', cats: ['grocery', 'household', 'bakery', 'fridge', 'frozen', 'produce', 'meat', 'deli'], fee: 60, time: 12, minOrder: 1, markup: 1.2, discounts: [], level: 6, desc: 'Anything, fast. Premium prices.' },
   { id: 'mega',    name: 'MegaBulk Distributors', icon: '🏭', cats: ['grocery', 'household', 'frozen'], fee: 45, time: 90, minOrder: 10, markup: 0.9, discounts: [[20, 10], [40, 18]], level: 8, desc: 'Huge orders, huge savings, slow trucks.' },
 ];
 export const SUPPLIER_MAP = Object.fromEntries(SUPPLIERS.map(s => [s.id, s]));
@@ -140,6 +152,8 @@ export const FURNITURE = {
   fridge_large:   { name: 'Walk-by Fridge Wall',cat: 'fridge',  kind: 'storage', w: 3, d: 1, slots: 15, cap: 50, cost: 1300,power: 14, maint: 3, appeal: 1, level: 6, icon: '❄️', desc: 'Huge open-front chiller.', temp: 3, maxTemp: 8 },
   freezer:        { name: 'Chest Freezer',      cat: 'frozen',  kind: 'storage', w: 2, d: 1, slots: 4, cap: 60, cost: 800, power: 12, maint: 2, appeal: 0, level: 3, icon: '🧊', desc: 'Glass-top chest freezer.', temp: -18, maxTemp: -6 },
   freezer_upright:{ name: 'Upright Freezer',    cat: 'frozen',  kind: 'storage', w: 2, d: 1, slots: 10, cap: 50, cost: 1100,power: 15, maint: 3, appeal: 0, level: 6, icon: '🥶', desc: 'Tall frozen display with doors.', temp: -18, maxTemp: -6 },
+  bakery:         { name: 'Bread Rack',         cat: 'bakery',  kind: 'storage', w: 2, d: 1, slots: 6, cap: 30, cost: 380, power: 0, maint: 1, appeal: 2, level: 3, icon: '🥖', desc: 'Wooden rack for bread baked in your oven.' },
+  oven:           { name: 'Bakery Oven',        kind: 'oven', w: 1, d: 1, cost: 950, power: 14, maint: 2, appeal: 1, level: 3, icon: '🔥', desc: 'Bakes a box of dough into fresh bread in about 20 seconds.' },
   produce:        { name: 'Produce Stand',      cat: 'produce', kind: 'storage', w: 2, d: 1, slots: 4, cap: 40, cost: 320, power: 0, maint: 1, appeal: 2, level: 2, icon: '🧺', desc: 'Wooden crates of fresh produce.' },
   // Departments are 3x3: back row = big walk-in fridge + prep station, middle row = staff aisle (walkable), front row = display counter.
   butcher:        { name: 'Butcher Department', cat: 'meat',    kind: 'counter', w: 3, d: 3, tiles: [[0,0],[1,0],[2,0],[0,2],[1,2],[2,2]], staffRow: 1, slots: 4, cap: 16, cost: 1800,power: 10, maint: 3, appeal: 2, level: 4, icon: '🔪', desc: 'Display counter, big meat fridge and a cutting station behind it.', temp: 2, maxTemp: 7, presses: 5 },
@@ -349,6 +363,8 @@ export const SHAPE_DIMS = {
   // household: a plastic-wrapped toilet roll pack, a handled jug, a squeeze bottle, a big gusseted powder bag
   pack: { w: 0.3, h: 0.27, d: 0.2, stack: 1 }, jug: { w: 0.15, h: 0.28, d: 0.11, stack: 1 }, squeeze: { w: 0.075, h: 0.21, d: 0.045, stack: 1 },
   pouch: { w: 0.24, h: 0.32, d: 0.1, stack: 1 },
+  // bakery (sold unwrapped): a loaf, a round roll, a croissant, a baguette
+  loaf: { w: 0.21, h: 0.1, d: 0.11, stack: 2 }, bun: { w: 0.095, h: 0.055, d: 0.095, stack: 2 }, crescent: { w: 0.14, h: 0.05, d: 0.085, stack: 2 }, stick: { w: 0.4, h: 0.055, d: 0.065, stack: 3 },
 };
 // Product sections of each fixture in local coordinates (centred, customer side = +z):
 // x0..x1 across, y = floor of the section, zf = front edge, depth, h = clear height.
@@ -357,6 +373,7 @@ export function slotRegions(type) {
   switch (type) {
     case 'shelf': return tiers([0.16, 0.54, 0.92, 1.3], [[-0.95, -0.03], [0.03, 0.95]], 0.26, 0.5, 0.34);
     case 'shelf_large': return tiers([0.16, 0.51, 0.86, 1.21, 1.56], [[-1.46, -0.54], [-0.46, 0.46], [0.54, 1.46]], 0.26, 0.5, 0.31);
+    case 'bakery': return tiers([0.42, 0.82, 1.22], [[-0.95, -0.03], [0.03, 0.95]], 0.3, 0.52, 0.3);
     case 'endcap': return tiers([0.16, 0.49, 0.82, 1.15], [[-0.43, 0.43]], 0.24, 0.45, 0.29);
     case 'fridge': case 'freezer_upright': return tiers([0.18, 0.52, 0.86, 1.2, 1.54], [[-0.9, -0.03], [0.03, 0.9]], 0.3, 0.5, 0.3);
     case 'fridge_large': return tiers([0.2, 0.54, 0.88, 1.22, 1.56], [[-1.45, -0.52], [-0.45, 0.45], [0.52, 1.45]], 0.32, 0.52, 0.3);

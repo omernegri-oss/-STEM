@@ -340,7 +340,7 @@ net.on('s', (s) => {
     // the server decides whether the baton is out (it goes away when you pick something up); right after
     // pressing 1 the local choice wins until the server has heard it
     if (performance.now() - (G.batonHold || 0) > 600) G.baton = !!mine[10];
-    G.cart = !!mine[11];
+    G.cart = !!mine[11]; G.topRaw = !!mine[12];
     if ((G.carry || []).at(-1) !== prevTop) G.deptProgress = 0;
   }
   actors.applySnapshot(s, G.me, me);
@@ -373,6 +373,7 @@ net.on('fx', (m) => {
     case 'bankrupt': play('dayend'); break;
     case 'ping': fx.ping(m.x, m.z, m.color, m.name); play('ping', m.x, m.z); break;
     case 'swing': actors.swing(m.id); break;
+    case 'baked': ui.system(`${PRODUCT_MAP[m.pid]?.name || 'Bread'} is baked. Take it out of the oven.`); break;
     case 'thief': ui.error('A shoplifter is walking out without paying. Stop them before the door!'); play('alarm', m.x, m.z); break;
     case 'caught': ui.system(`${m.by} caught a shoplifter. ${fmtMoney(m.value)} of goods are back on the shelves.`); play('sparkle', m.x, m.z); break;
     case 'pow': play('punch', m.x, m.z); break;
@@ -499,7 +500,7 @@ function frame(now) {
     const ce = $('carry');
     world.setCartsInUse(((G.snap?.C || []).filter(c => c[8] & 1).length) + ((G.snap?.P || []).filter(p => p[11]).length));
     const nameOf = (c) => c.startsWith('f:') ? FURNITURE[c.slice(2)].name + ' (box)' : c.includes(':') ? `${c.startsWith('raw') ? 'Raw' : 'Wrapped'} ${PRODUCT_MAP[c.split(':')[1]]?.name}` : PRODUCT_MAP[c]?.name;
-    if (carry.length && !build.active) { const t = `${G.cart ? 'In the cart' : 'Carrying'}: ${carry.map(nameOf).join(', ')}  ·  Q ${G.cart ? 'take one out' : 'drop'}`; if (ce.textContent !== t) ce.textContent = t; ce.classList.remove('hidden'); } else ce.classList.add('hidden');
+    if (carry.length && !build.active) { const t = `${G.cart ? 'In the cart' : 'Carrying'}: ${carry.map((c, i) => nameOf(c) + (G.topRaw && i === carry.length - 1 ? ' dough' : '')).join(', ')}  ·  Q ${G.cart ? 'take one out' : 'drop'}`; if (ce.textContent !== t) ce.textContent = t; ce.classList.remove('hidden'); } else ce.classList.add('hidden');
     me.cutting = !!(currentInter && currentInter.cutting && input.down('e'));
     const doAct = (a) => {
       if (a.a === '_pay') { if (document.pointerLockElement) document.exitPointerLock(); ui.payment(a); return; }

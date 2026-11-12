@@ -71,6 +71,12 @@ function build() {
   SHAPE_MATS.slab = ['plain', 'tray'];
   G.wedge = based(parts([[new THREE.CylinderGeometry(D.wedge.w / 2, D.wedge.w / 2, D.wedge.h, 16, 1, false, 0, Math.PI * 0.5).translate(0, D.wedge.h / 2, 0), 0]]));
   SHAPE_MATS.wedge = ['plain'];
+  // bakery, sold unwrapped: crusty loaf, round roll, croissant, baguette (one 'crust' material each)
+  const round = (w, h, d, sx = 8, sy = 6) => based(oneGroup(new THREE.SphereGeometry(0.5, sx, sy).scale(w, h * 1.25, d)));
+  G.loaf = based(oneGroup(new THREE.CapsuleGeometry(D.loaf.d / 2, D.loaf.w - D.loaf.d, 3, 8).rotateZ(Math.PI / 2).scale(1, D.loaf.h / D.loaf.d, 1))); SHAPE_MATS.loaf = ['crust'];
+  G.bun = round(D.bun.w, D.bun.h, D.bun.d); SHAPE_MATS.bun = ['crust'];
+  G.stick = based(oneGroup(new THREE.CapsuleGeometry(D.stick.d / 2, D.stick.w - D.stick.d, 3, 7).rotateZ(Math.PI / 2).scale(1, D.stick.h / D.stick.d, 1))); SHAPE_MATS.stick = ['crust'];
+  G.crescent = based(oneGroup(new THREE.TorusGeometry(D.crescent.w * 0.36, D.crescent.h * 0.42, 5, 8, Math.PI * 1.15).rotateX(Math.PI / 2).rotateY(-Math.PI * 0.08))); SHAPE_MATS.crescent = ['crust'];
   // toilet roll pack: plastic-wrapped block with soft, slightly bulged sides; the top shows the roll ends
   const pk = new THREE.BoxGeometry(D.pack.w, D.pack.h, D.pack.d, 3, 3, 2), pp = pk.attributes.position;
   for (let i = 0; i < pp.count; i++) {
@@ -130,6 +136,7 @@ const BRAND_STYLE = {
   'Blue Harbor': { bg: '#172a45', ink: '#ffffff', accent: '#4fa3d9', brandFont: '700 22px "Barlow Condensed"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'dark' },
   'Maple & Co': { bg: '#141414', ink: '#efe7d3', accent: '#c9a45c', brandFont: '900 24px "Playfair Display"', nameFont: '"Playfair Display"', nameWeight: 700, layout: 'premium' },
   // household brands (all invented)
+  "Miller's": { bg: '#f3e6cf', ink: '#4a2c17', accent: '#b9762f', brandFont: '700 26px "Playfair Display"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'heritage' },
   'CloudSoft': { bg: '#e8f3fc', ink: '#173a63', accent: '#2b7bd0', brandFont: 'italic 700 30px "Playfair Display"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'wave' },
   'Citrus Clean': { bg: '#ffffff', ink: '#1d2a12', accent: '#e8c21a', brandFont: '700 24px "Barlow Condensed"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'band' },
   'Brightwave': { bg: '#0f8a4a', ink: '#ffffff', accent: '#ffd400', brandFont: '26px "Archivo Black"', nameFont: '"Barlow Condensed"', nameWeight: 700, layout: 'burst' },
@@ -138,9 +145,9 @@ const BRAND_STYLE = {
 };
 const BRANDS = Object.keys(BRAND_STYLE);
 const BRAND_FOR = { pasta: 'Casa Bella', tomsauce: 'Casa Bella', olives: 'Casa Bella', salami: 'Casa Bella', truffle: 'Maple & Co', wine: 'Maple & Co', wagyu: 'Maple & Co', honey: 'Golden Fields', flour: 'Golden Fields', cereal: 'Golden Fields',
-  sugar: 'Pantry Pride', rice: 'Pantry Pride', beans: 'Pantry Pride', toiletpaper: 'CloudSoft', detergent: 'Brightwave', washpowder: 'Brightwave', bleach: 'Citrus Clean', dishsoap: 'Citrus Clean', shampoo: 'Silk & Shine', soap: 'Rosewood', water: 'Nordic Choice', fishsticks: 'Blue Harbor', sushi: 'Blue Harbor', milk: 'Valley Farms', butter: 'Valley Farms', cream: 'Valley Farms', eggs: 'Sunny Farm', yogurt: 'Sunny Farm',
+  bread: "Miller's", rolls: "Miller's", baguette: "Miller's", croissant: "Miller's", sugar: 'Pantry Pride', rice: 'Pantry Pride', beans: 'Pantry Pride', toiletpaper: 'CloudSoft', detergent: 'Brightwave', washpowder: 'Brightwave', bleach: 'Citrus Clean', dishsoap: 'Citrus Clean', shampoo: 'Silk & Shine', soap: 'Rosewood', water: 'Nordic Choice', fishsticks: 'Blue Harbor', sushi: 'Blue Harbor', milk: 'Valley Farms', butter: 'Valley Farms', cream: 'Valley Farms', eggs: 'Sunny Farm', yogurt: 'Sunny Farm',
   salad: 'Daily Fresh', hummus: 'Daily Fresh', potsalad: 'Daily Fresh', kombucha: 'Green Leaf', veggies: 'Green Leaf', coffee: 'Maple & Co', chocolate: 'Maple & Co' };
-const DESCRIPTOR = { grocery: 'CLASSIC', fridge: 'KEEP REFRIGERATED', frozen: 'KEEP FROZEN  −18°C', produce: 'FRESH', meat: 'FRESH · BUTCHER CUT', deli: 'DELI SELECTION', household: 'HOME CARE' };
+const DESCRIPTOR = { grocery: 'CLASSIC', fridge: 'KEEP REFRIGERATED', frozen: 'KEEP FROZEN  −18°C', produce: 'FRESH', meat: 'FRESH · BUTCHER CUT', deli: 'DELI SELECTION', household: 'HOME CARE', bakery: 'BAKED TODAY' };
 const SIZES = { box: '500 g', flatbox: '400 g', bag: '1 kg', can: '400 g', bottle: '1.5 L', jar: '350 g', carton: '1 L', tub: '150 g', slab: '500 g', wedge: '250 g', pack: '12 ROLLS', jug: '2 L', squeeze: '500 ml', pouch: '3 kg' };
 const SIZE_FOR = { toiletpaper: '12 ROLLS', soap: '4 × 100 g', cereal: '750 g', milk: '1 L · 3%', water: '1.5 L', detergent: '1.5 L · 30 WASHES', washpowder: '3 kg · 40 WASHES' };
 
@@ -199,6 +206,10 @@ const MOTIFS = {
   olives(g, w, h, r) { for (let i = 0; i < 14; i++) ell(g, w * 0.22 + r() * w * 0.56, h * 0.42 + r() * h * 0.38, 15, 11, r() < 0.5 ? 0x4f5a1e : 0x2c2a20, r() * 3, 0.45); },
   hummus(g, w, h) { ell(g, w / 2, h * 0.64, 60, 26, 0xd9bf8c, 0, 0.1); g.strokeStyle = 'rgba(150,110,60,0.6)'; g.lineWidth = 2; g.beginPath(); g.ellipse(w / 2, h * 0.64, 36, 14, 0, 0, Math.PI * 2); g.stroke(); g.fillStyle = 'rgba(200,120,40,0.7)'; g.beginPath(); g.ellipse(w / 2, h * 0.64, 14, 5, 0, 0, Math.PI * 2); g.fill(); },
   roast(g, w, h) { shadow(g, w / 2, h * 0.8, 60); ell(g, w / 2, h * 0.62, 58, 40, 0xb8732e, 0, 0.35); ell(g, w * 0.3, h * 0.68, 18, 12, 0xa8652a, 0.6); ell(g, w * 0.7, h * 0.68, 18, 12, 0xa8652a, -0.6); },
+  bread(g, w, h) { shadow(g, w / 2, h * 0.8, 70); ell(g, w / 2, h * 0.62, 78, 40, 0xb9762f, 0, 0.35); g.strokeStyle = 'rgba(245,225,180,0.9)'; g.lineWidth = 5; g.lineCap = 'round'; for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(w / 2 + k * 26 - 10, h * 0.62 - 20); g.lineTo(w / 2 + k * 26 + 10, h * 0.62 + 8); g.stroke(); } },
+  rolls(g, w, h) { for (const [x, y] of [[0.36, 0.56], [0.62, 0.54], [0.5, 0.72]]) { shadow(g, w * x, h * y + 22, 30); ell(g, w * x, h * y, 34, 26, 0xc98b3f, 0, 0.35); g.strokeStyle = 'rgba(245,225,180,0.85)'; g.lineWidth = 3; g.beginPath(); g.moveTo(w * x - 14, h * y - 6); g.lineTo(w * x + 14, h * y - 6); g.stroke(); } },
+  baguette(g, w, h) { for (const [dy, rot] of [[0, -0.35], [26, -0.3]]) { g.save(); g.translate(w / 2, h * 0.58 + dy); g.rotate(rot); ell(g, 0, 0, 96, 15, 0xc68a3c, 0, 0.35); g.strokeStyle = 'rgba(245,225,180,0.9)'; g.lineWidth = 4; g.lineCap = 'round'; for (let k = -3; k <= 3; k++) { g.beginPath(); g.moveTo(k * 24 - 6, -8); g.lineTo(k * 24 + 6, 6); g.stroke(); } g.restore(); } },
+  croissant(g, w, h) { g.save(); g.translate(w / 2, h * 0.64); for (let k = -3; k <= 3; k++) { const a = k * 0.32; ell(g, Math.sin(a) * 62, -Math.cos(a) * 30 + 16, 24 - Math.abs(k) * 4, 22 - Math.abs(k) * 3.5, k % 2 ? 0xd9963a : 0xc9842c, a, 0.4); } g.restore(); },
   bleach(g, w, h) { // a lemon half and a splash
     g.fillStyle = 'rgba(120,190,255,0.55)'; for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; g.beginPath(); g.ellipse(w / 2 + Math.cos(a) * 52, h * 0.62 + Math.sin(a) * 30, 12, 5, a, 0, Math.PI * 2); g.fill(); }
     ball(g, w / 2, h * 0.62, 40, 0xf2d21a, 0.3); g.fillStyle = '#fbeea0'; g.beginPath(); g.arc(w / 2, h * 0.62, 32, 0, Math.PI * 2); g.fill();
@@ -331,7 +342,8 @@ export function productMaterials(p) {
   const plain = new THREE.MeshPhysicalMaterial({ color: p.color, roughness: p.cat === 'meat' ? 0.55 : 0.35, clearcoat: p.cat === 'produce' ? 0.5 : 0.1 });
   const cap = new THREE.MeshStandardMaterial({ color: new THREE.Color(p.color).lerp(new THREE.Color(0xffffff), 0.3), roughness: 0.4 });
   const rolls = new THREE.MeshPhysicalMaterial({ map: rollsTexture(), roughness: 0.2, clearcoat: 0.6 });
-  const roles = { label, side, top, plain, cap, rolls, ...shared };
+  const crust = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.85 });
+  const roles = { label, side, top, plain, cap, rolls, crust, ...shared };
   arr = SHAPE_MATS[p.shape].map(r => roles[r]);
   matCache.set(p.id, arr);
   return arr;

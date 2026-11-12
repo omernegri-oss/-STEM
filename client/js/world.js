@@ -556,6 +556,7 @@ export class World {
       if (ud.tool) { const sp = this.deptPoint(f, 'stationSpot'); e.working = chars.some(c => (c.floor || 0) === (f.floor || 0) && Math.hypot(c.x - sp[0], c.z - sp[1]) < 0.75 && (c.stage === 'cutting' || c.cutting)); }
       if (ud.tool && e.working) { if (f.type === 'deli') ud.tool.rotation.x += dt * 25; else ud.tool.rotation.z = Math.sin(this.time * 18) * 0.4; }
       if (e.broken && ud.led) ud.led.visible = Math.sin(this.time * 10) > 0;
+      if (ud.glowMat) { const o = f.oven; const want = o ? (o.ready ? 0.35 : 1.6 + Math.sin(this.time * 5) * 0.25) : 0; ud.glowMat.emissiveIntensity += (want - ud.glowMat.emissiveIntensity) * Math.min(1, dt * 4); }
       if (e.label && e.label.visible) e.label.position.y = (f.type === 'freezer' ? 1.3 : 2.5) + Math.sin(this.time * 3) * 0.05;
     }
     if (camera && this.state) {

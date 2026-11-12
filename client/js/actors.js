@@ -22,6 +22,7 @@ const ROLE_UNIFORM = {
   cashier: { shirt: 0x1f5135, pants: 0x1a1a1a },
   stocker: { shirt: 0x1f5135, apron: 0x2b2f33, pants: 0x2c3e5a },
   cleaner: { shirt: 0x55595d, pants: 0x3a3a3a },
+  guard:   { shirt: 0x1b2333, pants: 0x14171c, cap: 0x14171c, badge: 0xe9c84a },
   butcher: { shirt: 0xf2f2ef, apron: 0x2b2f33, chef: true, pants: 0x1a1a1a },
   deli:    { shirt: 0x1a1a1a, apron: 0x6b4a2a, hairnet: true, pants: 0x1a1a1a },
 };
@@ -83,7 +84,7 @@ export class Actors {
 
   makeStaff(role, seed) {
     const u = ROLE_UNIFORM[role] || {};
-    const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: u.apron, chef: u.chef, hairnet: u.hairnet, cap: null, hat: null, badge: 0xe9e6df, pants: u.pants ?? 0x1a1a1a, jacket: null, scale: 1 };
+    const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: u.apron, chef: u.chef, hairnet: u.hairnet, cap: u.cap || null, hat: null, badge: u.badge || 0xe9e6df, longSleeves: role === 'guard' ? true : undefined, pants: u.pants ?? 0x1a1a1a, jacket: null, scale: 1 };
     const obj = makeCharacter(look);
     const tag = { visible: false }, bubble = { visible: false, position: { y: 0 } };
     const carry = new THREE.Group(); obj.userData.parts.hold.add(carry);
@@ -126,6 +127,10 @@ export class Actors {
       e.tx = x; e.tz = z; e.trot = rot; e.moving = !!moving; e.floor = floor || 0; e.stun = !!(flags & 16);
       if (e.first) { e.x = x; e.z = z; e.rot = rot; e.first = false; }
       e.flags = flags;
+      // a shoplifter heading for the door gets a red marker so the team can spot them
+      const thief = !!(flags & 32);
+      if (thief && !e.thiefTag) { e.thiefTag = makeSprite('SHOPLIFTER', 0.16, { bg: '#b91c1c', color: '#ffffff', size: 40, radius: 6, pad: 12, font: 'Barlow Condensed', weight: 700, depthTest: false }); e.thiefTag.position.y = 2.15; e.obj.add(e.thiefTag); }
+      if (e.thiefTag) e.thiefTag.visible = thief;
       e.upset = !!thought; // annoyed shoppers shake their head
       // VIP sunglasses look: purple glow ring
       const wantCart = !!(flags & 1);

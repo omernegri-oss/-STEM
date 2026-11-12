@@ -1,7 +1,7 @@
 // HUD, the store computer, info panels and overlays.
 import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, CATEGORIES, ROLES, SHIFTS, TEAM_UPGRADES, ACHIEVEMENTS,
-  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap, HIRE_FEE_DAYS,
+  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap, HIRE_FEE_DAYS, PROMO_OFF, PROMO_MAX,
 } from '/shared/data.js';
 import { play, audio, setSfx, setMusic } from './audio.js';
 
@@ -169,13 +169,18 @@ export class UI {
           <div class="pc-verdict"></div>
           <div class="note">Allowed ${fmtMoney(lo)} – ${fmtMoney(hi)} · usual price ${fmtMoney(p.price)}${this.G.world.saleActive ? '<br>Sale running: shoppers pay 15% less' : ''}</div>
           <button class="btn small" data-usual>Use usual price</button>
+          <button class="btn small pc-promo" data-promo></button>
         </div>
       </div>
       <div class="row"><button class="btn" data-close>Cancel</button><button class="btn primary" data-set>Set price</button></div>
     </div>`;
     const val = () => { const v = parseFloat(typed); return isNaN(v) ? 0 : v; };
     const show = () => {
-      const v = val(), sell = v * (this.G.world.saleActive ? 0.85 : 1), profit = sell - cost, ratio = v / p.price;
+      const promos = this.G.world.promos || [], onPromo = promos.includes(pid);
+      const v = val(), sell = v * (this.G.world.saleActive ? 0.85 : 1) * (onPromo ? 1 - PROMO_OFF : 1), profit = sell - cost, ratio = sell / p.price;
+      const pb = wrap.querySelector('[data-promo]');
+      pb.textContent = onPromo ? 'End promotion' : `Put on promotion (−${Math.round(PROMO_OFF * 100)}%)  ·  ${promos.length}/${PROMO_MAX} running`;
+      pb.classList.toggle('on', onPromo);
       wrap.querySelector('.pc-val').textContent = '$' + (typed || '0');
       wrap.querySelector('.pc-sell').textContent = fmtMoney(sell);
       const pe = wrap.querySelector('.pc-profit'); pe.textContent = fmtMoney(profit); pe.className = 'pc-profit ' + (profit > 0 ? 'pos' : 'neg');
@@ -229,6 +234,13 @@ export class UI {
       if (b.dataset.k) press(b.dataset.k);
       else if (b.dataset.step) step(+b.dataset.step);
       else if (b.hasAttribute('data-usual')) { typed = p.price.toFixed(2); fresh = true; show(); }
+      else if (b.hasAttribute('data-promo')) {
+        // a promotion: yellow sign on the shelf, 20% off, and many more shoppers pick the product
+        const promos = this.G.world.promos || (this.G.world.promos = []), on = promos.includes(pid);
+        if (!on && promos.length >= PROMO_MAX) { this.error(`Only ${PROMO_MAX} promotions can run at once. End one first.`); return; }
+        if (on) this.G.world.promos = promos.filter(x => x !== pid); else promos.push(pid);
+        this.net.act('promo', { pid, on: !on }); play('click'); show();
+      }
       else if (b.hasAttribute('data-set')) done(true);
     };
     document.addEventListener('keydown', onKey, true);
@@ -607,7 +619,7 @@ export class UI {
     const row = (k, v) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`;
     const ch = M.challenge;
     let h = `<div class="grid2"><div><div class="section-title">Store</div>${row('Level', `${M.level} / ${MAX_LEVEL}${next ? ` (${M.xp - cur}/${next - cur} XP)` : ' (MAX)'}`)}<div class="bar" style="margin:4px 0 8px"><div style="width:${next ? (M.xp - cur) / (next - cur) * 100 : 100}%;background:#3aa56d"></div></div>
-      ${row('Reputation', `<span class="stars">${stars(M.rep)}</span>`)}${row('Store appeal', M.appeal)}${row('Days open', M.day)}${row('Customers served', M.stats.customers)}${row('Total revenue', fmtMoney(M.stats.revenue))}${row('Customers punched ', M.stats.punched || 0)}
+      ${row('Reputation', `<span class="stars">${stars(M.rep)}</span>`)}${row('Store appeal', M.appeal)}${row('Days open', M.day)}${row('Customers served', M.stats.customers)}${row('Total revenue', fmtMoney(M.stats.revenue))}${row('Customers punched ', M.stats.punched || 0)}${row('Shoplifters caught', M.stats.caught || 0)}${row('Stolen goods', fmtMoney(M.stats.stolen || 0), M.stats.stolen ? 'neg' : '')}
       ${ch ? `<div class="section-title">Today's challenge</div><div class="sel-card">${esc(challengeText(ch))}<br><b>${challengeProgress(ch, M)}</b> · reward ${fmtMoney(ch.reward)} ${ch.done ? '' : ch.failed ? '' : ''}</div>` : ''}</div>
       <div><div class="section-title">Achievements (${Object.keys(M.achievements).length}/${ACHIEVEMENTS.length})</div><div class="ach">`;
     for (const a of ACHIEVEMENTS) { const got = M.achievements[a.id]; h += `<div class="${got ? 'yes' : 'no'}" title="${esc(a.desc)}"><i>${svg(got ? 'award' : 'star', 24)}</i><b>${esc(a.name)}</b>${esc(a.desc)}</div>`; }

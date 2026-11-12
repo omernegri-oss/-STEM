@@ -45,6 +45,7 @@ function buildList(game, c) {
   const weights = avail.map(p => {
     let w = stocked.has(p.id) ? 6 : carried.has(p.id) ? 4 : catPresent.has(p.cat) ? 0.45 : 0.15;
     if (heat && COLD_DRINKS.has(p.id)) w *= 4;
+    if (s.promos && s.promos.includes(p.id)) w *= 2.5; // promotions pull shoppers to the product
     return w;
   });
   let n = rndi(2, 5);
@@ -66,6 +67,9 @@ function buildList(game, c) {
   c.qty = Object.fromEntries(c.list.map(pid => { const r = Math.random(); return [pid, r < 0.1 ? 3 : r < 0.38 ? 2 : 1]; }));
   c.wanted = c.list.length;
   c.cart = c.list.length >= 4; // a big shop: takes a cart from the bay by the entrance, smaller shops use a basket
+  // a few shoppers are shoplifters (from store level 2): they fill a basket and head for the door instead of the register
+  c.thief = !c.vip && s.level >= 2 && Math.random() < (game.eventActive && game.eventActive('holiday') ? 0.09 : 0.06);
+  if (c.thief) { c.cart = false; c.list = c.list.slice(0, 3); c.wanted = c.list.length; }
   // butcher / deli requests
   for (const cat of COUNTER_CATS) {
     if (c.counterReq) break;
@@ -172,6 +176,34 @@ function leave(game, c, reason) {
   game.dirtyMeta();
 }
 
+// a shoplifter skips the registers and walks out with the basket; players and the guard can still stop them
+function startSteal(game, c) {
+  for (const rt of game.rt.values()) rt.queue = rt.queue.filter(id => id !== c.id);
+  c.stealing = true; c.state = 'leaving'; c.path = null; c.wp = null; c.speed *= 1.12;
+  game.fx({ k: 'thief', id: c.id, x: c.x, z: c.z, floor: c.floor || 0 });
+  game.msg(`A shoplifter is walking out without paying! Stop them before the door (baton or punch), or hire a security guard.`, '🚨', `thief:${game.s.day}:${c.id}`);
+}
+function escaped(game, c) {
+  c.escaped = true;
+  const value = Math.round(c.basket.reduce((a, b) => a + b.price, 0) * 100) / 100;
+  const s = game.s; s.stats.stolen = Math.round(((s.stats.stolen || 0) + value) * 100) / 100; s.ledger.stolen = Math.round(((s.ledger.stolen || 0) + value) * 100) / 100;
+  game.msg(`A shoplifter got away with $${value.toFixed(2)} of goods.`, '🚨');
+  game.fx({ k: 'err', text: `A shoplifter got away with $${value.toFixed(2)} of goods.` });
+  game.dirtyMeta();
+}
+// stopped at the door: the goods go back on the shelves
+export function catchThief(game, c, by) {
+  if (!c.stealing || c.caught || c.escaped) return false;
+  c.caught = true;
+  const value = Math.round(c.basket.reduce((a, b) => a + b.price, 0) * 100) / 100;
+  returnBasket(game, c);
+  c.stunT = 1.5; say(c, '😵', 2);
+  const s = game.s; s.stats.caught = (s.stats.caught || 0) + 1; s.rep = clamp(s.rep + 0.6, 0, 100);
+  game.msg(`${by} caught a shoplifter! $${value.toFixed(2)} of goods went back on the shelves.`, '🛡️');
+  game.fx({ k: 'caught', x: c.x, z: c.z, floor: c.floor || 0, by, value });
+  game.addXp(8); game.unlockAch && game.unlockAch('guardian'); game.dirtyMeta();
+  return true;
+}
 function chooseCheckout(game, c) {
   let best = null, bs = Infinity;
   for (const f of game.s.furniture) {
@@ -298,6 +330,7 @@ export function updateCustomers(game, dt, dMin) {
         }
         // done shopping
         if (!c.basket.length) { leave(game, c, 'nothing'); break; }
+        if (c.thief && !closing) { startSteal(game, c); break; }
         c.state = 'toCheckout';
         break;
       }
@@ -423,6 +456,8 @@ export function updateCustomers(game, dt, dMin) {
         if (d <= step) { c.x = tx; c.z = tz; list.shift(); } else { c.x += dx / d * step; c.z += dz / d * step; c.rot = Math.atan2(dx, dz); }
         c.moving = true;
         if (!list.length) c.dead = true;
+        // a shoplifter who makes it out of the door is gone with the goods
+        if (c.stealing && !c.caught && !c.escaped && c.z > s.d + 0.6) escaped(game, c);
         break;
       }
     }

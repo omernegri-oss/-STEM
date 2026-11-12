@@ -1,6 +1,6 @@
 // Supermarket – client entry point: menus, lobby, networking glue and the main loop.
 import * as THREE from 'three';
-import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, FLOOR_H, fmtMoney } from '/shared/data.js';
+import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, FLOOR_H, fmtMoney, shelfPrice } from '/shared/data.js';
 import { heightAt } from '/shared/grid.js';
 import { slotCap } from '/shared/data.js';
 import { Net } from './net.js';
@@ -373,6 +373,8 @@ net.on('fx', (m) => {
     case 'bankrupt': play('dayend'); break;
     case 'ping': fx.ping(m.x, m.z, m.color, m.name); play('ping', m.x, m.z); break;
     case 'swing': actors.swing(m.id); break;
+    case 'thief': ui.error('A shoplifter is walking out without paying. Stop them before the door!'); play('alarm', m.x, m.z); break;
+    case 'caught': ui.system(`${m.by} caught a shoplifter. ${fmtMoney(m.value)} of goods are back on the shelves.`); play('sparkle', m.x, m.z); break;
     case 'pow': play('punch', m.x, m.z); break;
     case 'knock': if (m.id === G.me) { me.knock(m.dx, m.dz, m.baton ? 3200 : 2000); rig.shake = m.baton ? 0.9 : 0.6; ui.error(m.baton ? `${m.by} hit you with a baton.` : `${m.by} punched you.`); } break;
   }
@@ -469,7 +471,7 @@ function frame(now) {
     if (!build.active && !G.station && !(G.carry || []).length && G.meta?.phase !== 'naming' && !ui.panel && (fpsView ? input.mouse.locked : true)) {
       aimedTag = aimTag(fpsView ? { x: 0, y: 0 } : { x: input.mouse.nx, y: input.mouse.ny }, fpsView);
       if (aimedTag) {
-        const p = PRODUCT_MAP[aimedTag.pid], price = (G.world.prices[p.id] ?? p.price) * (G.world.saleActive ? 0.85 : 1);
+        const p = PRODUCT_MAP[aimedTag.pid], price = shelfPrice(G.world, p.id);
         currentInter = { label: `${p.name}  $${price.toFixed(2)}  ·  ${fpsView ? 'E or click' : 'E or click the label'}: price calculator`, action: { a: '_price', pid: p.id } };
       }
     }

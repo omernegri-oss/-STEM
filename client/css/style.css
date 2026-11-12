@@ -448,3 +448,6 @@ button.den.small { cursor: pointer; }
 .seg button.sel { background: var(--brand); color: #fff; }
 .settings-card .note { margin: -4px 0 0; font-size: 12px; color: var(--muted); }
 #fps { position: fixed; left: 8px; top: 8px; z-index: 60; background: rgba(0,0,0,.55); color: #9be7b4; font: 600 12px ui-monospace, Consolas, monospace; padding: 3px 7px; border-radius: 5px; pointer-events: none; }
+
+.pc-promo { border-color: rgba(253,224,71,.5) !important; color: #fde047 !important; }
+.pc-promo.on { background: #fde047 !important; color: #7a1010 !important; }

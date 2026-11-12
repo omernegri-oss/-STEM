@@ -1,6 +1,6 @@
 // Renders the shared world state: the store building (1 or 2 floors), furniture, labelled products, boxes, dirt.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap, cartBay } from '/shared/data.js';
+import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap, cartBay, shelfPrice } from '/shared/data.js';
 import { Grid, center, dims } from '/shared/grid.js';
 import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, makePriceTag, TAG_W, makeCart, mergeStatic, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
 import { pbr, surfaceMaps } from './textures.js';
@@ -309,15 +309,19 @@ export class World {
   // shelf-edge labels with the product name and price under each section (look at one and press E to change the price)
   priceTags(e, f, w) {
     if (!f.slots) return;
-    const key = f.slots.map(s => s.pid ? `${s.pid}:${w.prices[s.pid]}` : '-').join(',') + (w.saleActive ? 's' : '');
+    const key = f.slots.map(s => s.pid ? `${s.pid}:${w.prices[s.pid]}` : '-').join(',') + (w.saleActive ? 's' : '') + (w.promos || []).join('+');
     if (key === e.tagKey) return;
     e.tagKey = key; disposeOwned(e.tags); e.tags.clear(); this.tagsDirty = true;
     const layout = slotLayout(f.type), rail = ['shelf', 'shelf_large', 'endcap'].includes(f.type);
     f.slots.forEach((sl, i) => {
       const L = layout[i]; if (!L || !sl.pid) return;
       const p = PRODUCT_MAP[sl.pid]; if (!p) return;
-      const price = Math.round((w.prices[p.id] ?? p.price) * (w.saleActive ? 0.85 : 1) * 100) / 100;
-      const tag = makePriceTag(p.name, price, !!w.saleActive);
+      const promo = (w.promos || []).includes(p.id);
+      const tag = makePriceTag(p.name, shelfPrice(w, p.id), !!w.saleActive, promo);
+      if (promo) { // a yellow promotion sign sticking up above the label, like in a real store
+        const sign = makeLabel('PROMO  −20%', 0.075, { bg: '#fde047', color: '#b91c1c', size: 44, pad: 14, radius: 3, font: 'Barlow Condensed', weight: 700 }, 0.3);
+        sign.position.set(L.x0 + TAG_W / 2 + 0.02, (rail ? L.y - 0.03 : Math.max(0.04, L.y - 0.03)) + 0.085, L.zf + (rail ? 0.036 : 0.032)); sign.material.toneMapped = false; e.tags.add(sign);
+      }
       // on gondola shelves the label clips onto the front of the price rail
       tag.position.set(L.x0 + TAG_W / 2 + 0.02, rail ? L.y - 0.03 : Math.max(0.04, L.y - 0.03), L.zf + (rail ? 0.034 : 0.03));
       tag.userData.tag = { pid: p.id, fid: f.id };
@@ -338,7 +342,7 @@ export class World {
   tagMeshes() {
     if (this.tagsDirty || !this.tagList) {
       this.tagsDirty = false; this.tagList = [];
-      for (const e of this.furn.values()) for (const t of e.tags.children) this.tagList.push(t);
+      for (const e of this.furn.values()) for (const t of e.tags.children) if (t.userData.tag) this.tagList.push(t);
     }
     return this.tagList;
   }

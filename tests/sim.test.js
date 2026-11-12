@@ -233,6 +233,49 @@ assert.ok(reachedUp, 'customer climbed the stairs'); assert.equal(climber.basket
   console.log('baton ✓ (rep', g3.s.rep.toFixed(1) + ')');
 }
 
+// --- promotions: 20% off at the register, a limit of four, never below cost
+{
+  const g5 = new Game('PROMO', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
+  const q = { id: 7, name: 'Q', x: 5, z: 5, rot: 0, carry: [], station: null, floor: 0 };
+  g5.players.set(7, q); g5.act(q, { a: 'nameDraft', name: 'Promo Mart' }); g5.act(q, { a: 'nameVote' });
+  assert.ok(g5.act(q, { a: 'promo', pid: 'flour' })); assert.deepEqual(g5.s.promos, ['flour']);
+  assert.equal(g5.effPrice('flour'), Math.round(PRODUCT_MAP.flour.price * 0.8 * 100) / 100);
+  for (const pid of ['sugar', 'oil', 'cereal']) assert.ok(g5.act(q, { a: 'promo', pid }));
+  assert.equal(g5.act(q, { a: 'promo', pid: 'pasta' }), false, 'a fifth promotion is refused');
+  assert.ok(g5.act(q, { a: 'promo', pid: 'flour' })); assert.equal(g5.s.promos.includes('flour'), false, 'toggled off');
+  g5.s.prices.pasta = priceLimits(PRODUCT_MAP.pasta)[0];
+  assert.equal(g5.act(q, { a: 'promo', pid: 'pasta' }), false, 'no promotion below cost');
+  console.log('promotions ✓');
+}
+
+// --- shoplifters: caught by a punch (goods back, no penalty), caught by the guard, or gone with the goods
+{
+  const { catchThief } = await import('../server/customers.js');
+  const g4 = new Game('THIEF', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
+  const q = { id: 7, name: 'Q', x: 5, z: 5, rot: 0, carry: [], station: null, floor: 0 };
+  g4.players.set(7, q); g4.act(q, { a: 'nameDraft', name: 'Thief Mart' }); g4.act(q, { a: 'nameVote' });
+  const sh = g4.newFixture('shelf', 3, 2, 0, 0); g4.s.furniture.push(sh); sh.slots[0].pid = 'flour'; sh.slots[0].qty = 3; sh.slots[0].exp = 99; g4.rebuildGrid();
+  g4.s.phase = 'open'; g4.s.minute = 10 * 60;
+  const mk = () => { const c = spawnCustomer(g4); c.thief = true; c.state = 'shop'; c.x = 5; c.z = 6.2; c.floor = 0; c.list = []; c.timer = 0; c.counterReq = null; c.basket = [{ pid: 'flour', price: 2.29, src: sh.id }]; return c; };
+  // 1) a punch stops them: the flour goes back, reputation does not drop
+  let c = mk(); g4.spawnT = 1e9; g4.tick(0.05);
+  assert.equal(c.stealing, true, 'heads for the door instead of the register'); assert.equal(c.state, 'leaving');
+  const rep0 = g4.s.rep, qty0 = sh.slots[0].qty;
+  c.x = 5; c.z = 6.2; q.punchAt = 0;
+  assert.ok(g4.act(q, { a: 'punch' }));
+  assert.equal(c.caught, true); assert.equal(c.basket.length, 0); assert.equal(sh.slots[0].qty, qty0 + 1, 'goods back on the shelf');
+  assert.ok(g4.s.rep >= rep0, 'no reputation penalty for stopping a thief'); assert.equal(g4.s.stats.caught, 1);
+  // 2) nobody stops them: they get away
+  g4.customers = []; c = mk(); for (let i = 0; i < 20 * 30 && !c.escaped; i++) g4.tick(0.05);
+  assert.equal(c.escaped, true); assert.ok(g4.s.stats.stolen > 2, 'the loss is recorded');
+  // 3) a guard catches them
+  g4.customers = []; g4.s.staff.push({ id: 99, name: 'Gil Guard', role: 'guard', skill: 3, speed: 1, salary: 94, seed: 5, shift: 'full', happiness: 80, present: true, x: 7.5, z: 7.4, rot: 0, floor: 0, state: 'idle', route: null, task: null, post: null, carry: null, timer: 0 });
+  c = mk(); c.x = 2; c.z = 3; for (let i = 0; i < 20 * 30 && !c.caught && !c.escaped; i++) g4.tick(0.05);
+  assert.equal(c.caught, true, 'the guard stopped the shoplifter'); assert.equal(g4.s.stats.caught, 2);
+  void catchThief;
+  console.log('shoplifters ✓ (caught', g4.s.stats.caught + ', stolen $' + g4.s.stats.stolen + ')');
+}
+
 // --- unpaid bills lead to eviction
 g.s.bills = [{ id: 999, day: g.s.day - 3, due: g.s.day - 1, items: { rent: 100, power: 10, maint: 5, late: 0 }, total: 115, paid: false }];
 g.customers = []; g.endDay(); g.beginNewDay(); g.beginNewDay();

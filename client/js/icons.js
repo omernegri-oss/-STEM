@@ -51,6 +51,7 @@ const P = {
   expand: 'M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6',
   download: 'M12 3v12M7 10l5 5 5-5M4 20h16',
   close: 'M6 6l12 12M18 6 6 18',
+  shield: 'M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6zM9 12l2.2 2.2L15.5 10',
   settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.3-.9-2 3.4 2 1.5a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 1.7-1l2.3.9 2-3.4z',
 };
 export function svg(name, size = 18) {
@@ -68,9 +69,9 @@ export function furnitureIcon(type) {
   if (def.kind === 'storage') return def.cat === 'produce' ? 'leaf' : def.cat === 'frozen' ? 'snow' : def.cat === 'fridge' ? 'fridge' : 'shelf';
   return { checkout: 'register', rack: 'pallet', dept: 'knife', decor: 'plant' }[def.kind] || 'box';
 }
-export const ROLE_ICON = { cashier: 'register', stocker: 'box', cleaner: 'broom', butcher: 'knife', deli: 'cheese', manager: 'users' };
+export const ROLE_ICON = { guard: 'shield', cashier: 'register', stocker: 'box', cleaner: 'broom', butcher: 'knife', deli: 'cheese', manager: 'users' };
 // server messages carry an emoji "kind"; show a matching line icon instead
-const MSG_ICON = { '📦': 'box', '🚚': 'truck', '⚠️': 'alert', '🔥': 'alert', '💸': 'coin', '💰': 'coin', '💵': 'coin', '🧾': 'receipt', '🔧': 'wrench', '🌡️': 'thermo', '📈': 'chart', '⭐': 'star', '🏆': 'award', '💬': 'mail', 'ℹ️': 'info', '🔑': 'key', '🏷️': 'tag', '👥': 'users', '📉': 'chart', '😡': 'alert', '🤩': 'star', '🎉': 'star', '💢': 'alert', '📣': 'info' };
+const MSG_ICON = { '🚨': 'alert', '🛡️': 'shield',  '📦': 'box', '🚚': 'truck', '⚠️': 'alert', '🔥': 'alert', '💸': 'coin', '💰': 'coin', '💵': 'coin', '🧾': 'receipt', '🔧': 'wrench', '🌡️': 'thermo', '📈': 'chart', '⭐': 'star', '🏆': 'award', '💬': 'mail', 'ℹ️': 'info', '🔑': 'key', '🏷️': 'tag', '👥': 'users', '📉': 'chart', '😡': 'alert', '🤩': 'star', '🎉': 'star', '💢': 'alert', '📣': 'info' };
 export function msgIcon(e) { return MSG_ICON[e] || 'info'; }
 
 const thumbs = new Map();

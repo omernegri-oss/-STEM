@@ -235,6 +235,7 @@ export const ROLES = {
   cashier: { name: 'Cashier',       icon: '💵', baseSalary: 88,  level: 3, color: 0x2563eb, desc: 'Operates a checkout counter.' },
   stocker: { name: 'Shelf Stocker', icon: '📦', baseSalary: 81,  level: 3, color: 0x16a34a, desc: 'Moves boxes onto shelves and keeps them full.' },
   cleaner: { name: 'Cleaner',       icon: '🧹', baseSalary: 69,  level: 4, color: 0x0891b2, desc: 'Cleans spills and litter.' },
+  guard:   { name: 'Security Guard', icon: '🛡️', baseSalary: 94, level: 4, color: 0x1e293b, desc: 'Stands by the entrance and catches shoplifters.' },
   butcher: { name: 'Butcher',       icon: '🔪', baseSalary: 119, level: 6, color: 0x991b1b, desc: 'Serves customers at the butcher counter.' },
   deli:    { name: 'Deli Clerk',    icon: '🧀', baseSalary: 106, level: 7, color: 0xca8a04, desc: 'Serves customers at the deli counter.' },
 };
@@ -288,6 +289,7 @@ export const ACHIEVEMENTS = [
   { id: 'repairman',    name: 'Fix-It Crew',       icon: '🔧', desc: 'Repair a broken fridge or freezer by hand.' },
   { id: 'scanner',      name: 'Speed Scanner',     icon: '⚡', desc: 'Personally check out 25 customers.' },
   { id: 'vip',          name: 'VIP Treatment',     icon: '🕶️', desc: 'Satisfy a VIP customer request.' },
+  { id: 'guardian',     name: 'Not On My Watch',   icon: '🛡️', desc: 'Catch a shoplifter.' },
   { id: 'decorator',    name: 'Interior Designer', icon: '🎨', desc: 'Reach 40 store appeal.' },
   { id: 'all_depts',    name: 'Full Service',      icon: '🏪', desc: 'Have all 6 departments running.' },
 ];
@@ -385,6 +387,9 @@ export function slotCap(type, pid) {
 // the shopping-cart bay: outside, on the sidewalk to the right of the entrance
 export function cartBay(doorX, d) { return { x: doorX + 3.7, z: d + 1.3 }; }
 export const CART_BOXES = 4; // boxes a player can move in a shopping cart
+// promotions: a product on promotion sells 20% cheaper and shoppers pick it far more often; a few at a time
+export const PROMO_OFF = 0.2, PROMO_MAX = 4;
+export function shelfPrice(w, pid) { const p = PRODUCT_MAP[pid]; return Math.round((w.prices[pid] ?? p.price) * (w.saleActive ? 0.85 : 1) * ((w.promos || []).includes(pid) ? 1 - PROMO_OFF : 1) * 100) / 100; }
 export function productsForCat(cat) { return PRODUCTS.filter(p => p.cat === cat); }
 export function fmtMoney(v) {
   const s = Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');

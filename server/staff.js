@@ -2,6 +2,7 @@
 import { FURNITURE, SHIFTS, PRODUCT_MAP, slotCap, fitsFixture } from '../shared/data.js';
 import { route } from '../shared/grid.js';
 import { clamp, DOOR_TYPES } from './game.js';
+import { catchThief } from './customers.js';
 
 export function staffPresent(game, st) {
   const s = game.s;
@@ -48,6 +49,7 @@ function step(game, st, dt) {
   const dx = tx - st.x, dz = tz - st.z; const d = Math.hypot(dx, dz);
   let sp = 2.4 * Math.min(1.4, eff(game, st));
   if (st.role === 'stocker' && game.s.upgrades.trolleys) sp *= 1.3;
+  if (st.role === 'guard' && st.state === 'chasing') sp = Math.max(sp * 1.5, 3.6); // runs after a shoplifter
   const stp = sp * dt;
   if (d <= stp) { st.x = tx; st.z = tz; if (tf !== undefined) st.floor = tf; st.route.shift(); }
   else { st.x += dx / d * stp; st.z += dz / d * stp; st.rot = Math.atan2(dx, dz); }
@@ -88,6 +90,7 @@ export function updateStaff(game, dt, dMin) {
       case 'deli': deptWorker(game, st, dt, 'deli'); break;
       case 'stocker': stocker(game, st, dt); break;
       case 'cleaner': cleaner(game, st, dt); break;
+      case 'guard': guard(game, st, dt); break;
     }
   }
 }
@@ -376,6 +379,28 @@ function cleaner(game, st, dt) {
   const list = s.dirt.filter(d => !claimed.has(d.id)).sort((a, b) => cost(a) - cost(b));
   for (const d of list) if (moveTo(game, st, Math.floor(d.x) + 0.5, Math.floor(d.z) + 0.5, d.floor || 0)) { st.task = d.id; st.state = 'toDirt'; return; }
   idle(game, st, dt);
+}
+
+// stands by the entrance; when a shoplifter heads for the door, runs over and stops them
+function guard(game, st, dt) {
+  const s = game.s;
+  const thief = game.customers.find(c => c.stealing && !c.caught && !c.escaped && c.z < s.d + 0.5);
+  if (thief) {
+    st.state = 'chasing';
+    if ((thief.floor || 0) === (st.floor || 0) && Math.hypot(thief.x - st.x, thief.z - st.z) < 1.3) {
+      catchThief(game, thief, st.name.split(' ')[0]); st.served = (st.served || 0) + 1; st.route = null; st.moving = false; st.timer = 1; return;
+    }
+    st.chaseT = (st.chaseT || 0) - dt;
+    if (st.chaseT <= 0 || !st.route || !st.route.length) { st.chaseT = 0.35; moveTo(game, st, thief.x, thief.z, thief.floor || 0); }
+    step(game, st, dt);
+    return;
+  }
+  // the post: just inside the door, to the side, facing into the store
+  const px = Math.min(s.w - 1.5, s.doorX + 2.6), pz = s.d - 1.6;
+  if ((st.floor || 0) !== 0 || Math.hypot(st.x - px, st.z - pz) > 0.5) {
+    if (st.state !== 'toPost' || !st.route || !st.route.length) { if (!moveTo(game, st, px, pz, 0)) { idle(game, st, dt); return; } st.state = 'toPost'; }
+    step(game, st, dt);
+  } else { st.state = 'working'; st.moving = false; st.route = null; st.rot = Math.PI; }
 }
 
 function idle(game, st, dt) {

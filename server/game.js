@@ -3,11 +3,11 @@ import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, FIXTURE_UPGRADES, EXPANSIONS,
   TEAM_UPGRADES, TEAM_UPGRADE_MAP, ROLES, SHIFTS, MAX_LEVEL, levelForXp, ACHIEVEMENTS,
   FIRST_NAMES, LAST_NAMES, EVENT_TYPES, STARTING_CASH, REAL_SECONDS_PER_MINUTE, OPEN_HOUR, CLOSE_HOUR,
-  LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, fitsFixture, fixtureCats, cartBay, CART_BOXES, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
+  LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, fitsFixture, fixtureCats, cartBay, CART_BOXES, PROMO_OFF, PROMO_MAX, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
   licenseCost, priceLimits, stairInfo, slotCap, HIRE_FEE_DAYS,
 } from '../shared/data.js';
 import { Grid, footprint, serviceTiles, FACING, center, route, deptSpots, dims } from '../shared/grid.js';
-import { updateCustomers, spawnCustomer, returnBasket, customerLeave } from './customers.js';
+import { updateCustomers, spawnCustomer, returnBasket, customerLeave, catchThief } from './customers.js';
 import { updateStaff } from './staff.js';
 
 export const rnd = (a, b) => a + Math.random() * (b - a);
@@ -62,8 +62,8 @@ export class Game {
       staff: [], candidates: [], orders: [], bills: [], inbox: [],
       upgrades: {},
       ledger: newLedger(), history: [], report: null,
-      stats: { revenue: 0, customers: 0, sold: {}, playerCheckouts: 0, butcher: 0, deli: 0, angry: 0, vip: 0, punched: 0 },
-      achievements: {}, demand: {}, events: [], pendingSale: false, saleActive: false, eventLog: [],
+      stats: { revenue: 0, customers: 0, sold: {}, playerCheckouts: 0, butcher: 0, deli: 0, angry: 0, vip: 0, punched: 0, caught: 0, stolen: 0 },
+      achievements: {}, demand: {}, events: [], pendingSale: false, saleActive: false, eventLog: [], promos: [],
       negativeDays: 0, nextId: 1, created: Date.now(), bankruptReason: '',
     };
     // the empty store comes with a computer and one checkout counter
@@ -76,7 +76,7 @@ export class Game {
 
   load(save) {
     this.s = save;
-    const def = { eventLog: [], licenses: [...STARTER_PRODUCTS], bills: [], inbox: [], floors: 1, bankruptReason: '' };
+    const def = { eventLog: [], licenses: [...STARTER_PRODUCTS], bills: [], inbox: [], floors: 1, bankruptReason: '', promos: [] };
     for (const k in def) if (this.s[k] === undefined) this.s[k] = def[k];
     if (!this.s.furniture.some(f => f.type === 'computer')) this.s.furniture.push(this.newFixture('computer', 0, this.s.d - 3, 1));
     if (this.s.phase === 'open' || this.s.phase === 'closing') this.s.phase = 'prep';
@@ -180,7 +180,7 @@ export class Game {
   unlocked(level) { return this.s.level >= level; }
   licensed(pid) { return this.s.licenses.includes(pid); }
   price(pid) { return this.s.prices[pid] ?? PRODUCT_MAP[pid].price; }
-  effPrice(pid) { return round2(this.price(pid) * (this.s.saleActive ? 0.85 : 1)); }
+  effPrice(pid) { return round2(this.price(pid) * (this.s.saleActive ? 0.85 : 1) * ((this.s.promos || []).includes(pid) ? 1 - PROMO_OFF : 1)); }
   eventActive(type) { return this.s.events.some(e => e.type === type && (e.until == null || this.s.minute < e.until)); }
   nearComputer(p) {
     return this.s.furniture.some(f => f.type === 'computer' && (f.floor || 0) === (p.floor || 0) && distToFixture(f, p.x, p.z) < 2.6);
@@ -316,6 +316,19 @@ export class Game {
         const p = PRODUCT_MAP[m.pid]; if (!p) return false;
         const [lo, hi] = priceLimits(p);
         s.prices[p.id] = round2(clamp(+m.price || p.price, lo, hi)); this.dirtyWorld(); this.dirtyMeta(); return true;
+      }
+      // put a product on promotion (from its shelf label), or end it
+      case 'promo': {
+        const p = PRODUCT_MAP[m.pid]; if (!p) return false;
+        s.promos ||= [];
+        const on = s.promos.includes(p.id);
+        if (m.on === false || (m.on === undefined && on)) s.promos = s.promos.filter(x => x !== p.id);
+        else if (!on) {
+          if (s.promos.length >= PROMO_MAX) return fail(`Only ${PROMO_MAX} promotions can run at once. End one first.`);
+          if (this.price(p.id) * (1 - PROMO_OFF) <= p.cost) return fail('At this price the promotion would lose money on every sale. Raise the price first.');
+          s.promos.push(p.id);
+        }
+        this.dirtyWorld(); this.dirtyMeta(); return true;
       }
       case 'priceAll': {
         const mult = clamp(+m.mult || 1, 0.5, 2);
@@ -614,7 +627,7 @@ export class Game {
       cands.push({ kind, e, d, dx: dx / d, dz: dz / d });
     };
     for (const p of this.players.values()) if (p !== player) consider('player', p);
-    for (const c of this.customers) if (c.state !== 'leaving' && c.state !== 'arrive') consider('customer', c);
+    for (const c of this.customers) if ((c.state !== 'leaving' && c.state !== 'arrive') || (c.stealing && !c.caught && !c.escaped)) consider('customer', c);
     for (const st of this.s.staff) if (st.present) consider('staff', st);
     this.fx({ k: 'swing', id: player.id, baton });
     if (!cands.length) { this.sound('whoosh', player.x, player.z); return true; }
@@ -629,6 +642,8 @@ export class Game {
       v.carry = []; v.station = null;
       this.fx({ k: 'knock', id: v.id, dx: t.dx * (baton ? 4.5 : 3.2), dz: t.dz * (baton ? 4.5 : 3.2), by: player.name, baton });
       this.dirtyWorld();
+    } else if (t.kind === 'customer' && t.e.stealing) {
+      catchThief(this, t.e, player.name); // no penalty: this one was stealing
     } else if (t.kind === 'customer') {
       const c = t.e;
       const g = this.gridOf(c.floor);
@@ -1290,7 +1305,7 @@ export class Game {
       furniture: s.furniture.map(f => ({ id: f.id, type: f.type, x: f.x, z: f.z, rot: f.rot, floor: f.floor || 0, upg: f.upg, broken: f.broken, repair: f.repair || 0,
         open: !!f.open, techEta: f.techEta, temp: f.temp !== undefined ? Math.round(f.temp) : undefined, slots: f.slots, boxes: f.boxes })),
       boxes: s.boxes.map(b => ({ id: b.id, pid: b.pid, ftype: b.ftype, qty: b.qty, exp: b.exp, x: b.x, z: b.z, y: b.y, floor: b.floor || 0, expired: b.expired })),
-      dirt: s.dirt, prices: s.prices, saleActive: s.saleActive,
+      dirt: s.dirt, prices: s.prices, saleActive: s.saleActive, promos: s.promos || [],
     };
   }
 

@@ -7,6 +7,7 @@ import { Net } from './net.js';
 import { OnlineHost, OnlineNet, localServerSocket, onlineAvailable } from './online.js';
 import { createScene } from './scene.js';
 import { prewarmTextures } from './textures.js';
+import { initTelemetry, reportBug, telemetryAllowed, setTelemetry } from './telemetry.js';
 import { World } from './world.js';
 import { Actors, carryModel } from './actors.js';
 import { makeBaton, makeCart } from './models.js';
@@ -107,6 +108,7 @@ const ui = new UI({ G, net, onPanel: (p) => togglePanel(p) });
 canvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
   try { localStorage.setItem('st_gfx', 'low'); } catch {}
+  reportBug('The 3D context was lost (graphics memory)', `graphics: ${gfx}`);
   try { net.room && net.room.save(); } catch {}
   const box = document.createElement('div'); box.id = 'gfx-lost';
   box.textContent = 'The graphics card ran out of memory. Your store is saved. Reloading in low graphics…';
@@ -148,7 +150,7 @@ function applySettings() {
 }
 function syncSettings() {
   document.querySelectorAll('#set-gfx button').forEach(b => b.classList.toggle('sel', b.dataset.gfx === gfx));
-  $('set-auto').checked = gfxAuto; $('set-fps').checked = settings.fps;
+  $('set-auto').checked = gfxAuto; $('set-fps').checked = settings.fps; $('set-stats').checked = telemetryAllowed();
   $('set-sens').value = settings.sens; $('set-sens-v').textContent = settings.sens.toFixed(1) + '×';
   $('set-sfx').value = Math.round(settings.sfxVol * 100); $('set-sfx-v').textContent = Math.round(settings.sfxVol * 100) + '%';
   $('set-music').value = Math.round(settings.musicVol * 100); $('set-music-v').textContent = Math.round(settings.musicVol * 100) + '%';
@@ -157,7 +159,9 @@ const toggleSettings = (on) => { const el = $('settings'); const show = on === u
 $('set-gfx').onclick = (e) => { const b = e.target.closest('button'); if (b) setGfx(b.dataset.gfx, true); };
 $('set-auto').onchange = (e) => { gfxAuto = e.target.checked; saveSettings(); };
 $('set-fps').onchange = (e) => { settings.fps = e.target.checked; saveSettings(); applySettings(); };
-$('set-sens').oninput = (e) => { settings.sens = +e.target.value; saveSettings(); applySettings(); syncSettings(); };
+$('set-stats').onchange = (e) => setTelemetry(e.target.checked);
+$('set-sens').oninput = (e) => { settings.sens = +e.target.value; saveSettings(); applySettings(); syncSettings();
+initTelemetry(() => ({ inStore: !!(G.code && G.started), where: G.started && G.code ? (net.online ? 'in a friend\'s store' : 'in own store') : G.code ? 'lobby' : 'menu' })); };
 $('set-sfx').oninput = (e) => { initAudio(); settings.sfxVol = e.target.value / 100; saveSettings(); applySettings(); syncSettings(); };
 $('set-sfx').onchange = () => play('click');
 $('set-music').oninput = (e) => { initAudio(); settings.musicVol = e.target.value / 100; saveSettings(); applySettings(); syncSettings(); };
@@ -219,7 +223,11 @@ function joinOnline(code) {
 if (onlineJoin) setTimeout(async () => {
   loading(true, `Connecting to store ${onlineJoin.code}…`);
   net.onStage = (text) => loading(true, text); // each step of the connection, so a slow one doesn't look stuck
-  try { await net.connect(); } catch (e) { loading(true, `${e.message || 'Could not connect.'} Returning to the menu…`); setTimeout(() => location.reload(), 6000); return; }
+  try { await net.connect(); } catch (e) {
+    // a wrong code is the player's typo, not a fault; anything else is worth knowing about
+    if (!/No store with code/.test(e.message || '')) reportBug('Joining a friend failed: ' + (e.message || 'unknown'), 'online join');
+    loading(true, `${e.message || 'Could not connect.'} Returning to the menu…`); setTimeout(() => location.reload(), 6000); return;
+  }
   loading(false); initAudio();
   net.send({ t: 'join', code: onlineJoin.code, name: prefs.name || 'Player', color: prefs.color });
 }, 0);

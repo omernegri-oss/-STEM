@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>סופרמרקט · סטטיסטיקות</title>
+<style>
+  :root { --bg: #0e1013; --panel: #15181c; --raise: #1d2126; --line: #2c3238; --ink: #e8eae6; --muted: #8d949a; --good: #46b97a; --bad: #e0574d; --warn: #e3a33b; --brand: #2f8a5b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 "Segoe UI", "Heebo", Arial, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 17px; margin: 28px 0 10px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .tile .lbl { color: var(--muted); font-size: 13px; }
+  .tile .num { font-size: 38px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .tile .sub { color: var(--muted); font-size: 12px; min-height: 18px; }
+  .tile.live { border-color: rgba(70,185,122,.5); grid-column: span 2; }
+  .tile.live .num { color: var(--good); font-size: 56px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--good); margin-inline-start: 8px; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .chart { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 12px 8px; }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 130px; direction: ltr; }
+  .bars div { flex: 1; background: var(--brand); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+  .bars div.today { background: var(--good); }
+  .bars div:hover::after { content: attr(data-t); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #000; color: #fff; font-size: 12px; padding: 3px 7px; border-radius: 5px; white-space: nowrap; z-index: 2; }
+  .axis { display: flex; justify-content: space-between; direction: ltr; color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .bug { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .bug.new { border-color: rgba(224,87,77,.6); }
+  .bug.fixed { opacity: .55; }
+  .bug .msg { direction: ltr; text-align: left; font: 600 14px ui-monospace, Consolas, monospace; word-break: break-word; }
+  .bug .meta { color: var(--muted); font-size: 12px; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .bug pre { direction: ltr; text-align: left; background: #0a0c0e; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 12px; overflow: auto; max-height: 220px; margin: 8px 0 0; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; background: var(--raise); border: 1px solid var(--line); }
+  .chip.bad { color: #f2a29b; border-color: rgba(224,87,77,.5); }
+  .chip.ok { color: #9be7b4; border-color: rgba(70,185,122,.5); }
+  button { background: var(--raise); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--brand); }
+  .state { padding: 10px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; }
+  .state.bad { border-color: rgba(224,87,77,.6); color: #f2a29b; }
+  .state.ok { border-color: rgba(70,185,122,.5); }
+  #gate { max-width: 420px; margin: 18vh auto; text-align: center; }
+  #gate input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--raise); color: var(--ink); font: inherit; direction: ltr; text-align: center; margin: 12px 0; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  @media (max-width: 520px) { .tile.live { grid-column: span 1; } }
+</style>
+</head>
+<body>
+<main>
+  <div id="gate" hidden>
+    <h1>סטטיסטיקות המשחק</h1>
+    <p class="muted">העמוד הזה פרטי. הדבק את המפתח הסודי כדי להיכנס.</p>
+    <input id="key" type="password" placeholder="secret key" autocomplete="off" />
+    <button id="enter">כניסה</button>
+    <p id="gate-msg" class="muted"></p>
+  </div>
+  <div id="app" hidden>
+    <header>
+      <h1>סופרמרקט · סטטיסטיקות</h1>
+      <div class="muted"><span id="updated">טוען…</span> · <button id="refresh">רענון</button></div>
+    </header>
+    <div id="health" class="state">בודק…</div>
+    <h2>שחקנים</h2>
+    <div class="grid">
+      <div class="tile live"><div class="lbl">מחוברים עכשיו <span class="dot"></span></div><div class="num" id="n-online">–</div><div class="sub" id="s-online"></div></div>
+      <div class="tile"><div class="lbl">היום</div><div class="num" id="n-today">–</div><div class="sub" id="s-today"></div></div>
+      <div class="tile"><div class="lbl">השבוע (7 ימים)</div><div class="num" id="n-week">–</div><div class="sub"></div></div>
+      <div class="tile"><div class="lbl">החודש (30 יום)</div><div class="num" id="n-month">–</div><div class="sub"></div></div>
+      <div class="tile"><div class="lbl">מאז ומתמיד</div><div class="num" id="n-all">–</div><div class="sub" id="s-all"></div></div>
+    </div>
+    <h2>שחקנים בכל יום (30 הימים האחרונים)</h2>
+    <div class="chart"><div class="bars" id="bars"></div><div class="axis"><span id="ax0"></span><span id="ax1"></span></div></div>
+    <h2>באגים ותקלות <span id="bug-count" class="chip"></span></h2>
+    <p class="muted">שגיאות שקרו אצל שחקנים נשלחות לכאן אוטומטית. "טופל" מסתיר תקלה עד שהיא קורית שוב.</p>
+    <div id="bugs"></div>
+    <p class="muted" style="margin-top:28px">הספירה אנונימית: כל דפדפן או התקנה מקבלים מזהה אקראי. לא נשמרים שמות, כתובות IP או מידע אישי. שחקן יכול לכבות את השליחה במסך ההגדרות של המשחק.</p>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let key = (location.hash.match(/key=([^&]+)/) || [])[1] || '';
+try { if (key) localStorage.setItem('stats_key', key); else key = localStorage.getItem('stats_key') || ''; } catch {}
+const heDate = (d) => { const [y, m, dd] = d.split('-'); return `${+dd}.${+m}`; };
+function gate(msg) { $('app').hidden = true; $('gate').hidden = false; $('gate-msg').textContent = msg || ''; }
+$('enter').onclick = () => { key = $('key').value.trim(); try { localStorage.setItem('stats_key', key); } catch {} load(true); };
+$('key').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('enter').click(); });
+$('refresh').onclick = () => load(true);
+async function call(extra = '') {
+  const r = await fetch(`/api/t?key=${encodeURIComponent(key)}${extra}`, { cache: 'no-store' });
+  if (r.status === 401) throw new Error('key');
+  if (!r.ok) throw new Error('server ' + r.status);
+  return r.json();
+}
+async function load(fresh) {
+  if (!key) return gate();
+  let d;
+  try { d = await call(fresh ? '&fresh=1' : ''); }
+  catch (e) { if (e.message === 'key') return gate('המפתח לא נכון.'); $('health').className = 'state bad'; $('health').textContent = 'לא מצליח להגיע לשרת הסטטיסטיקות (' + e.message + '). מנסה שוב…'; return; }
+  $('gate').hidden = true; $('app').hidden = false;
+  render(d);
+}
+function render(d) {
+  $('n-online').textContent = d.online.total;
+  $('s-online').textContent = d.online.total ? `באתר: ${d.online.web} · באפליקציה: ${d.online.app} · בתוך חנות: ${d.online.inStore}` : 'אף אחד לא משחק כרגע';
+  $('n-today').textContent = d.today; $('s-today').textContent = d.newToday ? `מתוכם ${d.newToday} חדשים` : '';
+  $('n-week').textContent = d.week; $('n-month').textContent = d.month; $('n-all').textContent = d.all;
+  $('s-all').textContent = d.all ? `אתר: ${d.platforms.web} · אפליקציה: ${d.platforms.app}` : '';
+  const max = Math.max(1, ...d.daily.map(x => x.n));
+  $('bars').innerHTML = d.daily.map(x => `<div class="${x.day === d.today ? 'today' : ''}" style="height:${Math.max(2, x.n / max * 100)}%" data-t="${heDate(x.day)}: ${x.n}"></div>`).join('');
+  $('ax0').textContent = heDate(d.daily[0].day); $('ax1').textContent = 'היום';
+  const open = d.bugs.filter(b => !b.fixed), fresh = open.filter(b => b.last === d.today);
+  $('bug-count').textContent = open.length ? `${open.length} פתוחים` : 'אין תקלות פתוחות'; $('bug-count').className = 'chip ' + (open.length ? 'bad' : 'ok');
+  $('bugs').innerHTML = d.bugs.length ? d.bugs.map(b => `<div class="bug ${b.fixed ? 'fixed' : b.last === d.today ? 'new' : ''}">
+      <div class="msg">${esc(b.m)}</div>
+      <div class="meta"><span>${b.n} פעמים</span><span>ראשונה: ${heDate(b.first)}</span><span>אחרונה: ${heDate(b.last)}</span><span class="chip">${b.p === 'app' ? 'אפליקציה' : 'אתר'}${b.v ? ' · ' + esc(b.v) : ''}</span>${b.w ? `<span class="chip">${esc(b.w)}</span>` : ''}
+        ${b.fixed ? '<span class="chip ok">טופל</span>' : `<button data-fix="${esc(b.h)}">סמן כטופל</button>`}</div>
+      ${b.st || b.ua ? `<details><summary>פרטים טכניים</summary><pre>${esc(b.st || '')}${b.ua ? '\n\n' + esc(b.ua) : ''}</pre></details>` : ''}
+    </div>`).join('') : '<div class="state ok">לא התקבלו דיווחי שגיאה. </div>';
+  const ago = d.lastHeartbeat ? Math.round((d.now - d.lastHeartbeat) / 1000) : null;
+  $('health').className = 'state ' + (fresh.length ? 'bad' : 'ok');
+  $('health').textContent = (fresh.length ? `שים לב: ${fresh.length} תקלות קרו היום. ` : 'הכול תקין: אין תקלות חדשות היום. ')
+    + (ago === null ? 'עוד לא התקבל אות מהמשחק מאז שהשרת התעורר.' : `אות אחרון מהמשחק לפני ${ago < 90 ? ago + ' שניות' : Math.round(ago / 60) + ' דקות'}.`);
+  $('updated').textContent = 'עודכן ' + new Date(d.now).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+$('bugs').onclick = async (e) => { const b = e.target.closest('[data-fix]'); if (!b) return; b.disabled = true; try { render(await call('&fixed=' + encodeURIComponent(b.dataset.fix))); } catch {} };
+load(true);
+setInterval(() => { if (!document.hidden) load(false); }, 15000);
+</script>
+</body>
+</html>

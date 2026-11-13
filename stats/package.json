@@ -1,0 +1,8 @@
+{
+  "name": "supermarket-stats",
+  "private": true,
+  "type": "module",
+  "description": "Player counts and bug reports for the Supermarket game (Vercel function + private dashboard).",
+  "engines": { "node": "22.x" },
+  "dependencies": { "@vercel/blob": "^1.1.1" }
+}

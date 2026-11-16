@@ -160,8 +160,9 @@ $('set-gfx').onclick = (e) => { const b = e.target.closest('button'); if (b) set
 $('set-auto').onchange = (e) => { gfxAuto = e.target.checked; saveSettings(); };
 $('set-fps').onchange = (e) => { settings.fps = e.target.checked; saveSettings(); applySettings(); };
 $('set-stats').onchange = (e) => setTelemetry(e.target.checked);
-$('set-sens').oninput = (e) => { settings.sens = +e.target.value; saveSettings(); applySettings(); syncSettings();
-initTelemetry(() => ({ inStore: !!(G.code && G.started), where: G.started && G.code ? (net.online ? 'in a friend\'s store' : 'in own store') : G.code ? 'lobby' : 'menu' })); };
+$('set-sens').oninput = (e) => { settings.sens = +e.target.value; saveSettings(); applySettings(); syncSettings(); };
+// anonymous usage statistics and error reports (Settings can turn them off)
+initTelemetry(() => ({ inStore: !!(G.code && G.started), where: G.started && G.code ? (net.online ? 'in a friend\'s store' : 'in own store') : G.code ? 'lobby' : 'menu' }));
 $('set-sfx').oninput = (e) => { initAudio(); settings.sfxVol = e.target.value / 100; saveSettings(); applySettings(); syncSettings(); };
 $('set-sfx').onchange = () => play('click');
 $('set-music').oninput = (e) => { initAudio(); settings.musicVol = e.target.value / 100; saveSettings(); applySettings(); syncSettings(); };

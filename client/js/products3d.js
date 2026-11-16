@@ -119,7 +119,6 @@ export const PRODUCT_GEOS = build();
 // instead of an emoji. Drawn once per product on a 256x256 canvas that wraps the package.
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 function shade(c, f) { const col = new THREE.Color(c); col.multiplyScalar(f); return '#' + col.getHexString(); }
-function lum(c) { const col = new THREE.Color(c); return 0.299 * col.r + 0.587 * col.g + 0.114 * col.b; }
 function rnd(seed) { let s = seed >>> 0 || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 const seedOf = (id) => [...id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7);
 

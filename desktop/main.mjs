@@ -1,6 +1,6 @@
 // Desktop version: an Electron window around the game. The game server runs inside this process on 127.0.0.1,
 // so the host's store lives here. Friends join over the internet with the store code (WebRTC, see client/js/online.js).
-import { app, BrowserWindow, ipcMain, shell, Menu, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, Menu, dialog, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -68,8 +68,9 @@ function restartFresh() {
       { detached: true, stdio: 'ignore', windowsHide: true }).unref();
   } else {
     const target = process.platform === 'darwin' ? exe.replace(/\/Contents\/MacOS\/.*$/, '') : exe;
-    const again = process.platform === 'darwin' ? `open "${target}"` : `"${target}" &`;
-    spawn('sh', ['-c', `sleep 1; pkill -x "${name}"; sleep 1; ${again}`], { detached: true, stdio: 'ignore' }).unref();
+    // the paths are passed as arguments ($1, $2), never pasted into the command text (a folder name can hold any character)
+    const again = process.platform === 'darwin' ? 'open "$2"' : '"$2" &';
+    spawn('sh', ['-c', `sleep 1; pkill -x "$1"; sleep 1; ${again}`, 'sh', name, target], { detached: true, stdio: 'ignore' }).unref();
   }
 }
 step('single copy ok');
@@ -86,13 +87,19 @@ try {
 
 // ---------------------------------------------------------------------------------- page bridge
 let win = null;
-ipcMain.on('app-info', (e) => { e.returnValue = { port, version: app.getVersion() }; });
-ipcMain.on('app-quit', () => app.quit());
-ipcMain.on('app-fullscreen', () => { if (win) win.setFullScreen(!win.isFullScreen()); });
+// only the game's own page may use the bridge
+const fromGame = (e) => !!e.senderFrame && e.senderFrame.url.startsWith(`http://127.0.0.1:${port}/`);
+ipcMain.on('app-info', (e) => { e.returnValue = fromGame(e) ? { port, version: app.getVersion() } : null; });
+ipcMain.on('app-quit', (e) => { if (fromGame(e)) app.quit(); });
+ipcMain.on('app-fullscreen', (e) => { if (fromGame(e) && win) win.setFullScreen(!win.isFullScreen()); });
 
 function createWindow() {
   if (!port) return;
   Menu.setApplicationMenu(null);
+  // the game needs the mouse (first-person view), fullscreen and copying the store code: nothing else is granted
+  // (no camera, microphone, location, notifications...)
+  const GRANTED = new Set(['pointerLock', 'fullscreen', 'keyboardLock', 'clipboard-sanitized-write']);
+  session.defaultSession.setPermissionRequestHandler((wc, permission, done) => done(GRANTED.has(permission)));
   const windowed = process.argv.includes('--windowed');
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1024, minHeight: 640, show: true, fullscreen: !windowed, backgroundColor: '#10161d', title: 'Supermarket',
@@ -100,8 +107,9 @@ function createWindow() {
   });
   // F11 toggles fullscreen; links to other sites open in the normal browser
   win.webContents.on('before-input-event', (e, input) => { if (input.type === 'keyDown' && input.key === 'F11') { win.setFullScreen(!win.isFullScreen()); e.preventDefault(); } });
-  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
-  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(`http://127.0.0.1:${port}/`)) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
+  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.on('will-attach-webview', (e) => e.preventDefault());
+  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(`http://127.0.0.1:${port}/`)) { e.preventDefault(); if (/^https?:\/\//.test(url)) shell.openExternal(url); } });
   win.webContents.on('render-process-gone', (e, d) => { logError('Page crashed', d.reason); if (d.reason !== 'clean-exit' && win) win.reload(); });
   win.webContents.on('did-fail-load', (e, code, desc) => logError('Page failed to load', `${code} ${desc}`));
   win.webContents.on('did-finish-load', () => step('page loaded'));

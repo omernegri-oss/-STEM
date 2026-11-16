@@ -1,8 +1,8 @@
 // Characters: players, customers, employees, pigeons. Interpolates server snapshots and animates them.
 import * as THREE from 'three';
-import { PRODUCT_MAP, ROLES, PLAYER_ROLES } from '/shared/data.js';
+import { PRODUCT_MAP, PLAYER_ROLES } from '/shared/data.js';
 import { heightAt } from '/shared/grid.js';
-import { disposeOwned, makeCharacter, animateCharacter, lookFromSeed, makeSprite, setSpriteText, makeBasket, makeCart, makeBox, makeFBox, makeHandTruck, makePigeon, UNIT_GEOS, mat, B, C, productMaterial, S as Sph, makeBaton } from './models.js';
+import { disposeOwned, makeCharacter, animateCharacter, lookFromSeed, makeSprite, setSpriteText, makeBasket, makeCart, makeBox, makeFBox, makeHandTruck, makePigeon, UNIT_GEOS, mat, B, C, productMaterial, makeBaton } from './models.js';
 
 // visual for one carried item code: 'milk' | 'f:shelf' | 'raw:ribeye' | 'pack:ribeye'
 export function carryModel(code) {

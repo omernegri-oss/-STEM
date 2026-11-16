@@ -1,7 +1,7 @@
 // Local player movement (client-predicted), third-person camera, input, and context-sensitive interaction.
 import * as THREE from 'three';
 import { FURNITURE, PRODUCT_MAP, CATEGORIES, stairInfo, slotCap, fitsFixture, cartBay, CART_BOXES } from '/shared/data.js';
-import { resolveCollision, dims, center, heightAt, deptSpots } from '/shared/grid.js';
+import { resolveCollision, dims, center, deptSpots } from '/shared/grid.js';
 
 // The key by its place on the keyboard, so WASD and every shortcut work with any layout (Hebrew, Russian,
 // French AZERTY...): on a Hebrew keyboard the W key types a Hebrew letter, but its code is still 'KeyW'.

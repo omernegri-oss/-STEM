@@ -1,7 +1,7 @@
 // HUD, the store computer, info panels and overlays.
 import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, CATEGORIES, ROLES, SHIFTS, TEAM_UPGRADES, ACHIEVEMENTS,
-  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap, HIRE_FEE_DAYS, PROMO_OFF, PROMO_MAX,
+  LEVEL_XP, MAX_LEVEL, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap, HIRE_FEE_DAYS, PROMO_OFF, PROMO_MAX,
 } from '/shared/data.js';
 import { play, audio, setSfx, setMusic } from './audio.js';
 

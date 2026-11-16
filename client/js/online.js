@@ -13,6 +13,8 @@ import { Mqtt, relayLink, relayUrls, TOPIC, BYE } from './relay.js';
 
 const PREFIX = 'supermarket-stem-'; // peer id = PREFIX + store code
 const CHUNK = 16000;                // messages are split above this size and joined on arrival
+const MAX_PARTS = 400;              // the largest message accepted in pieces (about 6 MB: far above a full store)
+const MAX_FRIEND_MESSAGE = 64 * 1024; // what a friend may send the host in one message (same as the game server)
 const BEAT = 3000, DEAD = 12000;    // both sides send a heartbeat; silence this long means the other computer is gone
 const HB = '{"t":"hb"}';
 // STUN finds each computer's public address; TURN relays when there is no direct route
@@ -49,8 +51,13 @@ class Joiner {
     if (typeof data !== 'string') return null;
     if (data[0] !== '\u0001') return data;
     const a = data.indexOf('|'), b = data.indexOf('|', a + 1), c = data.indexOf('|', b + 1);
+    if (a < 0 || b < 0 || c < 0) return null;
     const id = data.slice(1, a), i = +data.slice(a + 1, b), n = +data.slice(b + 1, c);
-    let p = this.parts.get(id); if (!p) { p = new Array(n); p.got = 0; this.parts.set(id, p); }
+    // a message in pieces: a sane number of pieces, each in range, and only a few unfinished messages at a time
+    if (!Number.isInteger(n) || n < 1 || n > MAX_PARTS || !Number.isInteger(i) || i < 0 || i >= n || data.length > CHUNK + 64) return null;
+    let p = this.parts.get(id);
+    if (!p) { if (this.parts.size >= 4) this.parts.delete(this.parts.keys().next().value); p = new Array(n); p.got = 0; this.parts.set(id, p); }
+    if (p.length !== n) return null;
     if (p[i] === undefined) { p[i] = data.slice(c + 1); p.got++; }
     if (p.got < n) return null;
     this.parts.delete(id);
@@ -155,8 +162,10 @@ export class OnlineHost {
     const drop = () => { clearInterval(beat); if (local) { const l = local; local = null; l.close(); } if (joined) { joined = false; this.friends--; this.sync(); } };
     conn.on('data', (data) => {
       heard = Date.now();
-      const str = joiner.push(data); if (str == null || str === HB) return;
+      if (typeof data !== 'string' || data.length > MAX_FRIEND_MESSAGE) return;
+      const str = joiner.push(data); if (str == null || str === HB || str.length > MAX_FRIEND_MESSAGE) return;
       let m; try { m = JSON.parse(str); } catch { return; }
+      if (!m || typeof m !== 'object' || typeof m.t !== 'string') return;
       if (!joined) {
         // a friend may only join this store: no other commands before that
         if (m.t !== 'join' || String(m.code || '').toUpperCase() !== this.code) return;
@@ -180,7 +189,7 @@ export class OnlineHost {
 
 // the friend's side: same interface as Net (connect, on, emit, send, act)
 export class OnlineNet {
-  constructor(code) { this.code = code; this.handlers = {}; this.open = false; this.online = true; this.joiner = new Joiner(); this.onStage = () => {}; }
+  constructor(code) { this.code = code; this.handlers = Object.create(null); this.open = false; this.online = true; this.joiner = new Joiner(); this.onStage = () => {}; }
   async connect() {
     if (!onlineAvailable()) throw new Error('Online play is not available here. Open the game website or the downloaded game.');
     let notFound = false;
@@ -202,7 +211,7 @@ export class OnlineNet {
     const link = this.link;
     const lost = () => { if (!this.open) return; this.open = false; clearInterval(this.beat); this.shutdown(); this.emit('close', {}); };
     this.beat = setInterval(() => { if (Date.now() - heard > DEAD) return lost(); try { link.send(HB); } catch {} }, BEAT);
-    link.on('data', (data) => { heard = Date.now(); const s = this.joiner.push(data); if (s == null || s === HB) return; let m; try { m = JSON.parse(s); } catch { return; } this.emit(m.t, m); });
+    link.on('data', (data) => { heard = Date.now(); const s = this.joiner.push(data); if (s == null || s === HB) return; let m; try { m = JSON.parse(s); } catch { return; } if (m && typeof m.t === 'string') this.emit(m.t, m); });
     link.on('close', lost);
   }
   // route 1: WebRTC through PeerJS

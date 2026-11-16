@@ -1,6 +1,6 @@
 // Renderer, camera, lighting with a day/night cycle, and the street environment around the store.
 import * as THREE from 'three';
-import { B, C, S, mat, makeTree, makeStreetLamp, rng, textTexture, mergeStatic } from './models.js';
+import { B, C, S, makeTree, makeStreetLamp, rng, textTexture, mergeStatic } from './models.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -221,27 +221,4 @@ function makeCar(color, x, z) {
   return g;
 }
 
-export function tileTexture(a, b, px = 64, n = 2, opts = {}) {
-  const c = document.createElement('canvas'); c.width = c.height = px * n;
-  const g = c.getContext('2d');
-  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-    g.fillStyle = opts.checker ? ((i + j) % 2 ? b : a) : a;
-    g.fillRect(i * px, j * px, px, px);
-  }
-  if (opts.plank) {
-    g.fillStyle = a; g.fillRect(0, 0, px * n, px * n);
-    for (let j = 0; j < n * 4; j++) {
-      g.fillStyle = j % 2 ? a : b; g.fillRect(0, j * px / 4, px * n, px / 4);
-      g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, j * px / 4, px * n, 2);
-      g.fillRect(((j * 37) % n) * px + px / 2, j * px / 4, 2, px / 4);
-    }
-  } else if (opts.marble) {
-    g.strokeStyle = 'rgba(120,113,108,0.18)'; g.lineWidth = 2;
-    for (let k = 0; k < 9; k++) { g.beginPath(); g.moveTo(Math.random() * px * n, 0); g.bezierCurveTo(Math.random() * px * n, px, Math.random() * px * n, px * 1.2, Math.random() * px * n, px * n); g.stroke(); }
-  }
-  g.strokeStyle = opts.grout || 'rgba(100,116,139,0.25)'; g.lineWidth = 2;
-  if (!opts.plank) for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * px, 0); g.lineTo(i * px, px * n); g.stroke(); g.beginPath(); g.moveTo(0, i * px); g.lineTo(px * n, i * px); g.stroke(); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-  return t;
-}
 export { B, C, S };

@@ -12,7 +12,7 @@ const PAY_GEO = { note: new THREE.BoxGeometry(0.155, 0.002, 0.066), card: new TH
 const PAY_MAT = { note: new THREE.MeshStandardMaterial({ color: 0x9fc79a, roughness: 0.8 }), card: new THREE.MeshStandardMaterial({ color: 0x1d3f8f, roughness: 0.35, metalness: 0.2 }), chip: new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.3, metalness: 0.8 }) };
 
 // store look: neutral painted block walls, a dark green brand band, aluminium storefront
-const BRAND = 0x1f5135, BRAND_CSS = '#1f5135';
+const BRAND_CSS = '#1f5135';
 
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(1, 1, 1), tmpC = new THREE.Color();
 const EXPIRED = new THREE.Color(0x6b5b3e);

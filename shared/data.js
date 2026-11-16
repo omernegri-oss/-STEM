@@ -308,33 +308,6 @@ export const ACHIEVEMENTS = [
   { id: 'all_depts',    name: 'Full Service',      icon: '🏪', desc: 'Have all 6 departments running.' },
 ];
 
-// The guided goal chain. Each has a check computed on the server and a cash reward.
-export const GOALS = [
-  { id: 'name',        text: 'Agree on a name for your supermarket', reward: 0 },
-  { id: 'shelf',       text: 'Buy and place a Grocery Shelf (Build: B)', reward: 50 },
-  { id: 'checkout',    text: 'Place a Checkout Counter', reward: 50 },
-  { id: 'order',       text: 'Order products from a supplier (Orders: O)', reward: 50 },
-  { id: 'stock',       text: 'Carry a delivery box inside and stock a shelf (E)', reward: 75 },
-  { id: 'fridge',      text: 'Place a Dairy Fridge and stock it with milk', reward: 100 },
-  { id: 'open',        text: 'Open the store for business!', reward: 50 },
-  { id: 'sale',        text: 'Check out a customer at the register', reward: 100 },
-  { id: 'hire',        text: 'Hire your first employee (Staff: H)', reward: 150 },
-  { id: 'day1',        text: 'Finish your first day', reward: 200 },
-  { id: 'customers30', text: 'Serve 30 customers in total', reward: 200 },
-  { id: 'decor',       text: 'Raise store appeal to 10 with decorations', reward: 200 },
-  { id: 'produce',     text: 'Open a produce section (Level 2)', reward: 300 },
-  { id: 'expand1',     text: 'Expand your supermarket', reward: 400 },
-  { id: 'freezer',     text: 'Run a frozen food section (Level 3)', reward: 400 },
-  { id: 'butcher',     text: 'Serve a customer at the Butcher Counter (Level 4)', reward: 600 },
-  { id: 'deli',        text: 'Serve a customer at the Deli Counter (Level 5)', reward: 700 },
-  { id: 'rev10k',      text: 'Reach $10,000 total revenue', reward: 1000 },
-  { id: 'staff4',      text: 'Have 4 employees on the payroll', reward: 800 },
-  { id: 'rep4',        text: 'Reach a 4★ reputation', reward: 1200 },
-  { id: 'day3k',       text: 'Earn $3,000 in a single day', reward: 1500 },
-  { id: 'level8',      text: 'Reach store level 8', reward: 2500 },
-  { id: 'rev100k',     text: 'Reach $100,000 total revenue — top of the market!', reward: 5000 },
-];
-
 export const FIRST_NAMES = ['Ava', 'Ben', 'Chloe', 'Dan', 'Ella', 'Finn', 'Gina', 'Hugo', 'Ivy', 'Jack', 'Kira', 'Leo', 'Maya', 'Noah', 'Olive', 'Pablo', 'Quinn', 'Rosa', 'Sam', 'Tara', 'Umar', 'Vera', 'Wes', 'Xena', 'Yusuf', 'Zoe', 'Amir', 'Bella', 'Carlos', 'Dina', 'Eli', 'Farah', 'Gus', 'Hana', 'Igor', 'Jade', 'Kofi', 'Lena', 'Milo', 'Nina', 'Omar', 'Priya', 'Rami', 'Sofia', 'Theo', 'Uma', 'Viktor', 'Yara'];
 export const LAST_NAMES = ['Baker', 'Cohen', 'Diaz', 'Evans', 'Fischer', 'Garcia', 'Hughes', 'Ito', 'Jensen', 'Kim', 'Levi', 'Moreau', 'Nakamura', 'Okafor', 'Patel', 'Rossi', 'Silva', 'Tanaka', 'Usman', 'Varga', 'Weber', 'Young', 'Zhang', 'Novak', 'Haddad', 'Lindqvist', 'Mendes', 'Peretz'];
 
@@ -407,7 +380,6 @@ export const CART_BOXES = 4; // boxes a player can move in a shopping cart
 // promotions: a product on promotion sells 20% cheaper and shoppers pick it far more often; a few at a time
 export const PROMO_OFF = 0.2, PROMO_MAX = 4;
 export function shelfPrice(w, pid) { const p = PRODUCT_MAP[pid]; return Math.round((w.prices[pid] ?? p.price) * (w.saleActive ? 0.85 : 1) * ((w.promos || []).includes(pid) ? 1 - PROMO_OFF : 1) * 100) / 100; }
-export function productsForCat(cat) { return PRODUCTS.filter(p => p.cat === cat); }
 export function fmtMoney(v) {
   const s = Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return (v < 0 ? '-$' : '$') + s;

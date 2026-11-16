@@ -2,7 +2,6 @@
 // exception or invalid state (NaN money/positions, stuck customers, runaway entity counts).
 import assert from 'node:assert/strict';
 import { Game } from '../server/game.js';
-import { spawnCustomer } from '../server/customers.js';
 import { FURNITURE, PRODUCTS } from '../shared/data.js';
 
 const DAYS = +process.env.DAYS || 20;

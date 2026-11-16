@@ -18,7 +18,7 @@ const persistence = {
 };
 
 export class LocalNet {
-  constructor() { this.handlers = {}; this.open = false; this.room = null; this.player = null; this.local = true; }
+  constructor() { this.handlers = Object.create(null); this.open = false; this.room = null; this.player = null; this.local = true; }
   connect() {
     this.open = true;
     const dt = 1 / TICK_RATE; let last = performance.now(), acc = 0;

@@ -83,16 +83,20 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let key = (location.hash.match(/key=([^&]+)/) || [])[1] || '';
+let key = '';
+try { key = decodeURIComponent((location.hash.match(/key=([^&]+)/) || [])[1] || ''); } catch {}
+// the key leaves the address bar at once (so it is not left in the history or shared with a copied link)
+if (key) history.replaceState(null, '', location.pathname);
 try { if (key) localStorage.setItem('stats_key', key); else key = localStorage.getItem('stats_key') || ''; } catch {}
-const heDate = (d) => { const [y, m, dd] = d.split('-'); return `${+dd}.${+m}`; };
-function gate(msg) { $('app').hidden = true; $('gate').hidden = false; $('gate-msg').textContent = msg || ''; }
+const heDate = (d) => { const [, m, dd] = String(d || '').split('-'); return `${+dd}.${+m}`; };
+function gate(msg) { if (msg) { key = ''; try { localStorage.removeItem('stats_key'); } catch {} } $('app').hidden = true; $('gate').hidden = false; $('gate-msg').textContent = msg || ''; }
 $('enter').onclick = () => { key = $('key').value.trim(); try { localStorage.setItem('stats_key', key); } catch {} load(true); };
 $('key').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('enter').click(); });
 $('refresh').onclick = () => load(true);
 async function call(extra = '') {
-  const r = await fetch(`/api/t?key=${encodeURIComponent(key)}${extra}`, { cache: 'no-store' });
+  const r = await fetch(`/api/t?d=1${extra}`, { cache: 'no-store', headers: { 'x-key': key } });
   if (r.status === 401) throw new Error('key');
+  if (r.status === 503) throw new Error('nokey');
   if (!r.ok) throw new Error('server ' + r.status);
   return r.json();
 }
@@ -100,7 +104,7 @@ async function load(fresh) {
   if (!key) return gate();
   let d;
   try { d = await call(fresh ? '&fresh=1' : ''); }
-  catch (e) { if (e.message === 'key') return gate('המפתח לא נכון.'); $('health').className = 'state bad'; $('health').textContent = 'לא מצליח להגיע לשרת הסטטיסטיקות (' + e.message + '). מנסה שוב…'; return; }
+  catch (e) { if (e.message === 'key') return gate('המפתח לא נכון.'); if (e.message === 'nokey') return gate('לא הוגדר מפתח בשרת: יש להגדיר את משתנה הסביבה ADMIN_KEY בפרויקט ב-Vercel.'); $('health').className = 'state bad'; $('health').textContent = 'לא מצליח להגיע לשרת הסטטיסטיקות (' + e.message + '). מנסה שוב…'; return; }
   $('gate').hidden = true; $('app').hidden = false;
   render(d);
 }
@@ -110,14 +114,14 @@ function render(d) {
   $('n-today').textContent = d.today; $('s-today').textContent = d.newToday ? `מתוכם ${d.newToday} חדשים` : '';
   $('n-week').textContent = d.week; $('n-month').textContent = d.month; $('n-all').textContent = d.all;
   $('s-all').textContent = d.all ? `אתר: ${d.platforms.web} · אפליקציה: ${d.platforms.app}` : '';
-  const max = Math.max(1, ...d.daily.map(x => x.n));
-  $('bars').innerHTML = d.daily.map(x => `<div class="${x.day === d.today ? 'today' : ''}" style="height:${Math.max(2, x.n / max * 100)}%" data-t="${heDate(x.day)}: ${x.n}"></div>`).join('');
+  const max = Math.max(1, ...d.daily.map(x => +x.n || 0));
+  $('bars').innerHTML = d.daily.map(x => `<div class="${x.day === d.today ? 'today' : ''}" style="height:${Math.max(2, (+x.n || 0) / max * 100)}%" data-t="${esc(heDate(x.day))}: ${+x.n || 0}"></div>`).join('');
   $('ax0').textContent = heDate(d.daily[0].day); $('ax1').textContent = 'היום';
   const open = d.bugs.filter(b => !b.fixed), fresh = open.filter(b => b.last === d.today);
   $('bug-count').textContent = open.length ? `${open.length} פתוחים` : 'אין תקלות פתוחות'; $('bug-count').className = 'chip ' + (open.length ? 'bad' : 'ok');
   $('bugs').innerHTML = d.bugs.length ? d.bugs.map(b => `<div class="bug ${b.fixed ? 'fixed' : b.last === d.today ? 'new' : ''}">
       <div class="msg">${esc(b.m)}</div>
-      <div class="meta"><span>${b.n} פעמים</span><span>ראשונה: ${heDate(b.first)}</span><span>אחרונה: ${heDate(b.last)}</span><span class="chip">${b.p === 'app' ? 'אפליקציה' : 'אתר'}${b.v ? ' · ' + esc(b.v) : ''}</span>${b.w ? `<span class="chip">${esc(b.w)}</span>` : ''}
+      <div class="meta"><span>${+b.n || 0} פעמים</span><span>ראשונה: ${esc(heDate(b.first))}</span><span>אחרונה: ${esc(heDate(b.last))}</span><span class="chip">${b.p === 'app' ? 'אפליקציה' : 'אתר'}${b.v ? ' · ' + esc(b.v) : ''}</span>${b.w ? `<span class="chip">${esc(b.w)}</span>` : ''}
         ${b.fixed ? '<span class="chip ok">טופל</span>' : `<button data-fix="${esc(b.h)}">סמן כטופל</button>`}</div>
       ${b.st || b.ua ? `<details><summary>פרטים טכניים</summary><pre>${esc(b.st || '')}${b.ua ? '\n\n' + esc(b.ua) : ''}</pre></details>` : ''}
     </div>`).join('') : '<div class="state ok">לא התקבלו דיווחי שגיאה. </div>';

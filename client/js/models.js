@@ -170,7 +170,7 @@ export function makePriceTag(name, price, sale, promo = false) {
 }
 
 // ------------------------------------------------------------------ furniture
-const STEEL = 0xcbd5e1, DARK = 0x334155, WHITE = 0xf8fafc, WOOD = 0xb7834f, WOOD2 = 0x8b5a2b;
+const DARK = 0x334155, WOOD = 0xb7834f, WOOD2 = 0x8b5a2b;
 export function catColor(cat) { return new THREE.Color(CATEGORIES[cat]?.color || '#94a3b8').getHex(); }
 
 export function makeFurniture(type, f = {}) {

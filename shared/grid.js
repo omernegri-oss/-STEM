@@ -284,12 +284,6 @@ export function heightAt(W, floors, floor, x, z) {
   }
   return floor * FLOOR_H;
 }
-export function onRamp(W, floors, x, z) {
-  if (floors < 2) return false;
-  const s = stairInfo(W);
-  return x >= s.x && x < s.x + 2 && z >= s.z0 && z < s.z1;
-}
-
 // Route between any two points on any floor. Returns [[x, z, floor], ...] (tile centres + stair waypoints) or null.
 export function route(grids, from, to) {
   const g0 = grids[0];

@@ -1,9 +1,13 @@
 // A multiplayer room: up to 4 players sharing one supermarket. Owns the Game and the network fan-out.
 import { Game } from './game.js';
-import { MAX_PLAYERS, TICK_RATE, PLAYER_COLORS, PLAYER_ROLES } from '../shared/data.js';
+import { MAX_PLAYERS, PLAYER_COLORS, PLAYER_ROLES } from '../shared/data.js';
 
 const r2 = v => Math.round(v * 100) / 100;
 const REACTIONS = new Set(['😡', '😵', '💢']);
+// what players send is never trusted: numbers must be real numbers inside the map, names are plain short text
+const num = (v, lo, hi, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
+const cleanName = (v) => (typeof v === 'string' ? v : '').replace(/[\u0000-\u001f\u007f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, '').trim().slice(0, 16) || 'Player';
+const CHAT_PER_10S = 8;
 // carried things are sent as short codes: 'milk', 'f:shelf' (furniture box), 'raw:ribeye', 'pack:ribeye'
 const carryCode = (b) => b.ftype ? 'f:' + b.ftype : b.dept ? `${b.dept}:${b.pid}` : b.pid;
 
@@ -26,15 +30,13 @@ export class Room {
     this.game.players = this.players;
   }
 
-  get hostId() { for (const p of this.players.values()) if (p.host) return p.id; return null; }
-
   addPlayer(ws, name, color) {
     if (this.players.size >= MAX_PLAYERS) return null;
     const used = new Set([...this.players.values()].map(p => p.color));
-    if (!color || used.has(color)) color = PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[0];
+    if (!PLAYER_COLORS.includes(color) || used.has(color)) color = PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[0];
     const s = this.game.s;
     const p = {
-      id: this.nextPid++, ws, name: String(name || 'Player').slice(0, 16) || 'Player', color,
+      id: this.nextPid++, ws, name: cleanName(name), color,
       role: 'manager', x: s.doorX + 1 + (this.players.size - 1.5) * 0.8, z: s.d - 2, rot: Math.PI, anim: 0,
       carry: [], station: null, host: this.players.size === 0, emote: '', emoteT: 0, ready: false, floor: 0, stunUntil: 0,
     };
@@ -99,8 +101,9 @@ export class Room {
     const g = this.game;
     switch (msg.t) {
       case 'p': {
-        if (typeof msg.x !== 'number' || typeof msg.z !== 'number') return;
-        p.x = msg.x; p.z = msg.z; p.rot = +msg.rot || 0; p.anim = msg.anim | 0;
+        if (!Number.isFinite(msg.x) || !Number.isFinite(msg.z)) return;
+        const s = g.s;
+        p.x = num(msg.x, -30, s.w + 30); p.z = num(msg.z, -30, s.d + 30); p.rot = num(msg.rot, -1000, 1000); p.anim = msg.anim ? 1 : 0;
         p.floor = Math.max(0, Math.min((g.s.floors || 1) - 1, msg.floor | 0));
         if (p.station) {
           const f = g.fixture(p.station);
@@ -110,8 +113,8 @@ export class Room {
       }
       case 'lobby': {
         if (msg.color && PLAYER_COLORS.includes(msg.color) && ![...this.players.values()].some(o => o !== p && o.color === msg.color)) p.color = msg.color;
-        if (msg.role && PLAYER_ROLES[msg.role]) p.role = msg.role;
-        if (msg.name) p.name = String(msg.name).slice(0, 16);
+        if (typeof msg.role === 'string' && Object.hasOwn(PLAYER_ROLES, msg.role)) p.role = msg.role;
+        if (msg.name) p.name = cleanName(msg.name);
         this.sendLobby(); this.sendPlayers();
         return;
       }
@@ -128,17 +131,23 @@ export class Room {
         return;
       }
       case 'chat': {
-        const text = String(msg.text || '').slice(0, 140).trim();
+        const text = (typeof msg.text === 'string' ? msg.text : '').replace(/[\u0000-\u001f\u007f\u2028-\u202e\u2066-\u2069]/g, ' ').trim().slice(0, 140);
         if (!text) return;
+        // no flooding the team chat
+        const now = Date.now(); p.chatAt = (p.chatAt || []).filter(t => now - t < 10000);
+        if (p.chatAt.length >= CHAT_PER_10S) return;
+        p.chatAt.push(now);
         this.broadcast({ t: 'chat', from: p.name, color: p.color, text });
         return;
       }
       case 'emote': {
-        p.emote = String(msg.e || '').slice(0, 4); p.emoteT = 3;
+        p.emote = typeof msg.e === 'string' && /^[a-z]{1,4}$/.test(msg.e) ? msg.e : ''; p.emoteT = 3;
         return;
       }
       case 'ping': {
-        this.broadcast({ t: 'fx', k: 'ping', x: +msg.x, z: +msg.z, color: p.color, name: p.name });
+        if (!Number.isFinite(msg.x) || !Number.isFinite(msg.z)) return;
+        const now = Date.now(); if (now - (p.pingAt || 0) < 300) return; p.pingAt = now;
+        this.broadcast({ t: 'fx', k: 'ping', x: num(msg.x, -60, g.s.w + 60), z: num(msg.z, -60, g.s.d + 60), color: p.color, name: p.name });
         return;
       }
     }

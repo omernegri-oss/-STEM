@@ -1,8 +1,7 @@
 // Supermarket – client entry point: menus, lobby, networking glue and the main loop.
 import * as THREE from 'three';
-import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, FLOOR_H, fmtMoney, shelfPrice } from '/shared/data.js';
+import { PLAYER_COLORS, PLAYER_ROLES, PRODUCT_MAP, FURNITURE, LIGHTS, FLOOR_H, fmtMoney, shelfPrice, slotCap } from '/shared/data.js';
 import { heightAt } from '/shared/grid.js';
-import { slotCap } from '/shared/data.js';
 import { Net } from './net.js';
 import { OnlineHost, OnlineNet, localServerSocket, onlineAvailable } from './online.js';
 import { createScene } from './scene.js';
@@ -293,8 +292,8 @@ $('l-roles').onclick = (e) => { const b = e.target.closest('button'); if (!b) re
 
 // ----------------------------------------------------------------------------------- network
 net.on('rooms', (m) => {
-  $('m-rooms').innerHTML = m.rooms.length ? m.rooms.map(r => `<div class="item"><span><b>${esc(r.name)}</b><small>${r.players}/${r.max} players · ${r.started ? 'Day ' + r.day : 'in lobby'}</small></span><button class="btn small primary" data-join="${r.code}">Join</button></div>`).join('') : '<i>No open stores — create one!</i>';
-  $('m-saves').innerHTML = m.saves.length ? m.saves.map(s => `<div class="item"><span><b>${esc(s.name)}</b><small>Day ${s.day} · Lv ${s.level} · ${fmtMoney(s.cash)}</small></span><button class="btn small" data-load="${s.code}">Continue</button></div>`).join('') : '<i>None yet</i>';
+  $('m-rooms').innerHTML = m.rooms.length ? m.rooms.map(r => `<div class="item"><span><b>${esc(r.name)}</b><small>${+r.players || 0}/${+r.max || 0} players · ${r.started ? 'Day ' + (+r.day || 1) : 'in lobby'}</small></span><button class="btn small primary" data-join="${esc(r.code)}">Join</button></div>`).join('') : '<i>No open stores — create one!</i>';
+  $('m-saves').innerHTML = m.saves.length ? m.saves.map(s => `<div class="item"><span><b>${esc(s.name)}</b><small>Day ${+s.day || 1} · Lv ${+s.level || 1} · ${fmtMoney(+s.cash || 0)}</small></span><button class="btn small" data-load="${esc(s.code)}">Continue</button></div>`).join('') : '<i>None yet</i>';
 });
 net.on('err', (m) => {
   // not a store on this game server: try a friend's store online
@@ -365,16 +364,11 @@ net.on('fx', (m) => {
   switch (m.k) {
     case 'err': ui.error(m.text); break;
     case 'snd': play(m.name, m.x, m.z); break;
-    case 'float': break; // money shows in the top bar (no floating numbers in the world)
     case 'levelup': ui.system(`Store level ${m.level}. New products and fixtures are available on the computer.`); play('levelup'); break;
     case 'report': ui.showReport(m.report); break;
     case 'delivery': ui.system(`Delivery from ${m.name} is at the loading zone.`); fx.truck(m.x, m.z, m.supplier); setTimeout(() => play('honk', m.x, m.z), 2200); break;
     case 'stocked': {
       const e = world.furn.get(m.id); if (!e) break;
-      const src = m.by > 0 ? actors.players.get(m.by) : actors.staff.get(-m.by);
-      const p = PRODUCT_MAP[m.pid];
-      const yb = (e.data.floor || 0) * FLOOR_H;
-      void src; void p; void yb;
       play('pop', e.group.position.x, e.group.position.z); setTimeout(() => play('pop', e.group.position.x, e.group.position.z), 90);
       break;
     }
@@ -550,8 +544,7 @@ function frame(now) {
     rig.update(dt, { mouse: { dragging: false, wheel: 0 }, typing: () => true, down: () => false }, { x: 6, z: 5 });
   }
   const ls = LIGHTS.find(l => l.id === G.world?.lighting) || LIGHTS[0];
-  const lighting = S.updateLighting(G.snap ? G.snap.time : 11 * 60, G.snap ? G.snap.phase : 'open', ls.id, ls.color);
-  void lighting;
+  S.updateLighting(G.snap ? G.snap.time : 11 * 60, G.snap ? G.snap.phase : 'open', ls.id, ls.color);
   actors.update(dt, inGame ? me : null);
   const chars = actors.positions(); if (inGame) chars.push(me);
   world.update(dt, chars, S.camera, inGame ? me : null);

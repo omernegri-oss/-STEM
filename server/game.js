@@ -27,6 +27,9 @@ export const DOOR_TYPES = new Set(['fridge', 'freezer_upright', 'freezer']);
 const COMPUTER_ACTIONS = new Set(['order', 'license', 'buyFurniture', 'hire', 'fire', 'shift', 'raise', 'buyUpgrade',
   'priceAll', 'expand', 'payBill', 'sale']); // setPrice also works at a shelf label
 
+// look a player-supplied key up in a data table: only real entries count (never "constructor", "__proto__", ...)
+const own = (map, k) => (typeof k === 'string' && Object.hasOwn(map, k) ? map[k] : undefined);
+
 function newLedger() {
   return { revenue: 0, cogs: 0, salaries: 0, rent: 0, power: 0, maint: 0, other: 0, bonus: 0, tips: 0,
     customers: 0, served: 0, angry: 0, lost: 0, satSum: 0, satN: 0, waste: 0, sold: {} };
@@ -120,7 +123,6 @@ export class Game {
   }
   toast(text, kind, icon) { this.msg(text, icon || (kind === 'bad' ? '⚠️' : 'ℹ️')); }
   sound(name, x, z) { this.fx({ k: 'snd', name, x, z }); }
-  float(text, x, z, color = '#16a34a', floor = 0) { this.fx({ k: 'float', text, x, z, color, floor }); }
   dirtyWorld() { this.worldDirty = true; }
   dirtyMeta() { this.metaDirty = true; }
 
@@ -223,6 +225,7 @@ export class Game {
     const s = this.s;
     const fail = (text) => { this.fx({ k: 'err', text, to: player.id }); return false; };
     const a = m.a;
+    if (typeof a !== 'string') return false;
     if (s.phase === 'bankrupt' && a !== 'restart') return fail('The store is closed.');
     if (s.phase === 'naming' && !['nameDraft', 'nameVote'].includes(a)) return fail('Agree on a store name first!');
     if (COMPUTER_ACTIONS.has(a) && !this.nearComputer(player)) return fail('Use the store computer for that.');
@@ -254,7 +257,7 @@ export class Game {
 
       // ---------------- computer: buying
       case 'buyFurniture': {
-        const def = FURNITURE[m.type]; if (!def) return false;
+        const def = own(FURNITURE, m.type); if (!def) return false;
         const n = clamp(m.n | 0 || 1, 1, 10);
         if (!this.unlocked(def.level)) return fail(`Unlocks at level ${def.level}.`);
         const total = def.cost * n + FURNITURE_SUPPLIER.fee;
@@ -266,7 +269,7 @@ export class Game {
         return true;
       }
       case 'license': {
-        const p = PRODUCT_MAP[m.pid]; if (!p) return false;
+        const p = own(PRODUCT_MAP, m.pid); if (!p) return false;
         if (this.licensed(p.id)) return fail('Already unlocked.');
         if (!this.unlocked(p.level)) return fail(`Available at level ${p.level}.`);
         const cost = licenseCost(p);
@@ -298,7 +301,7 @@ export class Game {
         return true;
       }
       case 'buyUpgrade': {
-        const u = TEAM_UPGRADE_MAP[m.id]; if (!u) return false;
+        const u = own(TEAM_UPGRADE_MAP, m.id); if (!u) return false;
         if (s.upgrades[u.id]) return fail('Already owned.');
         if (u.requires && !s.upgrades[u.requires]) return fail(`Requires ${TEAM_UPGRADE_MAP[u.requires].name} first.`);
         if (!this.unlocked(u.level)) return fail(`Unlocks at level ${u.level}.`);
@@ -313,13 +316,13 @@ export class Game {
         b.paid = true; this.sound('coin'); this.dirtyMeta(); return true;
       }
       case 'setPrice': {
-        const p = PRODUCT_MAP[m.pid]; if (!p) return false;
+        const p = own(PRODUCT_MAP, m.pid); if (!p) return false;
         const [lo, hi] = priceLimits(p);
-        s.prices[p.id] = round2(clamp(+m.price || p.price, lo, hi)); this.dirtyWorld(); this.dirtyMeta(); return true;
+        s.prices[p.id] = round2(clamp(Number.isFinite(m.price) ? m.price : p.price, lo, hi)); this.dirtyWorld(); this.dirtyMeta(); return true;
       }
       // put a product on promotion (from its shelf label), or end it
       case 'promo': {
-        const p = PRODUCT_MAP[m.pid]; if (!p) return false;
+        const p = own(PRODUCT_MAP, m.pid); if (!p) return false;
         s.promos ||= [];
         const on = s.promos.includes(p.id);
         if (m.on === false || (m.on === undefined && on)) s.promos = s.promos.filter(x => x !== p.id);
@@ -331,7 +334,7 @@ export class Game {
         this.dirtyWorld(); this.dirtyMeta(); return true;
       }
       case 'priceAll': {
-        const mult = clamp(+m.mult || 1, 0.5, 2);
+        const mult = clamp(Number.isFinite(m.mult) ? m.mult : 1, 0.5, 2);
         for (const p of PRODUCTS) { const [lo, hi] = priceLimits(p); s.prices[p.id] = round2(clamp(p.price * mult, lo, hi)); }
         this.dirtyWorld(); this.dirtyMeta(); return true;
       }
@@ -343,7 +346,7 @@ export class Game {
         if (s.cash < fee) return fail(`Hiring ${c.name.split(' ')[0]} costs a ${fmtMoney(fee)} recruitment fee.`);
         this.spend(fee, 'salaries');
         s.candidates = s.candidates.filter(x => x !== c);
-        const st = { ...c, shift: m.shift && SHIFTS[m.shift] ? m.shift : 'full', happiness: 75, hiredDay: s.day, absent: false, served: 0 };
+        const st = { ...c, shift: own(SHIFTS, m.shift) ? m.shift : 'full', happiness: 75, hiredDay: s.day, absent: false, served: 0 };
         this.resetStaffRuntime(st);
         s.staff.push(st);
         this.sound('hire'); this.unlockAch('first_hire');
@@ -355,7 +358,7 @@ export class Game {
         s.staff = s.staff.filter(x => x !== st);
         this.dirtyMeta(); return true;
       }
-      case 'shift': { const st = s.staff.find(x => x.id === m.id); if (!st || !SHIFTS[m.shift]) return false; st.shift = m.shift; this.dirtyMeta(); return true; }
+      case 'shift': { const st = s.staff.find(x => x.id === m.id); if (!st || !own(SHIFTS, m.shift)) return false; st.shift = m.shift; this.dirtyMeta(); return true; }
       case 'raise': {
         const st = s.staff.find(x => x.id === m.id); if (!st) return false;
         st.salary = Math.round(st.salary * 1.1); st.happiness = clamp(st.happiness + 20, 0, 100); this.dirtyMeta(); return true;
@@ -550,7 +553,7 @@ export class Game {
         const f = this.fixture(m.id); if (!f || FURNITURE[f.type].kind !== 'counter') return false;
         if (player.carry.length) return fail('Your hands are full!');
         const c = this.customerAtCounter(f);
-        const pid = m.pid || (c ? c.counterReq.pid : null);
+        const pid = (own(PRODUCT_MAP, m.pid) && m.pid) || (c ? c.counterReq.pid : null);
         const slot = f.slots.find(sl => (!pid || sl.pid === pid) && sl.qty > 0 && !sl.expired);
         if (!slot) {
           if (c && pid) { this.counterOutOfStock(f, c); return fail(`Out of ${PRODUCT_MAP[pid].name}! The customer is disappointed.`); }
@@ -691,10 +694,10 @@ export class Game {
   // ------------------------------------------------------------------ orders
   placeOrder(player, m, fail) {
     const s = this.s;
-    const sup = SUPPLIER_MAP[m.supplier];
+    const sup = own(SUPPLIER_MAP, m.supplier);
     if (!sup) return false;
     if (!this.unlocked(sup.level)) return fail(`${sup.name} unlocks at level ${sup.level}.`);
-    const items = (m.items || []).filter(i => i && PRODUCT_MAP[i.pid] && (i.boxes | 0) > 0).map(i => ({ pid: i.pid, boxes: Math.min(60, i.boxes | 0) }));
+    const items = (Array.isArray(m.items) ? m.items.slice(0, PRODUCTS.length) : []).filter(i => i && own(PRODUCT_MAP, i.pid) && (i.boxes | 0) > 0).map(i => ({ pid: i.pid, boxes: Math.min(60, i.boxes | 0) }));
     if (!items.length) return fail('Your order is empty.');
     let boxes = 0, subtotal = 0;
     const shortage = s.events.find(e => e.type === 'shortage');
@@ -859,7 +862,7 @@ export class Game {
     const complain = (text) => { c.mood -= 3; c.thought = '😠'; c.thoughtT = 2.5; return fail(text); };
     if (c.payBy === 'cash') {
       if (m.a !== 'payCash') return complain(`${c.name} is paying cash, not by card.`);
-      const owed = round2(c.tendered - c.due), given = round2(Math.max(0, +m.change || 0));
+      const owed = round2(c.tendered - c.due), given = round2(clamp(Number.isFinite(m.change) ? m.change : 0, 0, 10000));
       if (given < owed - 0.004) return complain(`${c.name}: "That's not enough change. I gave you ${money(c.tendered)} for ${money(c.due)}, I should get ${money(owed)} back."`);
       const extra = round2(given - owed);
       this.completeCheckout(c, f, player, extra);
@@ -867,7 +870,7 @@ export class Game {
       return true;
     }
     if (m.a !== 'payCard') return complain(`${c.name} is paying by card. Use the card terminal.`);
-    const amount = round2(+m.amount || 0);
+    const amount = round2(Number.isFinite(m.amount) ? m.amount : 0);
     if (Math.abs(amount - c.due) > 0.004) return complain(amount > c.due
       ? `${c.name}: "${money(amount)}? My total is ${money(c.due)}. I'm not paying that."`
       : `${c.name}: "The terminal says ${money(amount)}, but my total is ${money(c.due)}. Please fix it."`);
@@ -907,7 +910,6 @@ export class Game {
     const rt = this.rt.get(f.id); if (rt) rt.queue = rt.queue.filter(id => id !== c.id);
     customerLeave(this, c, 'paid');
     this.sound('kaching', f.x, f.z);
-    this.float('+' + fmtMoney(total), f.x + 0.5, f.z + 0.5, '#16a34a', f.floor || 0);
     this.addXp(total * 0.6 + 4);
     if (who && this.players.has(who.id)) { s.stats.playerCheckouts++; if (s.stats.playerCheckouts >= 25) this.unlockAch('scanner'); }
     if (c.vip && c.vipHappy) {
@@ -938,7 +940,7 @@ export class Game {
     c.mood += 4 + (server.skill || 3);
     if ((server.skill || 0) >= 4 && Math.random() < 0.4) {
       const tip = round2(1 + server.skill * Math.random());
-      this.earn(tip, 'tips'); this.float(`Tip +${fmtMoney(tip)}`, f.x + 1, f.z + 0.5, '#ca8a04', f.floor || 0);
+      this.earn(tip, 'tips');
     }
     this.sound('serve', f.x, f.z);
     if (def.cat === 'meat') { s.stats.butcher++; this.unlockAch('butcher'); } else { s.stats.deli++; this.unlockAch('deli'); }

@@ -1,6 +1,6 @@
-// Transient visual effects: floating money text, sparkles, confetti, pings, delivery trucks.
+// Transient visual effects: map pings and delivery trucks.
 import * as THREE from 'three';
-import { makeSprite, makeTruck, mat, UNIT_GEOS, disposeOwned } from './models.js';
+import { makeSprite, makeTruck, disposeOwned } from './models.js';
 import { SUPPLIER_MAP } from '/shared/data.js';
 
 const SUP_COLORS = { pantry: 0xf59e0b, dairy: 0x38bdf8, green: 0x16a34a, polar: 0x6366f1, prime: 0xdc2626, bella: 0x15803d, express: 0xec4899, mega: 0x475569 };
@@ -10,33 +10,7 @@ export class FX {
     this.scene = scene;
     this.items = [];
     this.trucks = [];
-    this.partGeo = new THREE.BoxGeometry(0.08, 0.08, 0.02);
   }
-  float(text, x, z, color = '#16a34a', y = 1.8) {
-    const s = makeSprite(text, 0.36, { bg: null, color, size: 54 });
-    s.position.set(x, y, z); s.material.depthTest = false;
-    this.scene.add(s);
-    this.items.push({ obj: s, t: 0, life: 1.6, vy: 0.9, kind: 'float' });
-  }
-  burst(x, y, z, n = 14, colors = [0xfacc15, 0xf97316, 0xec4899, 0x22c55e, 0x3b82f6], speed = 3) {
-    for (let i = 0; i < n; i++) {
-      const m = new THREE.Mesh(this.partGeo, mat(colors[i % colors.length]));
-      m.position.set(x, y, z);
-      const a = Math.random() * Math.PI * 2, u = Math.random();
-      this.scene.add(m);
-      this.items.push({ obj: m, t: 0, life: 1.2 + Math.random() * 0.5, v: new THREE.Vector3(Math.cos(a) * speed * u, 2 + Math.random() * speed, Math.sin(a) * speed * u), spin: Math.random() * 10, kind: 'part' });
-    }
-  }
-  // products hop from a carried box onto the shelf
-  fly(shape, color, from, to, n = 2) {
-    for (let i = 0; i < Math.min(4, n); i++) {
-      const m = new THREE.Mesh(UNIT_GEOS[shape] || UNIT_GEOS.box, mat(color));
-      const yb = from.y || 0;
-      m.position.set(from.x, yb + 1.1, from.z); m.visible = false; this.scene.add(m);
-      this.items.push({ obj: m, t: -i * 0.07, life: 0.38, kind: 'fly', from: new THREE.Vector3(from.x, yb + 1.1, from.z), to: new THREE.Vector3(to.x + (Math.random() - 0.5) * 0.8, yb + 0.6 + Math.random() * 0.9, to.z + (Math.random() - 0.5) * 0.3) });
-    }
-  }
-  sparkle(x, z) { this.burst(x, 0.3, z, 8, [0xffffff, 0x7dd3fc, 0xfef08a], 1.5); }
   ping(x, z, color, name) {
     const g = new THREE.Group();
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, side: THREE.DoubleSide }));
@@ -56,16 +30,7 @@ export class FX {
   update(dt) {
     for (const it of this.items) {
       it.t += dt;
-      const k = it.t / it.life;
-      if (it.kind === 'float') { it.obj.position.y += it.vy * dt; it.obj.material.opacity = 1 - Math.max(0, k - 0.6) / 0.4; }
-      else if (it.kind === 'part') {
-        it.v.y -= 9 * dt; it.obj.position.addScaledVector(it.v, dt);
-        if (it.obj.position.y < 0.02) { it.obj.position.y = 0.02; it.v.multiplyScalar(0.3); }
-        it.obj.rotation.x += it.spin * dt; it.obj.rotation.y += it.spin * dt;
-      } else if (it.kind === 'fly') {
-        const k2 = Math.max(0, Math.min(1, it.t / it.life)); it.obj.visible = it.t >= 0;
-        it.obj.position.lerpVectors(it.from, it.to, k2); it.obj.position.y += Math.sin(k2 * Math.PI) * 0.6; it.obj.rotation.y = k2 * 6;
-      } else if (it.kind === 'ping') { const s = 1 + (it.t * 2 % 1) * 1.5; it.ring.scale.set(s, s, s); it.ring.material.opacity = 1 - (it.t * 2 % 1); }
+      if (it.kind === 'ping') { const s = 1 + (it.t * 2 % 1) * 1.5; it.ring.scale.set(s, s, s); it.ring.material.opacity = 1 - (it.t * 2 % 1); }
     }
     this.items = this.items.filter(it => { if (it.t >= it.life) { this.scene.remove(it.obj); disposeOwned(it.obj); return false; } return true; });
     for (const tr of this.trucks) {

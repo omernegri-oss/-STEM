@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cspFor } from '../server/csp.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist');
 const THREE_V = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules/three/package.json'), 'utf8')).version;
@@ -34,6 +35,8 @@ for (const f of fs.readdirSync(path.join(OUT, 'js'))) {
 // stamp the build (date + commit) so bug reports say which version they came from
 const stamp = `${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${(process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || 'local').slice(0, 7)}`;
 fs.writeFileSync(path.join(OUT, 'js/version.js'), `export const BUILD = ${JSON.stringify(stamp)};\n`);
+// only this page's own scripts may run (see server/csp.js); artifact.html below drops it with the other meta tags
+html = html.replace('<meta charset="utf-8" />', `<meta charset="utf-8" />\n  <meta http-equiv="Content-Security-Policy" content="${cspFor(html)}" />`);
 fs.writeFileSync(path.join(OUT, 'index.html'), html);
 // artifact.html: the same page without the document wrapper (the artifact host adds its own)
 const head = html.match(/<head>([\s\S]*?)<\/head>/)[1].replace(/<meta [^>]*>\s*/g, '');
@@ -42,6 +45,6 @@ const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/)[1].replace(/(<a class="
 // the artifact host may only allow fonts from Google Fonts: ask for the same families there as a fallback
 const GF = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=Playfair+Display:wght@700;900&family=Archivo+Black&family=Pacifico&display=swap" />\n';
 fs.writeFileSync(path.join(OUT, 'artifact.html'), GF + head.trim() + '\n<style>html,body{height:100%;margin:0;padding:0;background:#10161d}:root{padding:0}</style>\n' + body.trim() + '\n');
-fs.writeFileSync(path.join(OUT, 'vercel.json'), JSON.stringify({ cleanUrls: false, headers: [{ source: '/(.*)', headers: [{ key: 'Cache-Control', value: 'public, max-age=300' }] }] }, null, 2));
+fs.writeFileSync(path.join(OUT, 'vercel.json'), JSON.stringify({ cleanUrls: false, headers: [{ source: '/(.*)', headers: [{ key: 'Cache-Control', value: 'public, max-age=300' }, { key: 'X-Content-Type-Options', value: 'nosniff' }, { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' }] }] }, null, 2));
 const files = []; (function walk(d) { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); f.isDirectory() ? walk(p) : files.push(path.relative(OUT, p)); } })(OUT);
 console.log(`dist/ built: ${files.length} files, three@${THREE_V} bundled`);

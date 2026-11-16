@@ -125,6 +125,8 @@ function render(d) {
   $('health').className = 'state ' + (fresh.length ? 'bad' : 'ok');
   $('health').textContent = (fresh.length ? `שים לב: ${fresh.length} תקלות קרו היום. ` : 'הכול תקין: אין תקלות חדשות היום. ')
     + (ago === null ? 'עוד לא התקבל אות מהמשחק מאז שהשרת התעורר.' : `אות אחרון מהמשחק לפני ${ago < 90 ? ago + ' שניות' : Math.round(ago / 60) + ' דקות'}.`);
+  // without a storage connection the history lives only in memory and resets when the server restarts
+  if (d.storage === false || d.storageError) { $('health').className = 'state bad'; $('health').textContent = (d.storage === false ? 'אחסון לא מחובר: המספרים של היום/שבוע/חודש/תמיד יתאפסו כשהשרת מתאפס. ב-Vercel: Storage ← Create ← Blob ← Connect לפרויקט store. ' : 'שגיאת שמירה: ' + d.storageError + '. ') + $('health').textContent; }
   $('updated').textContent = 'עודכן ' + new Date(d.now).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 $('bugs').onclick = async (e) => { const b = e.target.closest('[data-fix]'); if (!b) return; b.disabled = true; try { render(await call('&fixed=' + encodeURIComponent(b.dataset.fix))); } catch {} };

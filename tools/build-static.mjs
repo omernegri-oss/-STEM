@@ -19,6 +19,12 @@ for (const d of ['utils', 'environments', 'postprocessing', 'shaders', 'math']) 
 copy(path.join(ROOT, 'node_modules/peerjs/dist/peerjs.min.js'), path.join(OUT, 'lib/peerjs.min.js'));
 let html = fs.readFileSync(path.join(OUT, 'index.html'), 'utf8');
 html = html.replace('<script type="importmap">', '<script>window.ST_STATIC = true;</script>\n  <script type="importmap">');
+// Vercel Web Analytics (page views, no cookies): only on the Vercel copy of the site, and not for players who
+// turned statistics off in Settings
+html = html.replace('</head>', `  <script>(function () { try { if (!/\\.vercel\\.app$/.test(location.hostname) || localStorage.getItem('st_stats') === '0') return; } catch (e) {}
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    var s = document.createElement('script'); s.defer = true; s.src = '/_vercel/insights/script.js'; document.head.appendChild(s); })();</script>
+</head>`);
 // relative paths so the build works from any folder or host (also as a claude.ai artifact)
 html = html.replace(/(href|src)="\/(css|js)\//g, '$1="./$2/').replace('"/vendor/three.module.js"', '"./vendor/three.module.js"').replace('"/addons/"', '"./addons/"');
 for (const f of fs.readdirSync(path.join(OUT, 'js'))) {
@@ -26,7 +32,7 @@ for (const f of fs.readdirSync(path.join(OUT, 'js'))) {
   fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/from '\/(shared|server)\//g, "from '../$1/"));
 }
 // stamp the build (date + commit) so bug reports say which version they came from
-const stamp = `${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${(process.env.GITHUB_SHA || 'local').slice(0, 7)}`;
+const stamp = `${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${(process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || 'local').slice(0, 7)}`;
 fs.writeFileSync(path.join(OUT, 'js/version.js'), `export const BUILD = ${JSON.stringify(stamp)};\n`);
 fs.writeFileSync(path.join(OUT, 'index.html'), html);
 // artifact.html: the same page without the document wrapper (the artifact host adds its own)

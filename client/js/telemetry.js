@@ -4,7 +4,7 @@
 import { BUILD } from './version.js';
 
 // the stats service (api/t.js + stats/ in the repository, hosted on Vercel). Empty = nothing is ever sent.
-export const STATS_URL = '';
+export const STATS_URL = 'https://store-henna-gamma-93.vercel.app/api/t';
 
 const off = () => { try { return localStorage.getItem('st_stats') === '0'; } catch { return false; } };
 export const telemetryAllowed = () => !off();

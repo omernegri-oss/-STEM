@@ -2,8 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "npm ci --ignore-scripts",
-  "buildCommand": "",
-  "outputDirectory": "stats",
+  "buildCommand": "node tools/build-static.mjs && cp -r stats dist/stats",
+  "outputDirectory": "dist",
   "functions": { "api/t.js": { "maxDuration": 10 } },
-  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }]
+  "headers": [
+    { "source": "/stats/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "Cache-Control", "value": "no-store" }] },
+    { "source": "/api/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+  ]
 }

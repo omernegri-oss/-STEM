@@ -12,7 +12,10 @@ const dayKey = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 
 const daysAgo = (n) => dayKey(new Date(Date.now() - n * 86400000));
 const ID = /^[a-z0-9]{8,24}$/;
 const clip = (s, n) => String(s ?? '').slice(0, n);
-const PATH = () => `${createHash('sha256').update(String(process.env.ADMIN_KEY || 'dev')).digest('hex').slice(0, 20)}/data.json`;
+const sha = (x) => createHash('sha256').update(String(x)).digest('hex');
+// the dashboard key: ADMIN_KEY in the project's environment variables, otherwise the built-in one (only its hash is here)
+const KEY_HASH = process.env.ADMIN_KEY ? sha(process.env.ADMIN_KEY) : '0a5107ebc947ddcb0743f70b5a5b7bc126b51da0166df7e9d0b88c56e6cb9dfd';
+const PATH = () => `${KEY_HASH.slice(0, 20)}/data.json`;
 
 const M = (globalThis.__stats ||= { live: new Map(), doc: null, loadedAt: 0, flushedAt: 0, dirty: false, lock: Promise.resolve(), bugWrites: 0, bugHour: 0, lastHb: 0 });
 const empty = () => ({ v: 1, users: {}, daily: {}, bugs: {} });
@@ -57,7 +60,8 @@ function flushSoon(now = false) {
       const days = Object.keys(M.doc.daily).sort(); for (const d of days.slice(0, -400)) delete M.doc.daily[d];
       const bugs = Object.entries(M.doc.bugs).sort((a, b) => (a[1].last < b[1].last ? 1 : -1)); for (const [h] of bugs.slice(200)) delete M.doc.bugs[h];
       await put(PATH(), JSON.stringify(M.doc), { access: 'public', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json', cacheControlMaxAge: 60 });
-    } catch (e) { M.dirty = true; console.error('flush failed', e && e.message); }
+      M.flushErr = '';
+    } catch (e) { M.dirty = true; M.flushErr = String((e && e.message) || e).slice(0, 200); console.error('flush failed', M.flushErr); }
   });
   return M.lock;
 }
@@ -92,7 +96,7 @@ async function ingest(req, res) {
 
 async function stats(req, res) {
   const key = String(req.query.key || req.headers['x-key'] || '');
-  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return res.status(401).json({ ok: false, error: 'wrong key' });
+  if (!key || sha(key) !== KEY_HASH) return res.status(401).json({ ok: false, error: 'wrong key' });
   const doc = await load(req.query.fresh === '1');
   if (req.query.fixed) { // mark a bug as handled (it shows again if it happens again)
     const g = doc.bugs[String(req.query.fixed)]; if (g) { g.fixed = true; M.dirty = true; await flushSoon(true); }
@@ -111,7 +115,7 @@ async function stats(req, res) {
   res.status(200).json({ ok: true, now, today,
     online: { total: live.length, web: live.filter(v => v.p === 'w').length, app: live.filter(v => v.p === 'a').length, inStore: live.filter(v => v.s).length },
     today: nToday, newToday, week: n7, month: n30, all, platforms: { web, app }, daily, bugs,
-    lastHeartbeat: M.lastHb || null, saved: !M.dirty });
+    lastHeartbeat: M.lastHb || null, saved: !M.dirty, storage: !!process.env.BLOB_READ_WRITE_TOKEN, storageError: M.flushErr || '' });
 }
 
 export default async function handler(req, res) {
@@ -121,6 +125,8 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'OPTIONS') return res.status(204).end();
     if (req.method === 'POST') return await ingest(req, res);
+    // a public health check (no numbers): is the service up, is storage connected
+    if (req.method === 'GET' && req.query.health !== undefined) return res.status(200).json({ ok: true, storage: !!process.env.BLOB_READ_WRITE_TOKEN, storageError: M.flushErr || '', key: process.env.ADMIN_KEY ? 'env' : 'built-in' });
     if (req.method === 'GET') return await stats(req, res);
     res.status(405).end();
   } catch (e) { console.error(e); res.status(500).json({ ok: false }); }

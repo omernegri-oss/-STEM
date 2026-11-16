@@ -3,7 +3,7 @@
 // store, and JavaScript errors (message and stack trace). Nothing else. Players can turn it off in Settings.
 import { BUILD } from './version.js';
 
-// the stats service (stats/ in the repository, hosted on Vercel). Empty = nothing is ever sent.
+// the stats service (api/t.js + stats/ in the repository, hosted on Vercel). Empty = nothing is ever sent.
 export const STATS_URL = '';
 
 const off = () => { try { return localStorage.getItem('st_stats') === '0'; } catch { return false; } };

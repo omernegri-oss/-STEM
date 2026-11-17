@@ -132,7 +132,6 @@ export class World {
       door.userData = { base, dir: i === 0 ? -1 : 1, open: 0 };
       front.add(door); this.doors.push(door);
     }
-    { const can = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.08, 1.4), frameM); can.position.set(dx0 + 1, 2.66, fz + 0.7); can.castShadow = true; front.add(can); }
     { const ex = makeLabel('EXIT', 0.14, { bg: '#1d2023', color: '#e0453b', size: 40, pad: 14, radius: 2, font: 'Barlow Condensed', weight: 700 }, 0.5); ex.material.toneMapped = false; ex.position.set(dx0 + 1, 2.75, fz - 0.12); ex.rotation.y = Math.PI; front.add(ex); }
     const matM = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), pbr('rubber', 2, 1.2, { color: 0x4a4d50 })); matM.rotation.x = -Math.PI / 2; matM.position.set(dx0 + 1, 0.006, D - 0.6); this.shell.add(matM);
     { const bs = basketStack(9); bs.position.set(dx1 + 0.45, 0, D - 0.35); this.shell.add(bs); }

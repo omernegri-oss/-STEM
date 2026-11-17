@@ -14,6 +14,6 @@ console.log('vendor/three ready');
 // release builds (CI) stamp the build id so bug reports say which version they came from
 if (process.env.CI) {
   const stamp = `${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${(process.env.GITHUB_SHA || 'ci').slice(0, 7)}`;
-  fs.writeFileSync(path.join(ROOT, 'client/js/version.js'), `export const BUILD = ${JSON.stringify(stamp)};\n`);
+  fs.writeFileSync(path.join(ROOT, 'client/js/version.js'), `export const BUILD = ${JSON.stringify(stamp)};\nexport const RELEASE = ${+process.env.GITHUB_RUN_NUMBER || 0};\n`);
   console.log('build', stamp);
 }

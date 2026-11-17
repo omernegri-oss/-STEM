@@ -458,3 +458,6 @@ button.den.small { cursor: pointer; }
 @media (max-width: 900px) { .debt { display: none; } }
 .rate-stars { color: var(--warn); letter-spacing: 2px; margin-left: 6px; }
 .swatch { display: block; width: 100%; height: 26px; border-radius: 5px; border: 1px solid var(--line); margin-bottom: 6px; }
+.update-bar { display: flex; flex-direction: column; gap: 8px; background: rgba(58,165,109,.12); border: 1px solid rgba(58,165,109,.5); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
+.update-bar.hidden { display: none; }
+.update-bar div { display: flex; gap: 8px; }

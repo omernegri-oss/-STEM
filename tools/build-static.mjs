@@ -33,7 +33,7 @@ for (const f of fs.readdirSync(path.join(OUT, 'js'))) {
 }
 // stamp the build (date + commit) so bug reports say which version they came from
 const stamp = `${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${(process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || 'local').slice(0, 7)}`;
-fs.writeFileSync(path.join(OUT, 'js/version.js'), `export const BUILD = ${JSON.stringify(stamp)};\n`);
+fs.writeFileSync(path.join(OUT, 'js/version.js'), `export const BUILD = ${JSON.stringify(stamp)};\nexport const RELEASE = 0;\n`);
 fs.writeFileSync(path.join(OUT, 'index.html'), html);
 // artifact.html: the same page without the document wrapper (the artifact host adds its own)
 const head = html.match(/<head>([\s\S]*?)<\/head>/)[1].replace(/<meta [^>]*>\s*/g, '');

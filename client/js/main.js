@@ -8,6 +8,8 @@ import { OnlineHost, OnlineNet, localServerSocket, onlineAvailable } from './onl
 import { createScene } from './scene.js';
 import { prewarmTextures } from './textures.js';
 import { initTelemetry, reportBug, telemetryAllowed, setTelemetry } from './telemetry.js';
+import { checkForUpdate } from './updates.js';
+checkForUpdate(); // desktop app: offer a newer version if one is out (runs before the 3D scene loads)
 import { World } from './world.js';
 import { Actors, carryModel } from './actors.js';
 import { makeBaton, makeCart } from './models.js';

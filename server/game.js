@@ -4,7 +4,7 @@ import {
   TEAM_UPGRADES, TEAM_UPGRADE_MAP, ROLES, SHIFTS, MAX_LEVEL, levelForXp, ACHIEVEMENTS,
   FIRST_NAMES, LAST_NAMES, EVENT_TYPES, STARTING_CASH, REAL_SECONDS_PER_MINUTE, OPEN_HOUR, CLOSE_HOUR,
   LAST_ENTRY_HOUR, fmtMoney, CATEGORIES, fitsFixture, fixtureCats, cartBay, CART_BOXES, PROMO_OFF, PROMO_MAX, BAKE_SECONDS, DOUGH_DAYS, MAX_CUSTOMERS, STARTER_PRODUCTS, FURNITURE_SUPPLIER,
-  licenseCost, priceLimits, stairInfo, slotCap, HIRE_FEE_DAYS,
+  licenseCost, priceLimits, stairInfo, slotCap, HIRE_FEE_DAYS, BRANDS, LIGHTS,
 } from '../shared/data.js';
 import { Grid, footprint, serviceTiles, FACING, center, route, deptSpots, dims } from '../shared/grid.js';
 import { updateCustomers, spawnCustomer, returnBasket, customerLeave, catchThief } from './customers.js';
@@ -53,7 +53,7 @@ export class Game {
     this.s = {
       version: 3, name: '', nameDraft: '', nameVotes: [], phase: 'naming',
       w: e.w, d: e.d, doorX: Math.floor(e.w / 2) - 1, expansion: 0, floors: 1,
-      floor: 'white', wall: 'cream',
+      floor: 'white', wall: 'cream', brand: 'berry', lighting: 'standard', styles: { brand: ['berry'], light: ['standard'] },
       furniture: [], boxes: [], dirt: [],
       prices: Object.fromEntries(PRODUCTS.map(p => [p.id, p.price])),
       licenses: [...STARTER_PRODUCTS],
@@ -70,7 +70,7 @@ export class Game {
     this.s.furniture.push(this.newFixture('computer', 0, e.d - 3, 1));
     this.s.furniture.push(this.newFixture('checkout', e.w - 4, e.d - 3, 0));
     this.refreshCandidates();
-    this.s.challenge = this.makeChallenge();
+    this.s.challenge = this.makeChallenge(); this.s.goals = this.makeGoals();
     this.msg('Welcome! Use this computer to buy shelves, order stock and unlock new products. Arrange the store however you like.', '🖥️');
   }
 
@@ -86,6 +86,8 @@ export class Game {
     for (const b of this.s.boxes) { delete b._claim; if (b.floor === undefined) b.floor = 0; }
     for (const f of this.s.furniture) if (f.floor === undefined) f.floor = 0;
     if (!this.s.challenge) this.s.challenge = this.makeChallenge();
+    if (!this.s.goals) this.s.goals = this.makeGoals();
+    this.s.brand ||= 'berry'; this.s.lighting ||= 'standard'; this.s.styles ||= { brand: ['berry'], light: ['standard'] };
   }
 
   serialize() {
@@ -172,6 +174,7 @@ export class Game {
     for (const f of this.s.furniture) a += FURNITURE[f.type].appeal || 0;
     if (this.s.upgrades.led) a += 5;
     if (this.s.floors > 1) a += 6;
+    a += (LIGHTS.find(l => l.id === this.s.lighting) || {}).appeal || 0;
     a -= this.s.dirt.length;
     return Math.round(a);
   }
@@ -329,6 +332,21 @@ export class Game {
           s.promos.push(p.id);
         }
         this.dirtyWorld(); this.dirtyMeta(); return true;
+      }
+      // store look: the brand colour (sign + aprons) and the lighting mood. Bought once, then free to switch back.
+      case 'style': {
+        const list = m.kind === 'brand' ? BRANDS : m.kind === 'light' ? LIGHTS : null; if (!list) return false;
+        const o = list.find(x => x.id === m.id); if (!o) return false;
+        const key = m.kind === 'brand' ? 'brand' : 'lighting';
+        if (s[key] === o.id) return true;
+        if (!this.unlocked(o.level)) return fail(`Unlocks at level ${o.level}.`);
+        const owned = (s.styles[m.kind] ||= []);
+        if (!owned.includes(o.id)) {
+          if (s.cash < o.cost) return fail('Not enough cash!');
+          this.spend(o.cost, 'other'); owned.push(o.id);
+        }
+        s[key] = o.id; this.sound('upgrade'); this.dirtyWorld(); this.dirtyMeta();
+        return true;
       }
       case 'priceAll': {
         const mult = clamp(+m.mult || 1, 0.5, 2);
@@ -987,6 +1005,43 @@ export class Game {
     c.reward = 40 + lvl * 50; c.done = false; c.failed = false;
     return c;
   }
+  // two small side goals each day, checked when the day ends
+  makeGoals() {
+    const s = this.s, lvl = s.level;
+    const pool = [
+      { type: 'lost0' }, { type: 'waste0' },
+      { type: 'tips', target: 4 + lvl * 3 },
+      { type: 'rep', target: Math.min(95, Math.round(s.rep) + 2) },
+    ];
+    const out = [];
+    while (out.length < 2) { const g = pool.splice(Math.floor(Math.random() * pool.length), 1)[0]; out.push({ ...g, reward: 20 + lvl * 20, done: false }); }
+    return out;
+  }
+  goalProgress(g) {
+    const L = this.s.ledger;
+    return { lost0: L.lost, waste0: L.waste, tips: round2(L.tips), rep: Math.round(this.s.rep) }[g.type] ?? 0;
+  }
+  checkGoals() {
+    const s = this.s, L = s.ledger;
+    for (const g of s.goals || []) {
+      g.done = g.type === 'lost0' ? L.served >= 8 && L.lost === 0 : g.type === 'waste0' ? L.served >= 8 && L.waste === 0
+        : g.type === 'tips' ? L.tips >= g.target : g.type === 'rep' ? s.rep >= g.target : false;
+      if (g.done) { this.earn(g.reward, 'bonus'); this.addXp(g.reward * 0.3); }
+    }
+  }
+  // the day's stars: how happy the shoppers were, how many were served, profit, calm, and the goals met
+  dayRating(r) {
+    const goalsDone = [r.challenge, ...(this.s.goals || [])].filter(x => x && x.done).length;
+    const parts = [
+      ['Happy shoppers', Math.round(r.avgSat / 100 * 35), 35],
+      ['Shoppers served', r.customers ? Math.round(r.served / r.customers * 25) : 0, 25],
+      ['Profit', r.profit > 0 ? 15 : 0, 15],
+      ['No angry walk-outs', Math.max(0, 15 - r.angry * 3), 15],
+      ['Goals met', Math.round(goalsDone / 3 * 10), 10],
+    ];
+    const score = parts.reduce((a, p) => a + p[1], 0);
+    return { score, stars: score < 30 ? 1 : score < 50 ? 2 : score < 70 ? 3 : score < 85 ? 4 : 5, parts, goalsDone };
+  }
   challengeProgress() {
     const c = this.s.challenge, L = this.s.ledger; if (!c) return 0;
     switch (c.type) {
@@ -1053,6 +1108,7 @@ export class Game {
     const coolers = s.furniture.filter(f => FURNITURE[f.type].temp !== undefined && !f.broken);
     const options = ['rush', 'delay', 'shortage', 'holiday', 'vip', 'sale', 'inspector', 'heatwave', 'influencer', 'pigeon'];
     if (coolers.length) options.push('breakdown', 'breakdown');
+    if (s.day >= 3) options.push('blackout');
     if (s.staff.length >= 2) options.push('absence');
     const type = forceType || pick(options);
     const ev = { type, at: s.minute };
@@ -1061,6 +1117,10 @@ export class Game {
     switch (type) {
       case 'rush': ev.until = s.minute + 90; break;
       case 'delay': case 'holiday': case 'heatwave': ev.until = CLOSE_HOUR * 60; break;
+      case 'blackout': {
+        const mins = rndi(60, 90); ev.until = Math.min(s.minute + mins, CLOSE_HOUR * 60 + 30);
+        detail = `The power is out for about ${mins} minutes. Fridges and freezers are warming up (open doors warm up much faster, so close them) and the self-checkouts are down.`; break;
+      }
       case 'influencer': ev.until = s.minute + 180; s.rep = clamp(s.rep + 6, 0, 100); break;
       case 'breakdown': {
         const f = pick(coolers.length ? coolers : s.furniture.filter(f => FURNITURE[f.type].temp !== undefined));
@@ -1163,6 +1223,7 @@ export class Game {
     s.bills.push(bill); s.bills = s.bills.filter(b => !b.paid || b.day > s.day - 5);
     this.msg(`New bill for day ${s.day}: ${fmtMoney(bill.total)} (rent, electricity, maintenance). Pay it on the computer by the end of day ${bill.due}.`, '🧾');
     if (fc.income) this.earn(fc.income, 'bonus');
+    this.checkGoals();
     const expenses = round2(L.cogs + L.salaries + L.rent + L.power + L.maint + L.other);
     const incomeTotal = round2(L.revenue + L.tips + L.bonus);
     const profit = round2(incomeTotal - expenses);
@@ -1175,6 +1236,15 @@ export class Game {
       demand: Object.entries(s.demand).sort((a, b) => b[1] - a[1]).slice(0, 5), cash: s.cash, vending: fc.income,
       challenge: s.challenge ? { ...s.challenge } : null, bill: bill.total,
     };
+    // everything still owed: shown in the night report so nobody forgets a bill
+    report.goals = (s.goals || []).map(g => ({ ...g }));
+    report.rating = this.dayRating(report);
+    s.streak = report.rating.stars >= 3 ? (s.streak || 0) + 1 : 0; report.streak = s.streak;
+    this.addXp(report.rating.stars * 8);
+    if (report.rating.stars === 5) this.unlockAch('five_star_day');
+    if (s.streak >= 5) this.unlockAch('streak5');
+    report.debts = s.bills.filter(b => !b.paid).map(b => ({ day: b.day, total: b.total, due: b.due, late: b.items.late || 0, evictIn: b.due + 3 - (s.day + 1) }));
+    report.debtTotal = round2(report.debts.reduce((a, b) => a + b.total, 0));
     s.report = report;
     s.history.push({ day: s.day, revenue: L.revenue, expenses, profit, customers: L.served, rep: Math.round(s.rep) });
     s.history = s.history.slice(-30);
@@ -1211,7 +1281,7 @@ export class Game {
       if (Math.random() < (f.upg ? 0.01 : 0.035)) { f.broken = true; f.repair = 0; this.msg(`Overnight, the ${FURNITURE[f.type].name} stopped working!`, '🔥'); }
     }
     this.refreshCandidates();
-    s.challenge = this.makeChallenge();
+    s.challenge = this.makeChallenge(); s.goals = this.makeGoals();
     this.dirtyMeta(); this.dirtyWorld();
     this.hooks.save && this.hooks.save();
   }
@@ -1237,6 +1307,7 @@ export class Game {
         if (s.phase === 'open' && Math.floor(s.minute / 60) === 13 && s.day >= 3 && Math.random() < 0.35) this.triggerEvent();
       }
       this.updateSpawning(dMin);
+      this.queueHint(simDt);
       this.updateFixtures(dMin);
       this.updateEvents(dMin);
       this.updatePigeons(simDt);
@@ -1251,6 +1322,22 @@ export class Game {
     updateStaff(this, simDt, dMin);
     this.lastAchCheck += dt;
     if (this.lastAchCheck > 1) { this.lastAchCheck = 0; this.checkAchievements(); if (s.phase === 'open' || s.phase === 'closing') this.checkChallenge(); }
+  }
+
+  // a long line at the registers: once a day, tell the team that more registers can be bought
+  queueHint(simDt) {
+    const s = this.s;
+    this.hintT = (this.hintT || 0) + simDt; if (this.hintT < 4) return; this.hintT = 0;
+    if (s.hintDay === s.day) return;
+    let regs = 0, waiting = 0;
+    for (const f of s.furniture) {
+      const k = FURNITURE[f.type].kind; if (k !== 'checkout' && k !== 'selfcheckout') continue;
+      regs++; const rt = this.rt.get(f.id); if (rt) waiting += rt.queue.length;
+    }
+    if (waiting >= 4 && regs < 4) {
+      s.hintDay = s.day;
+      this.msg(`${waiting} shoppers are waiting at the registers. Buy another Checkout Counter on the computer (Furniture, Service): each register can have its own cashier.`, '🛒');
+    }
   }
 
   updateSpawning(dMin) {
@@ -1288,6 +1375,8 @@ export class Game {
           f.techEta -= dMin;
           if (f.techEta <= 0) { f.broken = false; f.techEta = null; f.repair = 0; this.msg(`Technician repaired the ${def.name}.`, '🔧'); this.dirtyWorld(); }
         }
+      } else if (this.eventActive('blackout')) {
+        f.temp = Math.min(f.temp + (f.open ? 0.4 : 0.15) * dMin, 21); // no power: closed doors keep the cold in much better
       } else if (f.open) {
         f.temp = Math.min(f.temp + 0.1 * dMin, 16); // doors left open: it slowly warms up
       } else {
@@ -1309,6 +1398,7 @@ export class Game {
   updateEvents() {
     const s = this.s;
     for (const ev of s.events) {
+      if (ev.type === 'blackout' && !ev.done && s.minute >= ev.until) { ev.done = true; this.msg('The power is back on.', '⚡'); this.dirtyMeta(); }
       if (ev.type === 'inspector' && !ev.done && s.minute >= ev.checkAt) {
         ev.done = true;
         const n = s.dirt.length;
@@ -1335,7 +1425,7 @@ export class Game {
   worldView() {
     const s = this.s;
     return {
-      name: s.name, w: s.w, d: s.d, doorX: s.doorX, floors: s.floors, floor: s.floor, wall: s.wall, expansion: s.expansion,
+      name: s.name, w: s.w, d: s.d, doorX: s.doorX, floors: s.floors, floor: s.floor, wall: s.wall, brand: s.brand, lighting: s.lighting, expansion: s.expansion,
       furniture: s.furniture.map(f => ({ id: f.id, type: f.type, x: f.x, z: f.z, rot: f.rot, floor: f.floor || 0, upg: f.upg, broken: f.broken, repair: f.repair || 0,
         open: !!f.open, techEta: f.techEta, temp: f.temp !== undefined ? Math.round(f.temp) : undefined, slots: f.slots, boxes: f.boxes,
         oven: f.oven ? { pid: f.oven.pid, ready: f.oven.left <= 0 } : undefined })),
@@ -1357,6 +1447,7 @@ export class Game {
       demand: s.demand, events: s.events, pendingSale: s.pendingSale, saleActive: s.saleActive, eventLog: s.eventLog,
       negativeDays: s.negativeDays, speed: s.speed, paused: s.paused, carryCap: this.carryCap(), fixed: this.fixedCosts(), bankruptReason: s.bankruptReason,
       challenge: s.challenge ? { ...s.challenge, progress: this.challengeProgress() } : null,
+      goals: (s.goals || []).map(g => ({ ...g, progress: this.goalProgress(g) })), streak: s.streak || 0, styles: s.styles,
     };
   }
 }

@@ -15,7 +15,7 @@ import { FX } from './fx.js';
 import { Input, LocalPlayer, CameraRig, findInteraction, keyName } from './player.js';
 import { BuildMode } from './build.js';
 import { UI, esc } from './ui.js';
-import { initAudio, play, audio, setVolumes } from './audio.js';
+import { initAudio, play, audio, setVolumes, setMusicStyle } from './audio.js';
 import { svg, setIcon, ROLE_ICON } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
@@ -152,11 +152,13 @@ function syncSettings() {
   document.querySelectorAll('#set-gfx button').forEach(b => b.classList.toggle('sel', b.dataset.gfx === gfx));
   $('set-auto').checked = gfxAuto; $('set-fps').checked = settings.fps; $('set-stats').checked = telemetryAllowed();
   $('set-sens').value = settings.sens; $('set-sens-v').textContent = settings.sens.toFixed(1) + '×';
+  document.querySelectorAll('#set-mstyle button').forEach(b => b.classList.toggle('sel', b.dataset.ms === audio.style));
   $('set-sfx').value = Math.round(settings.sfxVol * 100); $('set-sfx-v').textContent = Math.round(settings.sfxVol * 100) + '%';
   $('set-music').value = Math.round(settings.musicVol * 100); $('set-music-v').textContent = Math.round(settings.musicVol * 100) + '%';
 }
 const toggleSettings = (on) => { const el = $('settings'); const show = on === undefined ? el.classList.contains('hidden') : on; el.classList.toggle('hidden', !show); if (show) { syncSettings(); if (document.pointerLockElement) document.exitPointerLock(); } };
 $('set-gfx').onclick = (e) => { const b = e.target.closest('button'); if (b) setGfx(b.dataset.gfx, true); };
+$('set-mstyle').onclick = (e) => { const b = e.target.closest('button'); if (b) { initAudio(); setMusicStyle(b.dataset.ms); syncSettings(); } };
 $('set-auto').onchange = (e) => { gfxAuto = e.target.checked; saveSettings(); };
 $('set-fps').onchange = (e) => { settings.fps = e.target.checked; saveSettings(); applySettings(); };
 $('set-stats').onchange = (e) => setTelemetry(e.target.checked);
@@ -550,6 +552,8 @@ function frame(now) {
     rig.update(dt, { mouse: { dragging: false, wheel: 0 }, typing: () => true, down: () => false }, { x: 6, z: 5 });
   }
   const ls = LIGHTS.find(l => l.id === G.world?.lighting) || LIGHTS[0];
+  actors.setBrand(G.world ? G.world.brand : 'berry');
+  S.setBlackout(!!G.meta && (G.meta.events || []).some(e => e.type === 'blackout' && !e.done) && (G.snap ? G.snap.phase : G.meta.phase) !== 'report');
   const lighting = S.updateLighting(G.snap ? G.snap.time : 11 * 60, G.snap ? G.snap.phase : 'open', ls.id, ls.color);
   void lighting;
   actors.update(dt, inGame ? me : null);

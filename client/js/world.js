@@ -1,6 +1,6 @@
 // Renders the shared world state: the store building (1 or 2 floors), furniture, labelled products, boxes, dirt.
 import * as THREE from 'three';
-import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap, cartBay, shelfPrice } from '/shared/data.js';
+import { FURNITURE, PRODUCT_MAP, FLOORS, WALLS, FLOOR_H, stairInfo, SHAPE_DIMS, slotCap, cartBay, shelfPrice, BRANDS } from '/shared/data.js';
 import { Grid, center, dims } from '/shared/grid.js';
 import { B, C, mat, makeFurniture, slotLayout, UNIT_GEOS, makeSprite, setSpriteText, textTexture, makeLabel, makePriceTag, TAG_W, makeCart, mergeStatic, productMaterial, makeBox, makeFBox, beltTexture, disposeOwned } from './models.js';
 import { pbr, surfaceMaps } from './textures.js';
@@ -47,7 +47,7 @@ export class World {
 
   set(w) {
     this.state = w;
-    const key = [w.w, w.d, w.doorX, w.floor, w.wall, w.name, w.floors].join('|');
+    const key = [w.w, w.d, w.doorX, w.floor, w.wall, w.name, w.floors, w.brand].join('|');
     if (key !== this.shellKey) { this.shellKey = key; this.buildShell(w); this.shellChanged = true; }
     this.grids = [new Grid(w.w, w.d, w.doorX, 0, w.floors || 1)];
     if ((w.floors || 1) > 1) this.grids.push(new Grid(w.w, w.d, w.doorX, 1, w.floors));
@@ -110,7 +110,7 @@ export class World {
     const top = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.1, 0.3), frameM); top.position.set(W / 2, 2.62, fz); front.add(top);
     const fascia = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.95, 0.3), fasciaM); fascia.position.set(W / 2, 3.12, fz); fascia.castShadow = true; front.add(fascia);
     const name = w.name || 'Your Supermarket';
-    const sign = storeSignTexture(name);
+    const sign = storeSignTexture(name, BRANDS.find(b => b.id === w.brand) || BRANDS[0]);
     const swid = Math.min(W - 0.6, 0.7 * sign.aspect);
     const signM = new THREE.MeshStandardMaterial({ map: sign.tex, emissive: 0xffffff, emissiveMap: sign.tex, emissiveIntensity: 0.75, transparent: true });
     const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(swid, swid / sign.aspect), signM); signMesh.position.set(W / 2, 3.17, fz + 0.16); front.add(signMesh);

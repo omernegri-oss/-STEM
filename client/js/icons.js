@@ -71,7 +71,7 @@ export function furnitureIcon(type) {
 }
 export const ROLE_ICON = { guard: 'shield', cashier: 'register', stocker: 'box', cleaner: 'broom', butcher: 'knife', deli: 'cheese', manager: 'users' };
 // server messages carry an emoji "kind"; show a matching line icon instead
-const MSG_ICON = { '🚨': 'alert', '🛡️': 'shield',  '📦': 'box', '🚚': 'truck', '⚠️': 'alert', '🔥': 'alert', '💸': 'coin', '💰': 'coin', '💵': 'coin', '🧾': 'receipt', '🔧': 'wrench', '🌡️': 'thermo', '📈': 'chart', '⭐': 'star', '🏆': 'award', '💬': 'mail', 'ℹ️': 'info', '🔑': 'key', '🏷️': 'tag', '👥': 'users', '📉': 'chart', '😡': 'alert', '🤩': 'star', '🎉': 'star', '💢': 'alert', '📣': 'info' };
+const MSG_ICON = { '⚡': 'alert', '🚨': 'alert', '🛡️': 'shield',  '📦': 'box', '🚚': 'truck', '⚠️': 'alert', '🔥': 'alert', '💸': 'coin', '💰': 'coin', '💵': 'coin', '🧾': 'receipt', '🔧': 'wrench', '🌡️': 'thermo', '📈': 'chart', '⭐': 'star', '🏆': 'award', '💬': 'mail', 'ℹ️': 'info', '🔑': 'key', '🏷️': 'tag', '👥': 'users', '📉': 'chart', '😡': 'alert', '🤩': 'star', '🎉': 'star', '💢': 'alert', '📣': 'info' };
 export function msgIcon(e) { return MSG_ICON[e] || 'info'; }
 
 const thumbs = new Map();

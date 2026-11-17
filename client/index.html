@@ -80,7 +80,7 @@
       <header id="topbar">
         <div class="tb-store"><span id="h-name">—</span><span id="h-code" class="code-chip"></span></div>
         <div class="tb-clock"><span id="h-day">Day 1</span><b id="h-time">07:00</b><span id="h-phase" class="phase-chip">PREP</span></div>
-        <div class="tb-cash"><span></span><b id="h-cash">$0</b><span id="h-cashdelta" class="delta"></span></div>
+        <div class="tb-cash"><span></span><b id="h-cash">$0</b><span id="h-cashdelta" class="delta"></span><span id="h-debt" class="debt hidden" title="Unpaid bills: pay them on the store computer"></span></div>
         <div class="tb-rep" title="Reputation"><span id="h-stars">★★★☆☆</span></div>
         <div class="tb-level" title="Store level"><span id="h-level">Lv 1</span><div class="xpbar"><div id="h-xp"></div></div></div>
         <div class="tb-speed">
@@ -174,6 +174,7 @@
       <div class="set-row"><label for="set-sens">Mouse sensitivity</label><input type="range" id="set-sens" min="0.3" max="3" step="0.1" /><b id="set-sens-v"></b></div>
       <div class="set-row"><label for="set-sfx">Sound effects</label><input type="range" id="set-sfx" min="0" max="100" step="5" /><b id="set-sfx-v"></b></div>
       <div class="set-row"><label for="set-music">Music</label><input type="range" id="set-music" min="0" max="100" step="5" /><b id="set-music-v"></b></div>
+      <div class="set-row"><label>Music style</label><div id="set-mstyle" class="seg"><button data-ms="lounge">Lounge</button><button data-ms="upbeat">Upbeat</button><button data-ms="calm">Calm</button></div></div>
       <div style="text-align:center;margin-top:14px"><button class="btn primary" id="set-close">Done</button></div>
     </div></div>
     <div id="fps" hidden></div>

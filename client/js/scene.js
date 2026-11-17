@@ -176,8 +176,9 @@ export function createScene(canvas, { quality = 'medium' } = {}) {
     else { night = 1; }
     tmp.copy(SKY.day).lerp(h < 12 ? SKY.dawn : SKY.dusk, dusk * 0.8).lerp(SKY.night, night * 0.9);
     scene.background.copy(tmp); scene.fog.color.copy(tmp);
-    hemi.intensity = 1.15 - night * 0.55;
-    sun.intensity = 2.3 * (1 - night * 0.85) * (1 - dusk * 0.25);
+    dark += (darkTarget - dark) * 0.04; // power outage: the store lights fade out and back in
+    hemi.intensity = (1.15 - night * 0.55) * (1 - dark * 0.55);
+    sun.intensity = 2.3 * (1 - night * 0.85) * (1 - dusk * 0.25) * (1 - dark * 0.35);
     sun.color.setHSL(0.1, 0.6 + dusk * 0.4, 0.92 - dusk * 0.15);
     const ang = (Math.max(7, Math.min(21, h)) - 7) / 14 * Math.PI; // east->west
     sun.position.set(state.W / 2 - Math.cos(ang) * 30, 12 + Math.sin(ang) * 28, state.D / 2 + 22);
@@ -186,7 +187,7 @@ export function createScene(canvas, { quality = 'medium' } = {}) {
     interior.forEach((l, i) => {
       if (style === 'disco') lightCol.setHSL(((performance.now() / 4000) + i * 0.25) % 1, 0.9, 0.6); else lightCol.set(styleColor);
       l.color.copy(lightCol);
-      l.intensity = night * 18 + dusk * 5 + (storeOpen ? base : 0);
+      l.intensity = (night * 18 + dusk * 5 + (storeOpen ? base : 0)) * (1 - dark * 0.9);
       l.visible = l.intensity > 0.05;
     });
     const lampOn = night > 0.3 || dusk > 0.6;
@@ -196,6 +197,8 @@ export function createScene(canvas, { quality = 'medium' } = {}) {
     return { night, dusk };
   }
 
+  let dark = 0, darkTarget = 0;
+  function setBlackout(on) { darkTarget = on ? 1 : 0; }
   function setQuality(q) {
     if (q === level) return;
     level = q;
@@ -208,7 +211,7 @@ export function createScene(canvas, { quality = 'medium' } = {}) {
     else if (!composer) { try { makeComposer(); } catch { composer = null; } }
     resize();
   }
-  return { renderer, scene, camera, sun, hemi, resize, buildEnvironment, updateLighting, setQuality, render, get composer() { return composer; }, get quality() { return level; } };
+  return { renderer, scene, camera, sun, hemi, resize, buildEnvironment, updateLighting, setBlackout, setQuality, render, get composer() { return composer; }, get quality() { return level; } };
 }
 
 function makeCar(color, x, z) {

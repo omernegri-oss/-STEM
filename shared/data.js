@@ -229,6 +229,17 @@ export const LIGHTS = [
   { id: 'disco',    name: 'Party Disco',       color: 'rainbow', cost: 2500, level: 7, appeal: 6, icon: '🪩' },
 ];
 
+// Store brand colour: the storefront sign and the staff aprons. The first one is how the store looks at the start.
+export const BRANDS = [
+  { id: 'berry',  name: 'Berry Pink',     sign: '#e0457b', tag: '#ff6fa3', apron: 0x1f7a4d, cost: 0,   level: 1 },
+  { id: 'green',  name: 'Fresh Green',    sign: '#2f9e5b', tag: '#6fe0a0', apron: 0x1f7a4d, cost: 150, level: 1 },
+  { id: 'blue',   name: 'Ocean Blue',     sign: '#2563eb', tag: '#7aa7ff', apron: 0x1d4ed8, cost: 150, level: 1 },
+  { id: 'orange', name: 'Sunny Orange',   sign: '#ea7a1a', tag: '#ffb066', apron: 0xc2410c, cost: 150, level: 2 },
+  { id: 'purple', name: 'Plum',           sign: '#7c3aed', tag: '#b69cff', apron: 0x6d28d9, cost: 250, level: 3 },
+  { id: 'red',    name: 'Classic Red',    sign: '#dc2626', tag: '#ff8a8a', apron: 0xb91c1c, cost: 250, level: 3 },
+  { id: 'black',  name: 'Midnight Black', sign: '#3f3f46', tag: '#d4d4d8', apron: 0x27272a, cost: 400, level: 5 },
+];
+
 // Team-wide upgrades bought from the "Upgrades" tab.
 export const TEAM_UPGRADES = [
   { id: 'handtruck',   name: 'Hand Trucks',        icon: '🛞', cost: 600,  level: 2, desc: 'Every player can carry 3 boxes at once.' },
@@ -306,6 +317,8 @@ export const ACHIEVEMENTS = [
   { id: 'guardian',     name: 'Not On My Watch',   icon: '🛡️', desc: 'Catch a shoplifter.' },
   { id: 'decorator',    name: 'Interior Designer', icon: '🎨', desc: 'Reach 40 store appeal.' },
   { id: 'all_depts',    name: 'Full Service',      icon: '🏪', desc: 'Have all 6 departments running.' },
+  { id: 'five_star_day', name: 'Perfect Score',    icon: '⭐', desc: 'Get 5 stars on the day rating.' },
+  { id: 'streak5',      name: 'On A Roll',         icon: '🔥', desc: 'Five days in a row with 3 stars or more.' },
 ];
 
 // The guided goal chain. Each has a check computed on the server and a cash reward.
@@ -350,6 +363,7 @@ export const EVENT_TYPES = {
   inspector:  { name: 'Health Inspector',      icon: '🧐', desc: 'An inspector will check cleanliness at 15:00!' },
   heatwave:   { name: 'Heatwave',              icon: '☀️', desc: 'Everyone wants cold drinks and ice cream!' },
   influencer: { name: 'Viral Video',           icon: '📱', desc: 'Your store went viral! Reputation boost and extra visitors.' },
+  blackout:   { name: 'Power Outage',         icon: '⚡', desc: 'The power is out! Fridges are warming up and the self-checkouts are down. Keep the fridge doors closed until it comes back.' },
   pigeon:     { name: 'A Pigeon Got In',       icon: '🐦', desc: 'A pigeon is making a mess. Clean up the droppings!' },
 };
 

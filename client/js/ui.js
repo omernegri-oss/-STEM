@@ -1,7 +1,7 @@
 // HUD, the store computer, info panels and overlays.
 import {
   PRODUCTS, PRODUCT_MAP, SUPPLIERS, SUPPLIER_MAP, FURNITURE, CATEGORIES, ROLES, SHIFTS, TEAM_UPGRADES, ACHIEVEMENTS,
-  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap, HIRE_FEE_DAYS, PROMO_OFF, PROMO_MAX,
+  LEVEL_XP, MAX_LEVEL, EVENT_TYPES, PLAYER_ROLES, EXPANSIONS, FURNITURE_SUPPLIER, fmtMoney, fmtTime, licenseCost, priceLimits, slotCap, HIRE_FEE_DAYS, PROMO_OFF, PROMO_MAX, BRANDS, LIGHTS,
 } from '/shared/data.js';
 import { play, audio, setSfx, setMusic } from './audio.js';
 
@@ -12,7 +12,7 @@ const esc = s => noEmoji(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;
 const stars = (rep) => { const s = Math.max(0, Math.min(5, rep / 20)); const full = Math.floor(s), half = s - full >= 0.5; return '★'.repeat(full) + (half ? '' : '') + '☆'.repeat(5 - full - (half ? 1 : 0)); };
 const skillStars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 const discountFor = (sup, boxes) => { let d = 0; for (const [n, pct] of sup.discounts) if (boxes >= n) d = pct; return d; };
-const COMPUTER_TABS = { orders: 'Order stock', licenses: 'Products', furniture: 'Furniture', prices: 'Prices', staff: 'Staff', upgrades: 'Upgrades', bills: 'Bills', messages: 'Messages' };
+const COMPUTER_TABS = { orders: 'Order stock', licenses: 'Products', furniture: 'Furniture', prices: 'Prices', staff: 'Staff', upgrades: 'Upgrades', style: 'Style', bills: 'Bills', messages: 'Messages' };
 const BUY_GROUPS = [['Shelving & coolers', ['shelf', 'shelf_large', 'endcap', 'produce', 'bakery', 'fridge', 'fridge_large', 'freezer', 'freezer_upright']],
   ['Service', ['checkout', 'selfcheckout', 'butcher', 'deli', 'oven', 'rack', 'bin', 'computer']],
   ['Plants & decor', ['plant', 'flowerpot', 'cactus', 'plant_tall', 'lamp', 'sign', 'bench', 'balloons', 'vending', 'flowers', 'fountain', 'neon', 'statue']]];
@@ -77,6 +77,10 @@ export class UI {
     setText('h-stars', stars(M.rep));
     setText('h-level', `Lv ${M.level}`);
     const cur = LEVEL_XP[M.level - 1], next = LEVEL_XP[M.level] ?? cur;
+    // small debts note next to the cash: unpaid bills, red once one is overdue
+    const owed = (M.bills || []).filter(b => !b.paid), owedSum = owed.reduce((a, b) => a + b.total, 0), late = owed.some(b => M.day > b.due);
+    const dEl = $('h-debt'); dEl.classList.toggle('hidden', !owed.length); dEl.classList.toggle('late', late);
+    if (owed.length) setText('h-debt', `Debts ${fmtMoney(owedSum)}${late ? ' · overdue' : ''}`);
     $('h-xp').style.width = (M.level >= MAX_LEVEL ? 100 : Math.min(100, (M.xp - cur) / (next - cur) * 100)) + '%';
     document.querySelectorAll('.tb-speed button').forEach(b => { const v = +b.dataset.speed; b.classList.toggle('sel', v === 0 ? M.paused : (!M.paused && M.speed === v)); });
     $('h-open').classList.toggle('hidden', phase !== 'prep');
@@ -340,12 +344,31 @@ export class UI {
         <div><small>Reputation</small><div class="big-num stars" style="font-size:22px">${stars(r.rep)}</div></div></div>
       <div class="report-grid"><div><div class="section-title">Income</div>${row('Sales', fmtMoney(r.revenue), 'pos')}${row('Tips', fmtMoney(r.tips), 'pos')}${row('Bonuses', fmtMoney(r.bonus), 'pos')}
         <div class="section-title">Spent today</div>${row('Stock orders', fmtMoney(r.cogs), 'neg')}${row('Salaries (paid automatically)', fmtMoney(r.salaries), 'neg')}${row('Bills paid', fmtMoney(r.rent + r.power + r.maint), 'neg')}${row('Furniture, licenses & other', fmtMoney(r.other), 'neg')}
-        ${row('<b>New bill to pay (rent, power, upkeep)</b>', fmtMoney(r.bill || 0), 'neg')}${row('<b>Cash now</b>', fmtMoney(r.cash), r.cash >= 0 ? 'pos' : 'neg')}</div>
-        <div>${r.challenge ? `<div class="section-title">Daily challenge</div>${row(r.challenge.done ? 'Completed' : 'Missed', r.challenge.done ? '+' + fmtMoney(r.challenge.reward) : '—')}` : ''}
+        ${row('<b>New bill to pay (rent, power, upkeep)</b>', fmtMoney(r.bill || 0), 'neg')}${row('<b>Cash now</b>', fmtMoney(r.cash), r.cash >= 0 ? 'pos' : 'neg')}
+        ${this.debtsHtml(r, row)}</div>
+        <div>${r.rating ? `<div class="section-title">Day rating <span class="rate-stars">${'★'.repeat(r.rating.stars)}${'☆'.repeat(5 - r.rating.stars)}</span> <small>${r.rating.score}/100${r.streak > 1 ? ` · ${r.streak} good days in a row` : ''}</small></div>${r.rating.parts.map(p => row(p[0], `${p[1]}/${p[2]}`, p[1] >= p[2] * 0.7 ? 'pos' : p[1] < p[2] * 0.35 ? 'neg' : '')).join('')}` : ''}
+        ${r.challenge ? `<div class="section-title">Goals</div>${row(esc(challengeText(r.challenge)), r.challenge.done ? '+' + fmtMoney(r.challenge.reward) : 'missed', r.challenge.done ? 'pos' : 'neg')}${(r.goals || []).map(g => row(esc(goalText(g)), g.done ? '+' + fmtMoney(g.reward) : 'missed', g.done ? 'pos' : 'neg')).join('')}` : ''}
         <div class="section-title">Customers</div>${row('Visitors', r.customers)}${row('Checked out', r.served)}${row('Left empty-handed', r.lost)}${row('Left angry', r.angry, r.angry ? 'neg' : '')}${row('Products wasted', r.waste, r.waste ? 'neg' : '')}
         <div class="section-title">Best sellers</div><div class="note" style="font-size:13px">${top}</div><div class="section-title">Customers asked for</div><div class="note" style="font-size:13px">${dem}</div></div></div>
       <div style="text-align:center;margin-top:16px"><button class="btn big primary" id="r-next">Start Day ${r.day + 1}</button><p class="note">Pay the new bill on the computer within 2 days.</p></div>`;
     $('r-next').onclick = () => this.net.act('continue');
+  }
+
+  // the two side goals of the day, with live progress
+  goalsHtml(M) {
+    return (M.goals || []).map(g => `<div class="note" style="margin-top:6px">Side goal: ${esc(goalText(g))} · <b>${goalProgress(g)}</b> · reward ${fmtMoney(g.reward)}${g.done ? ' (done)' : ''}</div>`).join('');
+  }
+  // the night report's list of unpaid bills, with when each one becomes overdue and what happens then
+  debtsHtml(r, row) {
+    const list = r.debts || [];
+    if (!list.length) return `<div class="section-title">Debts</div><div class="note debts-ok">No debts. All bills are paid.</div>`;
+    const lines = list.map(d => {
+      const state = d.evictIn <= 0 ? '<span class="neg">evicted when the next day starts!</span>'
+        : d.due < r.day ? `<span class="neg">overdue, ${d.evictIn} day${d.evictIn > 1 ? 's' : ''} until eviction</span>`
+        : d.due === r.day ? '<span class="neg">overdue from tomorrow (+10% rent fee)</span>' : `due by the end of day ${d.due}`;
+      return row(`Day ${d.day} bill<br><small>${state}${d.late ? ` · includes ${fmtMoney(d.late)} late fee` : ''}</small>`, fmtMoney(d.total), 'neg');
+    }).join('');
+    return `<div class="section-title">Debts (unpaid bills)</div>${lines}${row('<b>Total owed</b>', fmtMoney(r.debtTotal), 'neg')}${r.cash < r.debtTotal ? `<div class="note neg">Cash is lower than what you owe. Sell more before the due date.</div>` : ''}`;
   }
 
   // ------------------------------------------------------------------------------------------ panels
@@ -375,7 +398,7 @@ export class UI {
   renderPanel(scrollTop = false) {
     const body = $('p-body'); const sc = body.scrollTop;
     this.panelDirty = false; this.lastRender = performance.now();
-    const fn = { orders: this.pOrders, licenses: this.pLicenses, furniture: this.pFurniture, prices: this.pPrices, staff: this.pStaff, upgrades: this.pUpgrades,
+    const fn = { orders: this.pOrders, licenses: this.pLicenses, furniture: this.pFurniture, prices: this.pPrices, staff: this.pStaff, upgrades: this.pUpgrades, style: this.pStyle,
       bills: this.pBills, messages: this.pMessages, inventory: this.pInventory, finance: this.pFinance, stats: this.pStats }[this.panel];
     if (!fn || !this.G.meta || !this.G.world) return;
     let [title, html] = fn.call(this);
@@ -533,6 +556,19 @@ export class UI {
     return ['Upgrades & expansion', h + '</div>'];
   }
 
+  // store look: brand colour (sign and aprons) and lighting mood. Pay once, switch back for free.
+  pStyle() {
+    const M = this.G.meta, W = this.G.world, owned = M.styles || { brand: ['berry'], light: ['standard'] };
+    const card = (kind, o, current, swatch) => {
+      const has = (owned[kind] || []).includes(o.id), lock = M.level < o.level, use = current === o.id;
+      return `<div class="card ${use ? 'owned' : ''} ${lock ? 'locked' : ''}"><span class="swatch" style="background:${swatch}"></span><h4>${esc(o.name)}</h4>${o.appeal ? `<p>+${o.appeal} store appeal</p>` : ''}
+        <div class="row"><span class="price">${use ? 'In use' : has ? 'Owned' : o.cost ? fmtMoney(o.cost) : 'Free'}</span>${use ? '' : `<button class="btn small primary" data-act="style" data-kind="${kind}" data-id="${o.id}" ${lock || (!has && M.cash < o.cost) ? 'disabled' : ''}>${lock ? `Lv${o.level}` : has ? 'Use' : 'Buy'}</button>`}</div></div>`;
+    };
+    let h = `<div class="section-title">Brand colour <small>storefront sign and staff aprons</small></div><div class="cards">${BRANDS.map(o => card('brand', o, W.brand || 'berry', o.sign)).join('')}</div>`;
+    h += `<div class="section-title">Lighting mood</div><div class="cards">${LIGHTS.map(o => card('light', o, W.lighting || 'standard', o.color === 'rainbow' ? 'linear-gradient(90deg,#f43f5e,#f59e0b,#22c55e,#3b82f6,#a855f7)' : o.color)).join('')}</div>`;
+    return ['Store style', h];
+  }
+
   pBills() {
     const M = this.G.meta;
     const bills = [...(M.bills || [])].sort((a, b) => (a.paid - b.paid) || b.day - a.day);
@@ -552,7 +588,7 @@ export class UI {
     let h = '';
     if (M.pendingSale) h += `<div class="sel-card"><h4>Flash sale offer</h4>Run a store-wide 15% discount today to attract a crowd?<div class="btns"><button class="btn small good" data-act="sale" data-v="1">Run the sale</button><button class="btn small" data-act="sale" data-v="0">No thanks</button></div></div>`;
     const ch = M.challenge;
-    if (ch) h += `<div class="sel-card"><h4>Today's challenge ${ch.done ? '' : ch.failed ? '' : ''}</h4>${esc(challengeText(ch))} · ${challengeProgress(ch, M)} · reward ${fmtMoney(ch.reward)}</div>`;
+    if (ch) h += `<div class="sel-card"><h4>Today's challenge ${ch.done ? '(done)' : ch.failed ? '(failed)' : ''}</h4>${esc(challengeText(ch))} · ${challengeProgress(ch, M)} · reward ${fmtMoney(ch.reward)}${this.goalsHtml(M)}</div>`;
     const list = [...(M.inbox || [])].sort((a, b) => b.seq - a.seq);
     if (!list.length) h += '<p class="note">No messages yet.</p>';
     for (const m of list) h += `<div class="msg ${m.seq > seen ? 'new' : ''}"><span class="mi">${svg(msgIcon(m.icon), 18)}</span><div><div class="mt">${esc(m.text)}</div><div class="note">Day ${m.day}, ${fmtTime(m.min)}</div></div></div>`;
@@ -620,7 +656,7 @@ export class UI {
     const ch = M.challenge;
     let h = `<div class="grid2"><div><div class="section-title">Store</div>${row('Level', `${M.level} / ${MAX_LEVEL}${next ? ` (${M.xp - cur}/${next - cur} XP)` : ' (MAX)'}`)}<div class="bar" style="margin:4px 0 8px"><div style="width:${next ? (M.xp - cur) / (next - cur) * 100 : 100}%;background:#3aa56d"></div></div>
       ${row('Reputation', `<span class="stars">${stars(M.rep)}</span>`)}${row('Store appeal', M.appeal)}${row('Days open', M.day)}${row('Customers served', M.stats.customers)}${row('Total revenue', fmtMoney(M.stats.revenue))}${row('Customers punched ', M.stats.punched || 0)}${row('Shoplifters caught', M.stats.caught || 0)}${row('Stolen goods', fmtMoney(M.stats.stolen || 0), M.stats.stolen ? 'neg' : '')}
-      ${ch ? `<div class="section-title">Today's challenge</div><div class="sel-card">${esc(challengeText(ch))}<br><b>${challengeProgress(ch, M)}</b> · reward ${fmtMoney(ch.reward)} ${ch.done ? '' : ch.failed ? '' : ''}</div>` : ''}</div>
+      ${ch ? `<div class="section-title">Today's challenge</div><div class="sel-card">${esc(challengeText(ch))}<br><b>${challengeProgress(ch, M)}</b> · reward ${fmtMoney(ch.reward)} ${ch.done ? '(done)' : ch.failed ? '(failed)' : ''}${this.goalsHtml(M)}</div>` : ''}</div>
       <div><div class="section-title">Achievements (${Object.keys(M.achievements).length}/${ACHIEVEMENTS.length})</div><div class="ach">`;
     for (const a of ACHIEVEMENTS) { const got = M.achievements[a.id]; h += `<div class="${got ? 'yes' : 'no'}" title="${esc(a.desc)}"><i>${svg(got ? 'award' : 'star', 24)}</i><b>${esc(a.name)}</b>${esc(a.desc)}</div>`; }
     return ['Progress', h + '</div></div></div>'];
@@ -655,6 +691,7 @@ export class UI {
       case 'fire': { const id = +b.dataset.id; this.ask('Let this employee go?', 'Let go').then(ok => { if (ok) net.act('fire', { id }); }); break; }
       case 'raise': net.act('raise', { id: +b.dataset.id }); break;
       case 'upgrade': net.act('buyUpgrade', { id: b.dataset.id }); break;
+      case 'style': net.act('style', { kind: b.dataset.kind, id: b.dataset.id }); break;
     }
   }
   panelChange(e) {
@@ -693,6 +730,12 @@ export class UI {
 function challengeText(ch) {
   return { serve: `Check out ${ch.target} customers today`, revenue: `Earn ${fmtMoney(ch.target)} in sales today`, noangry: `Serve ${ch.target}+ customers with no angry walk-outs`,
     sat: `Average satisfaction ${ch.target}%+ today`, cat: `Sell ${ch.target} ${CATEGORIES[ch.cat]?.name || ''} items today` }[ch.type] || '';
+}
+function goalText(g) {
+  return { lost0: 'Nobody leaves empty-handed (serve 8+)', waste0: 'No wasted products (serve 8+)', tips: `Collect ${fmtMoney(g.target)} in tips`, rep: `End the day with reputation ${g.target}+` }[g.type] || '';
+}
+function goalProgress(g) {
+  return g.type === 'tips' ? `${fmtMoney(g.progress)} / ${fmtMoney(g.target)}` : g.type === 'rep' ? `${g.progress} / ${g.target}` : `${g.progress} so far`;
 }
 function challengeProgress(ch, M) {
   return ch.type === 'revenue' ? `${fmtMoney(ch.progress)} / ${fmtMoney(ch.target)}` : ch.type === 'sat' ? `${ch.progress}% now` : `${ch.progress}/${ch.target}`;

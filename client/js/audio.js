@@ -1,6 +1,11 @@
 // Procedural sound effects & background music using WebAudio – no audio files needed.
 let ctx = null, master = null, sfxGain = null, musicGain = null, noiseBuf = null;
-export const audio = { sfx: true, music: true, sfxVol: 0.7, musicVol: 0.7, listener: { x: 0, z: 0 } };
+export const MUSIC_STYLES = {
+  lounge: { bpm: 98, melody: [659, 784, 880, 784, 659, 587, 523, 587, 659, 523, 440, 523, 587, 659, 587, 494], skip: 5, wave: 'sine' },
+  upbeat: { bpm: 124, melody: [784, 988, 1175, 988, 880, 1047, 880, 784, 988, 1175, 1319, 1175, 1047, 880, 784, 659], skip: 7, wave: 'triangle' },
+  calm:   { bpm: 70, melody: [523, 659, 587, 523, 440, 523, 587, 392], skip: 3, wave: 'sine' },
+};
+export const audio = { style: 'lounge', sfx: true, music: true, sfxVol: 0.7, musicVol: 0.7, listener: { x: 0, z: 0 } };
 const sfxLevel = () => (audio.sfx ? 0.8 * audio.sfxVol : 0), musicLevel = () => (audio.music ? 0.16 * audio.musicVol : 0);
 // volumes 0..1 from the settings screen
 export function setVolumes(sfxVol, musicVol) {
@@ -8,6 +13,7 @@ export function setVolumes(sfxVol, musicVol) {
   if (sfxGain) sfxGain.gain.value = sfxLevel();
   if (musicGain) musicGain.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.1);
 }
+try { const ms = localStorage.getItem('st_mstyle'); if (MUSIC_STYLES[ms]) audio.style = ms; } catch {}
 try { audio.sfx = localStorage.getItem('st_sfx') !== '0'; audio.music = localStorage.getItem('st_music') !== '0'; } catch {}
 
 export function initAudio() {
@@ -97,11 +103,17 @@ export function play(name, x, z) {
 
 // ------------------------------------------------------------- music: a cheerful elevator-muzak loop
 let musicTimer = null;
+export function setMusicStyle(id) {
+  if (!MUSIC_STYLES[id]) return;
+  audio.style = id; try { localStorage.setItem('st_mstyle', id); } catch {}
+  if (ctx && musicTimer) { clearInterval(musicTimer); musicTimer = null; startMusic(); }
+}
 function startMusic() {
-  const bpm = 98, beat = 60 / bpm;
+  const st = MUSIC_STYLES[audio.style] || MUSIC_STYLES.lounge;
+  const bpm = st.bpm, beat = 60 / bpm;
   // I - vi - IV - V in C major, jazzy 7ths
   const chords = [[261.6, 329.6, 392, 493.9], [220, 261.6, 329.6, 392], [174.6, 220, 261.6, 329.6], [196, 246.9, 293.7, 349.2]];
-  const melody = [659, 784, 880, 784, 659, 587, 523, 587, 659, 523, 440, 523, 587, 659, 587, 494];
+  const melody = st.melody;
   let bar = 0, t0 = ctx.currentTime + 0.2;
   const schedule = () => {
     while (t0 < ctx.currentTime + 2) {
@@ -123,11 +135,11 @@ function startMusic() {
       b2.connect(bg2); bg2.connect(musicGain); b2.start(t0 + beat * 2); b2.stop(t0 + beat * 4);
       // plucky melody (4 notes per bar)
       for (let i = 0; i < 4; i++) {
-        if ((bar + i) % 5 === 4) continue;
+        if ((bar + i) % st.skip === st.skip - 1) continue;
         const f = melody[(bar * 4 + i) % melody.length];
         const o = ctx.createOscillator(), g = ctx.createGain();
         const t = t0 + i * beat;
-        o.type = 'sine'; o.frequency.value = f;
+        o.type = st.wave; o.frequency.value = f;
         g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + beat * 0.9);
         o.connect(g); g.connect(musicGain); o.start(t); o.stop(t + beat);
       }

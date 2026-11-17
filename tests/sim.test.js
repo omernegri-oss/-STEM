@@ -2,8 +2,9 @@
 import assert from 'node:assert/strict';
 import { Game } from '../server/game.js';
 import { spawnCustomer } from '../server/customers.js';
-import { PRODUCT_MAP, MAX_CUSTOMERS, licenseCost, priceLimits, EXPANSIONS, ROLES } from '../shared/data.js';
+import { FURNITURE, PRODUCT_MAP, MAX_CUSTOMERS, licenseCost, priceLimits, EXPANSIONS, ROLES } from '../shared/data.js';
 
+const FURNITURE_TEMP = (f) => FURNITURE[f.type].temp;
 const fx = [];
 const g = new Game('TEST1', null, { fx: m => fx.push(m), isNameTaken: () => false, save: () => {} });
 const p = { id: 1, name: 'Tester', x: 6, z: 7, rot: 0, carry: [], station: null, floor: 0 };
@@ -104,6 +105,12 @@ assert.ok(maxC <= MAX_CUSTOMERS, 'never more than 15 shoppers');
 assert.ok(g.s.inbox.some(m => m.icon === '🗣️'), 'missing products reported as computer messages');
 assert.ok(!fx.some(f => f.k === 'toast'), 'no toasts other than level-up and delivery');
 const bill = g.s.bills.find(b => !b.paid); assert.ok(bill, 'rent bill created');
+assert.ok(r.rating && r.rating.stars >= 1 && r.rating.stars <= 5 && r.rating.parts.length === 5, 'the day gets a star rating with a breakdown');
+assert.equal(r.rating.score, r.rating.parts.reduce((x, p) => x + p[1], 0), 'the rating is the sum of its parts');
+assert.equal(r.goals.length, 2, 'two side goals are judged each day'); assert.notEqual(r.goals[0].type, r.goals[1].type, 'and they differ');
+assert.equal(r.debts.length, g.s.bills.filter(b => !b.paid).length, 'the night report lists every unpaid bill');
+assert.equal(r.debtTotal, Math.round(g.s.bills.filter(b => !b.paid).reduce((x, b) => x + b.total, 0) * 100) / 100, 'and the total owed');
+assert.ok(r.debts.every(d => d.due >= d.day && typeof d.evictIn === 'number'), 'with due day and days until eviction');
 act({ a: 'continue' });
 atComputer();
 const cashBefore = g.s.cash;
@@ -269,6 +276,63 @@ assert.ok(reachedUp, 'customer climbed the stairs'); assert.equal(climber.basket
   g5.s.prices.pasta = priceLimits(PRODUCT_MAP.pasta)[0];
   assert.equal(g5.act(q, { a: 'promo', pid: 'pasta' }), false, 'no promotion below cost');
   console.log('promotions ✓');
+}
+
+// --- power outage: fridges warm (open doors much faster), self-checkouts are down, then the power returns
+{
+  const g6 = new Game('BLACK', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
+  const q = { id: 9, name: 'Q', x: 5, z: 5, rot: 0, carry: [], station: null, floor: 0 };
+  g6.players.set(9, q); g6.act(q, { a: 'nameDraft', name: 'Dark Mart' }); g6.act(q, { a: 'nameVote' });
+  g6.s.phase = 'open'; g6.s.minute = 10 * 60;
+  const f1 = g6.newFixture('fridge', 2, 2, 0), f2 = g6.newFixture('fridge', 5, 2, 0); g6.s.furniture.push(f1, f2); f2.open = true;
+  g6.triggerEvent('blackout');
+  assert.ok(g6.eventActive('blackout'), 'outage is active');
+  const until = g6.s.events.find(e => e.type === 'blackout').until; assert.ok(until - g6.s.minute >= 60 && until - g6.s.minute <= 90, 'lasts 60 to 90 minutes');
+  g6.updateFixtures(20);
+  assert.ok(f1.temp > FURNITURE_TEMP(f1) && f2.temp > f1.temp, `both fridges warm and the open one faster (${f1.temp} / ${f2.temp})`);
+  g6.s.minute = until + 1; g6.updateEvents();
+  assert.equal(g6.eventActive('blackout'), false, 'the power comes back'); assert.ok(g6.s.inbox.some(m => /power is back/.test(m.text)), 'and says so');
+  const before = f1.temp; g6.updateFixtures(10); assert.ok(f1.temp < before, 'fridges cool down again');
+  console.log('power outage ✓');
+}
+
+// --- two registers: both get a queue and both can be operated at the same time by two players
+{
+  const g8 = new Game('TWOREG', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
+  const A = { id: 1, name: 'A', x: 5, z: 5, rot: 0, carry: [], station: null, floor: 0 }, Bp = { id: 2, name: 'B', x: 6, z: 5, rot: 0, carry: [], station: null, floor: 0 };
+  g8.players.set(1, A); g8.players.set(2, Bp); g8.act(A, { a: 'nameDraft', name: 'Two Reg' }); g8.act(A, { a: 'nameVote' }); g8.act(Bp, { a: 'nameVote' });
+  g8.s.cash = 5000; g8.s.level = 3;
+  const comp8 = g8.s.furniture.find(f => f.type === 'computer'); A.x = comp8.x + 1.5; A.z = comp8.z + 1;
+  assert.ok(g8.act(A, { a: 'buyFurniture', type: 'checkout', n: 1 }), 'a second register can be bought');
+  g8.s.orders.forEach(o => { o.remaining = 0; }); g8.tick(0.05);
+  const box = g8.s.boxes.find(b => b.ftype === 'checkout'); assert.ok(box, 'its box arrives');
+  let spot = null; for (let x = 0; x < g8.s.w - 2 && !spot; x++) for (let z = 0; z < g8.s.d - 1 && !spot; z++) if (g8.gridOf(0).canPlace(g8.s.furniture, 'checkout', x, z, 0).ok) spot = [x, z];
+  A.carry.push({ ftype: 'checkout', qty: 1 }); assert.ok(g8.act(A, { a: 'place', x: spot[0], z: spot[1], rot: 0 }), 'and can be placed');
+  const regs = g8.s.furniture.filter(f => f.type === 'checkout'); assert.equal(regs.length, 2, 'two registers in the store');
+  for (const [pl, f] of [[A, regs[0]], [Bp, regs[1]]]) { pl.x = f._back[0] + 0.5; pl.z = f._back[1] + 0.5; assert.ok(g8.act(pl, { a: 'station', id: f.id }), `${pl.name} runs a register`); }
+  assert.notEqual(A.station, Bp.station, 'each player stands at a different register');
+  assert.ok(regs.every(f => g8.operatorOf(f) && g8.operatorOf(f).type === 'player'), 'both registers have an operator');
+  // a long queue triggers the hint once a day
+  g8.s.phase = 'open'; const rt0 = g8.rt.get(regs[0].id); rt0.queue = [101, 102, 103, 104, 105]; g8.queueHint(5);
+  assert.ok(g8.s.inbox.some(m => /Buy another Checkout Counter/.test(m.text)), 'a long queue suggests another register');
+  const n0 = g8.s.inbox.length; rt0.queue = [101, 102, 103, 104, 105]; g8.queueHint(5); assert.equal(g8.s.inbox.length, n0, 'but only once a day');
+  console.log('two registers ✓');
+}
+
+// --- store style: brand colour and lighting are bought once, then free to switch
+{
+  const g7 = new Game('STYLE', null, { fx: () => {}, isNameTaken: () => false, save: () => {} });
+  const q = { id: 4, name: 'Q', x: 5, z: 5, rot: 0, carry: [], station: null, floor: 0 };
+  g7.players.set(4, q); g7.act(q, { a: 'nameDraft', name: 'Style Mart' }); g7.act(q, { a: 'nameVote' });
+  g7.s.cash = 1000; const appeal0 = g7.appeal();
+  assert.ok(g7.act(q, { a: 'style', kind: 'brand', id: 'blue' })); assert.equal(g7.s.brand, 'blue'); assert.equal(g7.s.cash, 850, 'a new colour costs money');
+  assert.ok(g7.act(q, { a: 'style', kind: 'brand', id: 'berry' })); assert.equal(g7.s.cash, 850, 'the first colour is free to return to');
+  assert.ok(g7.act(q, { a: 'style', kind: 'brand', id: 'blue' })); assert.equal(g7.s.cash, 850, 'a bought colour is free to switch back to');
+  assert.equal(g7.act(q, { a: 'style', kind: 'brand', id: 'black' }), false, 'locked until level 5');
+  assert.equal(g7.act(q, { a: 'style', kind: 'light', id: 'nope' }), false, 'unknown style refused');
+  g7.s.level = 2; assert.ok(g7.act(q, { a: 'style', kind: 'light', id: 'warm' })); assert.equal(g7.worldView().lighting, 'warm'); assert.equal(g7.appeal(), appeal0 + 2, 'lighting adds store appeal');
+  assert.equal(g7.worldView().brand, 'blue');
+  console.log('store style ✓');
 }
 
 // --- shoplifters: caught by a punch (goods back, no penalty), caught by the guard, or gone with the goods

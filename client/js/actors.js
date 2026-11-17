@@ -1,6 +1,6 @@
 // Characters: players, customers, employees, pigeons. Interpolates server snapshots and animates them.
 import * as THREE from 'three';
-import { PRODUCT_MAP, ROLES, PLAYER_ROLES } from '/shared/data.js';
+import { PRODUCT_MAP, ROLES, PLAYER_ROLES, BRANDS } from '/shared/data.js';
 import { heightAt } from '/shared/grid.js';
 import { disposeOwned, makeCharacter, animateCharacter, lookFromSeed, makeSprite, setSpriteText, makeBasket, makeCart, makeBox, makeFBox, makeHandTruck, makePigeon, UNIT_GEOS, mat, B, C, productMaterial, S as Sph, makeBaton } from './models.js';
 
@@ -83,9 +83,17 @@ export class Actors {
     return { obj, bubble, basket, items, stars, itemsKey: '', cart: null, x: 0, z: 0, rot: 0, tx: 0, tz: 0, trot: 0, moving: false, first: true, scale: look.scale, floor: 0, kind: 'customer' };
   }
 
+  // the store brand colour (Style tab) changes the aprons of cashiers and stockers
+  setBrand(id) {
+    if (id === this.brandId) return;
+    this.brandId = id;
+    for (const e of this.staff.values()) this.root.remove(e.obj);
+    this.staff.clear(); // rebuilt with the new apron colour on the next snapshot
+  }
   makeStaff(role, seed) {
     const u = ROLE_UNIFORM[role] || {};
-    const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: u.apron, chef: u.chef, hairnet: u.hairnet, cap: u.cap || null, hat: null, badge: u.badge || 0xe9e6df, longSleeves: role === 'guard' ? true : undefined, pants: u.pants ?? 0x1a1a1a, jacket: null, bag: null, scale: 1 };
+    const brand = BRANDS.find(b => b.id === this.brandId);
+    const look = { ...lookFromSeed(seed), shirt: u.shirt, apron: (role === 'cashier' || role === 'stocker') && brand ? brand.apron : u.apron, chef: u.chef, hairnet: u.hairnet, cap: u.cap || null, hat: null, badge: u.badge || 0xe9e6df, longSleeves: role === 'guard' ? true : undefined, pants: u.pants ?? 0x1a1a1a, jacket: null, bag: null, scale: 1 };
     const obj = makeCharacter(look);
     const tag = { visible: false }, bubble = { visible: false, position: { y: 0 } };
     const carry = new THREE.Group(); obj.userData.parts.hold.add(carry);

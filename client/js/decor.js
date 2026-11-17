@@ -104,13 +104,13 @@ export function hangingSignTexture(num, english, dept) {
 }
 
 // ------------------------------------------------------------------ storefront: store name, tagline, cart logo
-export function storeSignTexture(name) {
+export function storeSignTexture(name, brand = { sign: '#e0457b', tag: '#ff6fa3' }) {
   const W = 2048, H = 400, c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
   g.fillStyle = '#16181b'; g.fillRect(0, 0, W, H);
   g.strokeStyle = '#2f3237'; g.lineWidth = 10; g.strokeRect(5, 5, W - 10, H - 10);
   // cart logo in a rounded square
-  g.fillStyle = '#e0457b'; g.beginPath(); g.roundRect ? g.roundRect(70, 80, 240, 240, 36) : g.rect(70, 80, 240, 240); g.fill();
+  g.fillStyle = brand.sign; g.beginPath(); g.roundRect ? g.roundRect(70, 80, 240, 240, 36) : g.rect(70, 80, 240, 240); g.fill();
   g.strokeStyle = '#ffffff'; g.lineWidth = 14; g.lineCap = 'round'; g.lineJoin = 'round';
   g.beginPath(); g.moveTo(105, 140); g.lineTo(135, 140); g.lineTo(165, 250); g.lineTo(265, 250); g.lineTo(285, 170); g.lineTo(150, 170); g.stroke();
   for (const x of [180, 250]) { g.beginPath(); g.arc(x, 285, 13, 0, Math.PI * 2); g.fillStyle = '#ffffff'; g.fill(); }
@@ -118,7 +118,7 @@ export function storeSignTexture(name) {
   let size = 170; g.font = `800 ${size}px "Barlow Condensed", ${HE}`;
   while (g.measureText(name).width > W - 470 && size > 70) { size -= 8; g.font = `800 ${size}px "Barlow Condensed", ${HE}`; }
   g.fillText(name, 380, 165);
-  g.fillStyle = '#ff6fa3'; g.font = '600 64px "Barlow Condensed", Arial, sans-serif'; g.fillText('NEIGHBOURHOOD MARKET  ·  FRESH EVERY DAY', 384, 305);
+  g.fillStyle = brand.tag; g.font = '600 64px "Barlow Condensed", Arial, sans-serif'; g.fillText('NEIGHBOURHOOD MARKET  ·  FRESH EVERY DAY', 384, 305);
   return { tex: canvasTex(c), aspect: W / H };
 }
 // big words on the shop windows (white on black), like FRESH · FRUITS · BAKERY

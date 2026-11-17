@@ -212,7 +212,7 @@ function chooseCheckout(game, c) {
     const rt = game.rt.get(f.id); if (!rt) continue;
     let score = rt.queue.length * 1.0 + Math.hypot(f.x - c.x, f.z - c.z) * 0.06 + ((f.floor || 0) !== (c.floor || 0) ? 3 : 0);
     if (k === 'checkout' && !game.operatorOf(f)) score += 2.5;
-    if (k === 'selfcheckout') score += c.basket.length > 6 ? 2 : 0.6;
+    if (k === 'selfcheckout') { if (game.eventActive('blackout')) continue; score += c.basket.length > 6 ? 2 : 0.6; }
     if (score < bs) { bs = score; best = f; }
   }
   return best;
